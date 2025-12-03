@@ -1,0 +1,16 @@
+services:
+  autoxpose:
+    image: autoxpose:latest
+    ports:
+      - '3000:3000'
+    environment:
+      - SERVER_IP=your-public-ip
+      - LAN_IP=your-lan-ip
+    volumes:
+      - autoxpose-data:/app/packages/backend/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    user: root
+    restart: unless-stopped
+
+volumes:
+  autoxpose-data:

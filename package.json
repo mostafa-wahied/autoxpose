@@ -1,0 +1,29 @@
+{
+  "name": "autoxpose",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
+    "build": "pnpm --filter backend build && pnpm --filter frontend build",
+    "lint": "pnpm -r lint",
+    "type-check": "pnpm -r type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,yaml,md}\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.2.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39"
+}

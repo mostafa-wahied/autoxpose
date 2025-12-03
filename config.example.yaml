@@ -1,0 +1,18 @@
+port: 3000
+
+database:
+  path: ./data/autoxpose.db
+
+dns:
+  provider: netlify
+  domain: example.com
+
+proxy:
+  provider: npm
+  url: http://npm:81
+
+discovery:
+  docker:
+    enabled: true
+    socket: /var/run/docker.sock
+    labelPrefix: autoxpose

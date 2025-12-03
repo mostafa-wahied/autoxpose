@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.font-jetbrains {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.font-fira {
+  font-family: 'Fira Code', monospace;
+}

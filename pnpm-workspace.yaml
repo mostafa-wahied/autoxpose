@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+ignoredBuiltDependencies:
+  - better-sqlite3
+  - cpu-features
+  - es5-ext
+  - esbuild
+  - protobufjs
+  - ssh2
