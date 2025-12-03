@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { detectPlatform } from '../../core/platform.js';
 import type { SettingsService } from './settings.service.js';
 
 type ProviderBody = { provider: string; config: Record<string, string> };
@@ -62,6 +63,7 @@ export function createSettingsRoutes(settings: SettingsService): FastifyPluginAs
     server.get('/status', async () => ({
       dns: formatDnsConfig(await settings.getDnsConfig()),
       proxy: formatProxyConfig(await settings.getProxyConfig()),
+      platform: detectPlatform(),
     }));
   };
 }

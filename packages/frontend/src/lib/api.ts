@@ -30,9 +30,15 @@ export interface ProviderStatus {
   config: Record<string, string> | null;
 }
 
+export interface PlatformInfo {
+  name: string;
+  os: string;
+}
+
 export interface SettingsStatus {
   dns: ProviderStatus;
   proxy: ProviderStatus;
+  platform?: PlatformInfo;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

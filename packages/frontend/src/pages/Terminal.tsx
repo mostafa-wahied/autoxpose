@@ -46,6 +46,7 @@ function TerminalDashboard(): JSX.Element {
   const dnsOk = settingsQuery.data?.dns?.configured ?? false;
   const proxyOk = settingsQuery.data?.proxy?.configured ?? false;
   const connectionStatus = getConnectionStatus(settingsQuery.isLoading, dnsOk, proxyOk);
+  const platformName = settingsQuery.data?.platform?.name ?? 'Server';
 
   return (
     <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
@@ -53,7 +54,7 @@ function TerminalDashboard(): JSX.Element {
         serviceCount={services.length}
         exposedCount={exposedCount}
         connectionStatus={connectionStatus}
-        serverName="autoxpose"
+        serverName={platformName}
         onExposeAll={actions.handleExposeAll}
         onUnexposeAll={actions.handleUnexposeAll}
         onScan={actions.handleScan}
