@@ -125,7 +125,7 @@ function ProxyForm(props: ProxyFormProps): JSX.Element {
       />
       <FormInput
         label="NPM URL"
-        placeholder="http://your-lan-ip:81"
+        placeholder="http://192.168.1.100:81"
         value={props.url}
         onChange={props.onUrlChange}
       />

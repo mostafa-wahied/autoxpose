@@ -133,6 +133,11 @@ export class NpmProxyProvider implements ProxyProvider {
     return response.map(r => this.mapHost(r));
   }
 
+  async findByDomain(domain: string): Promise<ProxyHost | null> {
+    const hosts = await this.listHosts();
+    return hosts.find(h => h.domain === domain) ?? null;
+  }
+
   private async authenticate(): Promise<void> {
     if (this.token) return;
 

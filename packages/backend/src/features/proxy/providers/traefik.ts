@@ -27,6 +27,11 @@ export class TraefikProxyProvider implements ProxyProvider {
     return response.map(r => this.mapHost(r));
   }
 
+  async findByDomain(domain: string): Promise<ProxyHost | null> {
+    const hosts = await this.listHosts();
+    return hosts.find(h => h.domain === domain) ?? null;
+  }
+
   private async request<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       headers: { 'Content-Type': 'application/json' },

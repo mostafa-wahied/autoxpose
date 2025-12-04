@@ -50,6 +50,11 @@ export class CaddyProxyProvider implements ProxyProvider {
     return this.parseHosts(response);
   }
 
+  async findByDomain(domain: string): Promise<ProxyHost | null> {
+    const hosts = await this.listHosts();
+    return hosts.find(h => h.domain === domain) ?? null;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,

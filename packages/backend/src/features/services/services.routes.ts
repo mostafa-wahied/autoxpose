@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppContext } from '../../core/context.js';
 import { probeBackend } from '../discovery/probe.js';
 import { checkDomainReachable } from '../settings/validation.js';
+import { createSyncRoutes } from './sync.routes.js';
 
 interface CreateBody {
   name: string;
@@ -56,23 +57,19 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       if (!service) return notFound(reply);
 
       const result = await probeBackend(ctx.lanIp, service.port);
-
-      if (result.responsive && result.scheme !== service.scheme) {
-        await ctx.services.updateService(service.id, { scheme: result.scheme });
-      }
+      const shouldUpdate = result.responsive && result.scheme !== service.scheme;
+      if (shouldUpdate) await ctx.services.updateService(service.id, { scheme: result.scheme });
 
       return {
         responsive: result.responsive,
         detectedScheme: result.scheme,
         currentScheme: service.scheme,
-        updated: result.responsive && result.scheme !== service.scheme,
+        updated: shouldUpdate,
       };
     });
 
     server.post<{ Body: ProbeBody }>('/probe', async request => {
-      const { host, port } = request.body;
-      const result = await probeBackend(host, port);
-      return result;
+      return probeBackend(request.body.host, request.body.port);
     });
 
     server.post<{ Params: IdParams }>('/:id/online', async (request, reply) => {
@@ -85,5 +82,7 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const result = await checkDomainReachable(fqdn);
       return { online: result.ok, domain: fqdn };
     });
+
+    await server.register(createSyncRoutes(ctx), { prefix: '/sync' });
   };
 };

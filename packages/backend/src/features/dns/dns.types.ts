@@ -24,4 +24,5 @@ export interface DnsProvider {
   createRecord(input: CreateRecordInput): Promise<DnsRecord>;
   deleteRecord(recordId: string): Promise<void>;
   listRecords(): Promise<DnsRecord[]>;
+  findByHostname(hostname: string): Promise<DnsRecord | null>;
 }

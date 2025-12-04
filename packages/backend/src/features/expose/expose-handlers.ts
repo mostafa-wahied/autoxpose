@@ -61,8 +61,16 @@ export async function handleDnsExpose(
       return undefined;
     }
 
-    emitRunning(ctx, 'dns', 50, 'Creating record...');
     const subdomain = svc.subdomain.split('.')[0];
+    emitRunning(ctx, 'dns', 40, 'Checking existing records...');
+    const existing = await dns.findByHostname(subdomain);
+
+    if (existing) {
+      emitSuccess(ctx, 'dns', `Found existing: ${svc.subdomain}`);
+      return existing.id;
+    }
+
+    emitRunning(ctx, 'dns', 60, 'Creating record...');
     const record = await dns.createRecord({ subdomain, ip: publicIp });
 
     emitSuccess(ctx, 'dns', svc.subdomain);
@@ -102,7 +110,15 @@ export async function handleProxyExpose(
       return undefined;
     }
 
-    emitRunning(ctx, 'proxy', 50, `Configuring ${fullDomain}...`);
+    emitRunning(ctx, 'proxy', 40, 'Checking existing hosts...');
+    const existing = await proxy.findByDomain(fullDomain);
+
+    if (existing) {
+      emitSuccess(ctx, 'proxy', `Found existing: Port ${svc.port} → 443`);
+      return existing.id;
+    }
+
+    emitRunning(ctx, 'proxy', 60, `Configuring ${fullDomain}...`);
     const host = await proxy.createHost({
       domain: fullDomain,
       targetHost: lanIp,

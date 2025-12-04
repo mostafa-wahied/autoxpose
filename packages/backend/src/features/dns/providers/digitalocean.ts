@@ -43,6 +43,11 @@ export class DigitalOceanDnsProvider implements DnsProvider {
     return response.domain_records.map(r => this.mapRecord(r));
   }
 
+  async findByHostname(hostname: string): Promise<DnsRecord | null> {
+    const records = await this.listRecords();
+    return records.find(r => r.hostname === hostname && r.type === 'A') ?? null;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,

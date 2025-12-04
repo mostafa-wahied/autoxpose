@@ -27,4 +27,5 @@ export interface ProxyProvider {
   createHost(input: CreateProxyHostInput): Promise<ProxyHost>;
   deleteHost(hostId: string): Promise<void>;
   listHosts(): Promise<ProxyHost[]>;
+  findByDomain(domain: string): Promise<ProxyHost | null>;
 }

@@ -24,7 +24,6 @@ export class SettingsService {
     const existing = await this.getDnsConfig();
     const newConfig = { ...config };
 
-    //Keep existing token if new one is empty or masked
     if (existing && (!newConfig.token || newConfig.token.includes('••••'))) {
       newConfig.token = existing.config.token;
     }
@@ -36,7 +35,6 @@ export class SettingsService {
     const existing = await this.getProxyConfig();
     const newConfig = { ...config };
 
-    //Keep existing password if new one is empty or masked
     if (existing && (!newConfig.password || newConfig.password.includes('••••'))) {
       newConfig.password = existing.config.password;
     }

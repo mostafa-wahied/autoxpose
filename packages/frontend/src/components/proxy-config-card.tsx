@@ -25,7 +25,7 @@ export function ProxyConfigCard({ current }: Props): JSX.Element {
       >
         <input
           type="text"
-          placeholder="NPM URL (e.g. http://your-lan-ip:81)"
+          placeholder="NPM URL (e.g. http://192.168.1.100:81)"
           value={cfg.url}
           onChange={e => cfg.setUrl(e.target.value)}
           className="w-full rounded border border-neutral-300 p-2 text-sm"
