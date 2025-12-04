@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, type SettingsStatus } from '../../lib/api';
 import { FormActions, FormInput, FormSelect } from './form-components';
+import { TestConnectionButton, type TestState } from './test-button';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -13,17 +14,18 @@ export function DnsConfigSection({ current }: DnsConfigSectionProps): JSX.Elemen
   const [provider, setProvider] = useState(current?.provider || 'cloudflare');
   const [token, setToken] = useState('');
   const [zoneId, setZoneId] = useState(current?.config?.zoneId || '');
+  const [domain, setDomain] = useState(current?.domain || '');
   const [isEditing, setIsEditing] = useState(!current?.configured);
   const queryClient = useQueryClient();
-  const isConfigured = current?.configured ?? false;
 
   useEffect(() => {
     if (current?.provider) setProvider(current.provider);
     if (current?.config?.zoneId) setZoneId(current.config.zoneId);
+    if (current?.domain) setDomain(current.domain);
   }, [current]);
 
   const mutation = useMutation({
-    mutationFn: () => api.settings.saveDns(provider, { token, zoneId }),
+    mutationFn: () => api.settings.saveDns(provider, { token, zoneId, domain }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       setToken('');
@@ -31,33 +33,32 @@ export function DnsConfigSection({ current }: DnsConfigSectionProps): JSX.Elemen
     },
   });
 
+  const isConfigured = current?.configured ?? false;
+  const formProps = {
+    provider,
+    token,
+    zoneId,
+    domain,
+    isConfigured,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    onProviderChange: setProvider,
+    onTokenChange: setToken,
+    onZoneIdChange: setZoneId,
+    onDomainChange: setDomain,
+    onSave: (): void => mutation.mutate(),
+    onCancel: (): void => setIsEditing(false),
+    hasToken: Boolean(current?.config?.token),
+  };
+
   return (
     <div className="rounded border border-[#30363d] bg-[#161b22] p-4">
       <DnsHeader
         isConfigured={isConfigured}
         isEditing={isEditing}
-        onEdit={(): void => setIsEditing(true)}
+        onEdit={() => setIsEditing(true)}
       />
-      {isEditing ? (
-        <DnsForm
-          provider={provider}
-          token={token}
-          zoneId={zoneId}
-          isConfigured={isConfigured}
-          isPending={mutation.isPending}
-          isError={mutation.isError}
-          onProviderChange={setProvider}
-          onTokenChange={setToken}
-          onZoneIdChange={setZoneId}
-          onSave={(): void => {
-            mutation.mutate();
-          }}
-          onCancel={(): void => setIsEditing(false)}
-          hasToken={Boolean(current?.config?.token)}
-        />
-      ) : (
-        <DnsDisplay current={current} />
-      )}
+      {isEditing ? <DnsForm {...formProps} /> : <DnsDisplay current={current} />}
     </div>
   );
 }
@@ -97,6 +98,7 @@ interface DnsFormProps {
   provider: string;
   token: string;
   zoneId: string;
+  domain: string;
   isConfigured: boolean;
   isPending: boolean;
   isError: boolean;
@@ -104,16 +106,23 @@ interface DnsFormProps {
   onProviderChange: (v: string) => void;
   onTokenChange: (v: string) => void;
   onZoneIdChange: (v: string) => void;
+  onDomainChange: (v: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
 function DnsForm(props: DnsFormProps): JSX.Element {
-  const canSave = Boolean(props.token || props.isConfigured);
+  const canSave = Boolean((props.token || props.isConfigured) && props.domain);
   const placeholder = props.hasToken ? 'Saved' : 'Enter token';
 
   return (
     <div className="space-y-3">
+      <FormInput
+        label="Base Domain"
+        placeholder="example.com"
+        value={props.domain}
+        onChange={props.onDomainChange}
+      />
       <FormSelect
         label="Provider"
         value={props.provider}
@@ -149,8 +158,25 @@ function DnsForm(props: DnsFormProps): JSX.Element {
 }
 
 function DnsDisplay({ current }: { current: SettingsStatus['dns'] | null }): JSX.Element {
+  const [testState, setTestState] = useState<TestState>({ status: 'idle' });
+
+  const handleTest = async (): Promise<void> => {
+    setTestState({ status: 'testing' });
+    try {
+      const result = await api.settings.testDns();
+      setTestState(result.ok ? { status: 'success' } : { status: 'error', error: result.error });
+    } catch {
+      setTestState({ status: 'error', error: 'Connection test failed' });
+    }
+  };
+
   return (
     <div className="space-y-2 text-xs text-[#8b949e]">
+      {current?.domain && (
+        <p>
+          <span className="text-[#484f58]">Domain:</span> {current.domain}
+        </p>
+      )}
       <p>
         <span className="text-[#484f58]">Provider:</span> {current?.provider}
       </p>
@@ -162,6 +188,7 @@ function DnsDisplay({ current }: { current: SettingsStatus['dns'] | null }): JSX
       <p>
         <span className="text-[#484f58]">Token:</span> Saved
       </p>
+      <TestConnectionButton status={testState.status} error={testState.error} onTest={handleTest} />
     </div>
   );
 }

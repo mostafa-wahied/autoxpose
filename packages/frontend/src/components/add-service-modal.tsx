@@ -18,12 +18,12 @@ const SCHEMES = [
 
 export function AddServiceModal({ onClose, onSuccess }: Props): JSX.Element {
   const [name, setName] = useState('');
-  const [domain, setDomain] = useState('');
+  const [subdomain, setSubdomain] = useState('');
   const [port, setPort] = useState('');
   const [scheme, setScheme] = useState('http');
 
   const mutation = useMutation({
-    mutationFn: () => api.services.create({ name, domain, port: parseInt(port, 10), scheme }),
+    mutationFn: () => api.services.create({ name, subdomain, port: parseInt(port, 10), scheme }),
     onSuccess: () => {
       onSuccess();
       onClose();
@@ -41,10 +41,10 @@ export function AddServiceModal({ onClose, onSuccess }: Props): JSX.Element {
       >
         <FormInput label="Name" value={name} onChange={setName} required />
         <FormInput
-          label="Domain"
-          value={domain}
-          onChange={setDomain}
-          placeholder="app.example.com"
+          label="Subdomain"
+          value={subdomain}
+          onChange={setSubdomain}
+          placeholder="myapp"
           required
         />
         <div className="grid grid-cols-2 gap-4">

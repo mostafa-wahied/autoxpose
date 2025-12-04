@@ -1,11 +1,12 @@
 export type DiscoveredService = {
   id: string;
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string;
   source: string;
   labels: Record<string, string>;
+  autoExpose: boolean;
 };
 
 export type DockerContainer = {

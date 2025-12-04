@@ -15,13 +15,21 @@ export class ExposeService {
     const service = await this.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
+    const baseDomain = await this.getBaseDomain();
+    const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+
     const dnsRecordId = service.dnsRecordId
       ? service.dnsRecordId
       : await this.createDnsRecord(service);
 
     const proxyHostId = service.proxyHostId
       ? service.proxyHostId
-      : await this.createProxyHost(service);
+      : await this.createProxyHost(service, fullDomain);
+
+    const nothingConfigured = !dnsRecordId && !proxyHostId;
+    if (nothingConfigured) {
+      throw new Error('No providers configured');
+    }
 
     await this.servicesRepo.update(serviceId, {
       enabled: true,
@@ -49,21 +57,35 @@ export class ExposeService {
     return (await this.servicesRepo.findById(serviceId))!;
   }
 
+  private async getBaseDomain(): Promise<string | null> {
+    const cfg = await this.settings.getDnsConfig();
+    return cfg?.config.domain ?? null;
+  }
+
+  private buildFullDomain(subdomain: string, baseDomain: string | null): string {
+    if (!baseDomain) return subdomain;
+    if (subdomain.endsWith(baseDomain)) return subdomain;
+    return `${subdomain}.${baseDomain}`;
+  }
+
   private async createDnsRecord(svc: ServiceRecord): Promise<string | undefined> {
     const dns = await this.settings.getDnsProvider();
     if (!dns) return undefined;
 
-    const subdomain = this.extractSubdomain(svc.domain);
+    const subdomain = this.extractSubdomain(svc.subdomain);
     const record = await dns.createRecord({ subdomain, ip: this.publicIp });
     return record.id;
   }
 
-  private async createProxyHost(svc: ServiceRecord): Promise<string | undefined> {
+  private async createProxyHost(
+    svc: ServiceRecord,
+    fullDomain: string
+  ): Promise<string | undefined> {
     const proxy = await this.settings.getProxyProvider();
     if (!proxy) return undefined;
 
     const host = await proxy.createHost({
-      domain: svc.domain,
+      domain: fullDomain,
       targetHost: this.lanIp,
       targetPort: svc.port,
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
@@ -84,8 +106,8 @@ export class ExposeService {
     if (proxy) await proxy.deleteHost(svc.proxyHostId);
   }
 
-  private extractSubdomain(domain: string): string {
-    const parts = domain.split('.');
-    return parts.length > 2 ? parts[0] : domain;
+  private extractSubdomain(subdomain: string): string {
+    const parts = subdomain.split('.');
+    return parts.length > 2 ? parts[0] : subdomain;
   }
 }

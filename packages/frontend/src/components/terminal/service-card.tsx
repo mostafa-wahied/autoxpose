@@ -1,27 +1,27 @@
-import { useState } from 'react';
-import { type ServiceRecord } from '../../lib/api';
+import { useEffect, useState } from 'react';
+import { api, type ServiceRecord } from '../../lib/api';
+import { EditableSubdomain } from './editable-subdomain';
 import { InlineSpinner } from './progress';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
 interface TerminalServiceCardProps {
   service: ServiceRecord;
+  baseDomain: string | null;
   onExpose: () => void;
   onDelete: () => void;
+  onSubdomainChange: (subdomain: string) => void;
   isLoading: boolean;
   isActive?: boolean;
+  canExpose: boolean;
 }
 
-export function TerminalServiceCard({
-  service,
-  onExpose,
-  onDelete,
-  isLoading,
-  isActive,
-}: TerminalServiceCardProps): JSX.Element {
+export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
+  const { service, baseDomain, onExpose, onDelete, onSubdomainChange, isLoading, isActive } = props;
   const [showDelete, setShowDelete] = useState(false);
   const isExposed = Boolean(service.enabled);
   const borderClass = isActive ? 'border-[#58a6ff]' : 'border-[#30363d]';
+  const canAct = props.canExpose || isExposed;
 
   return (
     <div
@@ -30,11 +30,18 @@ export function TerminalServiceCard({
       onMouseLeave={() => setShowDelete(false)}
     >
       <CardHeader name={service.name} port={service.port} />
-      <CardDomain domain={service.domain} isExposed={isExposed} />
+      <EditableSubdomain
+        value={service.subdomain}
+        baseDomain={baseDomain}
+        isExposed={isExposed}
+        onChange={onSubdomainChange}
+      />
       <CardFooter
+        serviceId={service.id}
         isExposed={isExposed}
         showDelete={showDelete}
         isLoading={isLoading}
+        canAct={canAct}
         onExpose={onExpose}
         onDelete={onDelete}
       />
@@ -53,60 +60,80 @@ function CardHeader({ name, port }: { name: string; port: number }): JSX.Element
   );
 }
 
-function CardDomain({ domain, isExposed }: { domain: string; isExposed: boolean }): JSX.Element {
-  const tip = isExposed ? 'Click to open' : 'Domain (not exposed)';
-
-  return (
-    <Tooltip content={tip}>
-      {isExposed ? (
-        <a
-          href={`https://${domain}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mb-3 block truncate text-xs text-[#58a6ff] hover:underline"
-        >
-          {domain} {'>'}
-        </a>
-      ) : (
-        <div className="mb-3 truncate text-xs text-[#8b949e]">{domain}</div>
-      )}
-    </Tooltip>
-  );
-}
-
 interface CardFooterProps {
+  serviceId: string;
   isExposed: boolean;
   showDelete: boolean;
   isLoading: boolean;
+  canAct: boolean;
   onExpose: () => void;
   onDelete: () => void;
 }
 
 function CardFooter(props: CardFooterProps): JSX.Element {
-  const { isExposed, showDelete, isLoading, onExpose, onDelete } = props;
-
+  const { serviceId, isExposed, showDelete, isLoading, canAct, onExpose, onDelete } = props;
   return (
     <div className="flex items-center justify-between">
-      <StatusBadge isExposed={isExposed} />
+      <StatusBadge serviceId={serviceId} isExposed={isExposed} />
       <div className="flex items-center gap-2">
         <DeleteButton visible={showDelete} onClick={onDelete} />
-        <ExposeButton isExposed={isExposed} isLoading={isLoading} onClick={onExpose} />
+        <ExposeButton
+          isExposed={isExposed}
+          isLoading={isLoading}
+          canAct={canAct}
+          onClick={onExpose}
+        />
       </div>
     </div>
   );
 }
 
-function StatusBadge({ isExposed }: { isExposed: boolean }): JSX.Element {
-  const tip = isExposed ? 'Service is publicly accessible' : 'Service is not exposed';
-  const color = isExposed ? TERMINAL_COLORS.success : TERMINAL_COLORS.textMuted;
+interface StatusBadgeProps {
+  serviceId: string;
+  isExposed: boolean;
+}
 
+function StatusBadge({ serviceId, isExposed }: StatusBadgeProps): JSX.Element {
+  const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
+
+  useEffect(() => {
+    if (!isExposed) {
+      setLiveStatus(null);
+      return;
+    }
+    setLiveStatus('checking');
+    api.services
+      .checkOnline(serviceId)
+      .then(res => setLiveStatus(res.online ? 'online' : 'offline'))
+      .catch(() => setLiveStatus('offline'));
+  }, [serviceId, isExposed]);
+
+  const getStatus = (): { tip: string; color: string; label: string } => {
+    if (!isExposed)
+      return {
+        tip: 'Service not exposed',
+        color: TERMINAL_COLORS.textMuted,
+        label: '\u25CB OFFLINE',
+      };
+    if (liveStatus === 'checking')
+      return { tip: 'Checking...', color: TERMINAL_COLORS.warning, label: '\u25CF CHECKING' };
+    if (liveStatus === 'online')
+      return { tip: 'Domain reachable', color: TERMINAL_COLORS.success, label: '\u25CF ONLINE' };
+    return {
+      tip: 'Domain not reachable',
+      color: TERMINAL_COLORS.error,
+      label: '\u25CF UNREACHABLE',
+    };
+  };
+
+  const { tip, color, label } = getStatus();
   return (
     <Tooltip content={tip}>
       <span
         className="rounded px-2 py-0.5 text-xs font-medium"
         style={{ background: `${color}20`, color }}
       >
-        {isExposed ? '\u25CF ONLINE' : '\u25CB OFFLINE'}
+        {label}
       </span>
     </Tooltip>
   );
@@ -120,7 +147,6 @@ function DeleteButton({
   onClick: () => void;
 }): JSX.Element {
   const opacityClass = visible ? 'opacity-100' : 'opacity-0';
-
   return (
     <div className={`transition-opacity duration-200 ${opacityClass}`}>
       <Tooltip content="Remove service">
@@ -142,19 +168,21 @@ function DeleteButton({
 interface ExposeButtonProps {
   isExposed: boolean;
   isLoading: boolean;
+  canAct: boolean;
   onClick: () => void;
 }
 
-function ExposeButton({ isExposed, isLoading, onClick }: ExposeButtonProps): JSX.Element {
-  const tip = isExposed ? 'Unexpose service' : 'Expose service';
-  const label = isExposed ? 'Stop service' : 'Start service';
+function ExposeButton({ isExposed, isLoading, canAct, onClick }: ExposeButtonProps): JSX.Element {
+  const disabled = isLoading || !canAct;
+  const tip = getTip(isExposed, canAct);
   const icon = isExposed ? '\u25A0' : '\u25B6';
+  const label = isExposed ? 'Stop service' : 'Start service';
 
   return (
     <Tooltip content={tip}>
       <button
         onClick={onClick}
-        disabled={isLoading}
+        disabled={disabled}
         className="flex h-7 w-7 items-center justify-center rounded border border-[#30363d] text-sm transition-all hover:border-[#58a6ff] hover:bg-[#58a6ff20] disabled:cursor-not-allowed disabled:opacity-50"
         style={{ color: TERMINAL_COLORS.accent }}
         aria-label={label}
@@ -163,4 +191,9 @@ function ExposeButton({ isExposed, isLoading, onClick }: ExposeButtonProps): JSX
       </button>
     </Tooltip>
   );
+}
+
+function getTip(isExposed: boolean, canAct: boolean): string {
+  if (!canAct) return 'Set subdomain and configure DNS/Proxy first';
+  return isExposed ? 'Unexpose service' : 'Expose service';
 }

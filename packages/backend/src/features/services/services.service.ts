@@ -5,7 +5,12 @@ import type {
   ServicesRepository,
 } from './services.repository.js';
 
-type SyncResult = { created: ServiceRecord[]; updated: ServiceRecord[]; removed: string[] };
+type SyncResult = {
+  created: ServiceRecord[];
+  updated: ServiceRecord[];
+  removed: string[];
+  autoExpose: ServiceRecord[];
+};
 
 export class ServicesService {
   constructor(private repository: ServicesRepository) {}
@@ -36,13 +41,15 @@ export class ServicesService {
   async syncFromDiscovery(discovered: DiscoveredService[]): Promise<SyncResult> {
     const existing = await this.repository.findAll();
     const existingBySourceId = new Map(existing.filter(s => s.sourceId).map(s => [s.sourceId!, s]));
+    const autoExposeIds = new Set(discovered.filter(d => d.autoExpose).map(d => d.id));
 
     const seenSourceIds = new Set<string>();
     const created = await this.processNewServices(discovered, existingBySourceId, seenSourceIds);
     const updated = await this.processUpdates(discovered, existingBySourceId);
     const removed = await this.removeStaleServices(existing, seenSourceIds);
+    const autoExpose = created.filter(s => s.sourceId && autoExposeIds.has(s.sourceId));
 
-    return { created, updated, removed };
+    return { created, updated, removed, autoExpose };
   }
 
   private async processNewServices(
@@ -56,7 +63,7 @@ export class ServicesService {
       if (existingMap.has(disc.id)) continue;
       const svc = await this.repository.create({
         name: disc.name,
-        domain: disc.domain,
+        subdomain: disc.subdomain,
         port: disc.port,
         scheme: disc.scheme,
         source: disc.source,
@@ -77,9 +84,10 @@ export class ServicesService {
       if (!existing) continue;
       const needsUpdate = this.serviceNeedsUpdate(existing, disc);
       if (!needsUpdate) continue;
+      const subdomainToUse = disc.subdomain || existing.subdomain;
       const upd = await this.repository.update(existing.id, {
         name: disc.name,
-        domain: disc.domain,
+        subdomain: subdomainToUse,
         port: disc.port,
         scheme: disc.scheme,
       });
@@ -89,9 +97,8 @@ export class ServicesService {
   }
 
   private serviceNeedsUpdate(existing: ServiceRecord, disc: DiscoveredService): boolean {
-    return (
-      existing.name !== disc.name || existing.domain !== disc.domain || existing.port !== disc.port
-    );
+    const subdomainChanged = disc.subdomain && existing.subdomain !== disc.subdomain;
+    return existing.name !== disc.name || subdomainChanged || existing.port !== disc.port;
   }
 
   private async removeStaleServices(

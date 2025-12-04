@@ -4,7 +4,7 @@ import { StatusBadge } from './ui';
 
 type Props = { service: ServiceRecord };
 
-function DomainCell({ domain, url }: { domain: string; url: string }): JSX.Element {
+function SubdomainCell({ subdomain, url }: { subdomain: string; url: string }): JSX.Element {
   if (!url) return <span className="text-neutral-400">-</span>;
   return (
     <a
@@ -13,7 +13,7 @@ function DomainCell({ domain, url }: { domain: string; url: string }): JSX.Eleme
       rel="noopener noreferrer"
       className="text-blue-600 hover:underline"
     >
-      {domain}
+      {subdomain}
     </a>
   );
 }
@@ -65,7 +65,7 @@ export function ServiceRow({ service }: Props): JSX.Element {
   const { expose, unexpose, del } = useServiceMutations(service.id);
   const isExposed = Boolean(service.dnsRecordId || service.proxyHostId);
   const isLoading = expose.isPending || unexpose.isPending;
-  const url = service.domain ? (isExposed ? `https://${service.domain}` : '') : '';
+  const url = service.subdomain ? (isExposed ? `https://${service.subdomain}` : '') : '';
 
   return (
     <tr className="border-b border-neutral-100">
@@ -73,7 +73,7 @@ export function ServiceRow({ service }: Props): JSX.Element {
         <div className="font-medium text-neutral-900">{service.name}</div>
       </td>
       <td className="py-3 pr-4 text-sm">
-        <DomainCell domain={service.domain || ''} url={url} />
+        <SubdomainCell subdomain={service.subdomain || ''} url={url} />
       </td>
       <td className="py-3 pr-4 font-mono text-xs text-neutral-500">:{service.port}</td>
       <td className="py-3 pr-4">

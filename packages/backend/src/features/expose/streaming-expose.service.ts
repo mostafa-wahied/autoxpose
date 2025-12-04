@@ -35,11 +35,26 @@ export class StreamingExposeService {
     const ctx = this.createContext(serviceId, 'expose', onProgress);
     emit(ctx);
 
+    const baseDomain = await this.getBaseDomain();
+    const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+
     const dnsId = await handleDnsExpose(ctx, service, this.settings, this.publicIp);
     if (dnsId === null) return;
 
-    const proxyId = await handleProxyExpose(ctx, service, this.settings, this.lanIp);
+    const proxyId = await handleProxyExpose({
+      ctx,
+      svc: service,
+      fullDomain,
+      settings: this.settings,
+      lanIp: this.lanIp,
+    });
     if (proxyId === null) return;
+
+    const nothingConfigured = dnsId === undefined && proxyId === undefined;
+    if (nothingConfigured) {
+      emitError(ctx, 'No providers configured. Set up DNS and Proxy in settings first.');
+      return;
+    }
 
     await this.servicesRepo.update(serviceId, {
       enabled: true,
@@ -47,7 +62,7 @@ export class StreamingExposeService {
       proxyHostId: proxyId || null,
     });
 
-    emitComplete(ctx, service.domain, { dns: dnsId, proxy: proxyId });
+    emitComplete(ctx, fullDomain, { dns: dnsId, proxy: proxyId });
   }
 
   async unexposeWithProgress(serviceId: string, onProgress: ProgressCallback): Promise<void> {
@@ -60,6 +75,9 @@ export class StreamingExposeService {
     const ctx = this.createContext(serviceId, 'unexpose', onProgress);
     emit(ctx);
 
+    const baseDomain = await this.getBaseDomain();
+    const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+
     const dnsOk = await handleDnsUnexpose(ctx, service.dnsRecordId, this.settings);
     if (!dnsOk) return;
 
@@ -71,7 +89,18 @@ export class StreamingExposeService {
       dnsRecordId: null,
       proxyHostId: null,
     });
-    emitComplete(ctx, service.domain, {});
+    emitComplete(ctx, fullDomain, {});
+  }
+
+  private async getBaseDomain(): Promise<string | null> {
+    const cfg = await this.settings.getDnsConfig();
+    return cfg?.config.domain ?? null;
+  }
+
+  private buildFullDomain(subdomain: string, baseDomain: string | null): string {
+    if (!baseDomain) return subdomain;
+    if (subdomain.endsWith(baseDomain)) return subdomain;
+    return `${subdomain}.${baseDomain}`;
   }
 
   private createContext(

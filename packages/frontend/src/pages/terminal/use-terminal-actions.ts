@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useExposeStream, type ExposeStreamState } from '../../hooks/use-expose-stream';
 import { type ServiceRecord } from '../../lib/api';
 import { type ConfirmAction } from './confirm-dialogs';
@@ -10,6 +10,7 @@ type DeleteMutation = ReturnType<typeof useTerminalMutations>['deleteMutation'];
 export interface TerminalActions {
   handleExpose: (service: ServiceRecord) => void;
   handleDelete: (service: ServiceRecord) => void;
+  handleSubdomainChange: (service: ServiceRecord, subdomain: string) => void;
   handleExposeAll: () => void;
   handleUnexposeAll: () => void;
   handleScan: () => void;
@@ -53,6 +54,7 @@ function executeConfirm(p: ConfirmParams): void {
 
 interface Params {
   services: ServiceRecord[];
+  needsSetup?: boolean;
 }
 
 interface Handlers {
@@ -60,6 +62,7 @@ interface Handlers {
   unexpose: (id: string) => void;
   clear: () => void;
   scanMutation: ScanMutation;
+  updateMutation: ReturnType<typeof useTerminalMutations>['updateMutation'];
 }
 
 function useHandlers(
@@ -74,6 +77,10 @@ function useHandlers(
     (s: ServiceRecord): void => setConfirmAction({ type: 'delete', service: s }),
     [setConfirmAction]
   );
+  const handleSubdomainChange = useCallback(
+    (s: ServiceRecord, subdomain: string): void => h.updateMutation.mutate({ id: s.id, subdomain }),
+    [h.updateMutation]
+  );
   const handleExposeAll = useCallback(
     (): void => setConfirmAction({ type: 'expose-all' }),
     [setConfirmAction]
@@ -83,20 +90,34 @@ function useHandlers(
     [setConfirmAction]
   );
   const handleScan = useCallback((): void => h.scanMutation.mutate(), [h.scanMutation]);
-  return { handleExpose, handleDelete, handleExposeAll, handleUnexposeAll, handleScan };
+  return {
+    handleExpose,
+    handleDelete,
+    handleSubdomainChange,
+    handleExposeAll,
+    handleUnexposeAll,
+    handleScan,
+  };
 }
 
-export function useTerminalActions({ services }: Params): {
+export function useTerminalActions({ services, needsSetup = false }: Params): {
   actions: TerminalActions;
   state: TerminalState;
 } {
   const { state: streamState, expose, unexpose, clear } = useExposeStream();
-  const { scanMutation, deleteMutation, deletingServiceId, setDeletingServiceId } =
+  const { scanMutation, deleteMutation, updateMutation, deletingServiceId, setDeletingServiceId } =
     useTerminalMutations();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(needsSetup);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
-  const handlers = useHandlers({ expose, unexpose, clear, scanMutation }, setConfirmAction);
+  useEffect(() => {
+    if (needsSetup && !settingsOpen) setSettingsOpen(true);
+  }, [needsSetup, settingsOpen]);
+
+  const handlers = useHandlers(
+    { expose, unexpose, clear, scanMutation, updateMutation },
+    setConfirmAction
+  );
   const handleConfirm = useCallback(
     (): void =>
       executeConfirm({

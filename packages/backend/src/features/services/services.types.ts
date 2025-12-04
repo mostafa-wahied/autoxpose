@@ -1,7 +1,7 @@
 export type Service = {
   id: string;
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string;
   enabled: boolean;
@@ -15,7 +15,7 @@ export type Service = {
 
 export type CreateServiceInput = {
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme?: string;
   source?: string;

@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const services = sqliteTable('services', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  domain: text('domain').notNull(),
+  subdomain: text('subdomain').notNull(),
   port: integer('port').notNull(),
   scheme: text('scheme').default('http'),
   enabled: integer('enabled', { mode: 'boolean' }).default(true),

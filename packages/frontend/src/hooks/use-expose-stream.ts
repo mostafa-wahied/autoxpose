@@ -59,7 +59,38 @@ function handleMessage(event: MessageEvent, setState: SetState, onComplete: () =
 }
 
 function handleError(setState: SetState): void {
-  setState(prev => ({ ...prev, isActive: false, error: 'Connection lost. Please try again.' }));
+  setState(prev => ({
+    ...prev,
+    isActive: false,
+    serviceId: null,
+    action: null,
+    error: 'Connection lost. Please try again.',
+  }));
+}
+
+function createStreamCallbacks(
+  eventSource: EventSource,
+  setState: SetState,
+  queryClient: ReturnType<typeof useQueryClient>,
+  eventSourceRef: React.MutableRefObject<EventSource | null>
+): { onMessage: (e: MessageEvent) => void; onError: () => void } {
+  const onComplete = (): void => {
+    eventSource.close();
+    eventSourceRef.current = null;
+    setTimeout(() => {
+      setState(prev => ({ ...prev, isActive: false }));
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+    }, 500);
+  };
+
+  return {
+    onMessage: (e): void => handleMessage(e, setState, onComplete),
+    onError: (): void => {
+      handleError(setState);
+      eventSource.close();
+      eventSourceRef.current = null;
+    },
+  };
 }
 
 export function useExposeStream(): UseExposeStreamReturn {
@@ -77,7 +108,6 @@ export function useExposeStream(): UseExposeStreamReturn {
   const startStream = useCallback(
     (serviceId: string, action: 'expose' | 'unexpose') => {
       cleanup();
-
       setState({
         isActive: true,
         serviceId,
@@ -91,21 +121,9 @@ export function useExposeStream(): UseExposeStreamReturn {
       const eventSource = new EventSource(url);
       eventSourceRef.current = eventSource;
 
-      const onComplete = (): void => {
-        eventSource.close();
-        eventSourceRef.current = null;
-        setTimeout(() => {
-          setState((prev): ExposeStreamState => ({ ...prev, isActive: false }));
-          queryClient.invalidateQueries({ queryKey: ['services'] });
-        }, 500);
-      };
-
-      eventSource.onmessage = (e): void => handleMessage(e, setState, onComplete);
-      eventSource.onerror = (): void => {
-        handleError(setState);
-        eventSource.close();
-        eventSourceRef.current = null;
-      };
+      const cbs = createStreamCallbacks(eventSource, setState, queryClient, eventSourceRef);
+      eventSource.onmessage = cbs.onMessage;
+      eventSource.onerror = cbs.onError;
     },
     [cleanup, queryClient]
   );

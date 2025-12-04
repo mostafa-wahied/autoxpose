@@ -24,6 +24,7 @@ async function main(): Promise<void> {
   const ctx = createAppContext(db, config.docker?.socketPath, config.serverIp, config.lanIp);
   const server = await createServer(config, ctx);
 
+  ctx.startWatcher();
   await server.listen({ port: config.port, host: '0.0.0.0' });
   logger.info(`Server running on port ${config.port}`);
 }

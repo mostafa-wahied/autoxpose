@@ -1,6 +1,9 @@
-import { type SettingsStatus } from '../../lib/api';
+import { useEffect, useState } from 'react';
+import { api, type SettingsStatus } from '../../lib/api';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
+
+type ConnectionState = 'unconfigured' | 'checking' | 'connected' | 'error';
 
 interface SettingsStatusBarProps {
   settings: SettingsStatus | null | undefined;
@@ -13,78 +16,120 @@ export function SettingsStatusBar({
   isExpanded,
   onToggle,
 }: SettingsStatusBarProps): JSX.Element {
+  const [dnsState, setDnsState] = useState<ConnectionState>('unconfigured');
+  const [proxyState, setProxyState] = useState<ConnectionState>('unconfigured');
+
+  useEffect(() => {
+    if (!settings?.dns?.configured) {
+      setDnsState('unconfigured');
+    } else {
+      setDnsState('checking');
+      api.settings
+        .testDns()
+        .then(r => setDnsState(r.ok ? 'connected' : 'error'))
+        .catch(() => setDnsState('error'));
+    }
+  }, [settings]);
+
+  useEffect(() => {
+    if (!settings?.proxy?.configured) {
+      setProxyState('unconfigured');
+    } else {
+      setProxyState('checking');
+      api.settings
+        .testProxy()
+        .then(r => setProxyState(r.ok ? 'connected' : 'error'))
+        .catch(() => setProxyState('error'));
+    }
+  }, [settings]);
+
+  const needsSetup = dnsState !== 'connected' || proxyState !== 'connected';
+  const barStyle = needsSetup
+    ? 'border-[#f8514950] bg-[#f8514915]'
+    : 'border-[#30363d] bg-[#161b22]';
+
   return (
-    <div className="border-t border-[#30363d] bg-[#161b22] px-4 py-2">
+    <div className={`border-t px-4 py-2 ${barStyle}`}>
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
-          <DnsStatusIndicator settings={settings} />
+          <StatusIndicator label="DNS" state={dnsState} provider={settings?.dns?.provider} />
           <span className="text-[#30363d]">|</span>
-          <ProxyStatusIndicator settings={settings} />
+          <StatusIndicator label="Proxy" state={proxyState} provider={settings?.proxy?.provider} />
+          <StatusMessage dnsState={dnsState} proxyState={proxyState} />
         </div>
-        <ConfigureButton isExpanded={isExpanded} onClick={onToggle} />
+        <ConfigureButton isExpanded={isExpanded} needsSetup={needsSetup} onClick={onToggle} />
       </div>
     </div>
   );
 }
 
-function DnsStatusIndicator({
-  settings,
-}: {
-  settings: SettingsStatus | null | undefined;
-}): JSX.Element {
-  const configured = settings?.dns?.configured ?? false;
-  const provider = settings?.dns?.provider ?? 'none';
-  const tip = configured ? `Provider: ${provider}` : 'DNS not configured';
-  const color = configured ? TERMINAL_COLORS.success : TERMINAL_COLORS.textMuted;
+function getStateInfo(state: ConnectionState): { icon: string; color: string; tip: string } {
+  switch (state) {
+    case 'connected':
+      return { icon: '\u2713', color: TERMINAL_COLORS.success, tip: 'Connected' };
+    case 'checking':
+      return { icon: '\u25CF', color: TERMINAL_COLORS.warning, tip: 'Testing...' };
+    case 'error':
+      return { icon: '\u2717', color: TERMINAL_COLORS.error, tip: 'Connection failed' };
+    default:
+      return { icon: '\u25CB', color: TERMINAL_COLORS.textMuted, tip: 'Not configured' };
+  }
+}
 
+interface StatusIndicatorProps {
+  label: string;
+  state: ConnectionState;
+  provider: string | null | undefined;
+}
+
+function StatusIndicator({ label, state, provider }: StatusIndicatorProps): JSX.Element {
+  const { icon, color, tip } = getStateInfo(state);
+  const fullTip = provider ? `${tip} - ${provider}` : tip;
   return (
-    <Tooltip content={tip}>
+    <Tooltip content={fullTip}>
       <div className="flex items-center gap-1.5">
-        <span className="text-[#8b949e]">DNS:</span>
-        <span style={{ color }}>{configured ? '\u2713' : '\u25CB'}</span>
-        {configured && <span className="text-[#8b949e]">{provider}</span>}
+        <span className="text-[#8b949e]">{label}:</span>
+        <span style={{ color }}>{icon}</span>
+        {provider && state === 'connected' && <span className="text-[#8b949e]">{provider}</span>}
       </div>
     </Tooltip>
   );
 }
 
-function ProxyStatusIndicator({
-  settings,
+function StatusMessage({
+  dnsState,
+  proxyState,
 }: {
-  settings: SettingsStatus | null | undefined;
-}): JSX.Element {
-  const configured = settings?.proxy?.configured ?? false;
-  const provider = settings?.proxy?.provider ?? 'none';
-  const url = settings?.proxy?.config?.url ?? '';
-  const tip = configured ? `${provider} @ ${url}` : 'Proxy not configured';
-  const color = configured ? TERMINAL_COLORS.success : TERMINAL_COLORS.textMuted;
-
-  return (
-    <Tooltip content={tip}>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[#8b949e]">Proxy:</span>
-        <span style={{ color }}>{configured ? '\u2713' : '\u25CB'}</span>
-        {configured && <span className="text-[#8b949e]">{provider}</span>}
-      </div>
-    </Tooltip>
-  );
+  dnsState: ConnectionState;
+  proxyState: ConnectionState;
+}): JSX.Element | null {
+  if (dnsState === 'connected' && proxyState === 'connected') return null;
+  if (dnsState === 'checking' || proxyState === 'checking') {
+    return <span className="text-[#f0883e]">Verifying connections...</span>;
+  }
+  if (dnsState === 'error' || proxyState === 'error') {
+    return <span className="text-[#f85149]">Connection failed - check settings</span>;
+  }
+  return <span className="animate-pulse text-[#f85149]">Setup required to expose services</span>;
 }
 
 interface ConfigureButtonProps {
   isExpanded: boolean;
+  needsSetup: boolean;
   onClick: () => void;
 }
 
-function ConfigureButton({ isExpanded, onClick }: ConfigureButtonProps): JSX.Element {
+function ConfigureButton({ isExpanded, needsSetup, onClick }: ConfigureButtonProps): JSX.Element {
   const arrow = isExpanded ? '\u25BC' : '\u25B2';
+  const baseClass = 'flex items-center gap-1 rounded px-2 py-1 transition-colors';
+  const colorClass = needsSetup
+    ? 'bg-[#f8514930] text-[#f85149] hover:bg-[#f8514950]'
+    : 'text-[#8b949e] hover:bg-[#30363d] hover:text-[#c9d1d9]';
 
   return (
     <Tooltip content={isExpanded ? 'Close settings' : 'Open settings panel'} shortcut="Ctrl+,">
-      <button
-        onClick={onClick}
-        className="flex items-center gap-1 rounded px-2 py-1 text-[#8b949e] transition-colors hover:bg-[#30363d] hover:text-[#c9d1d9]"
-      >
-        <span>Configure</span>
+      <button onClick={onClick} className={`${baseClass} ${colorClass}`}>
+        <span>{needsSetup ? 'Setup Required' : 'Configure'}</span>
         <span className="text-[10px]">{arrow}</span>
       </button>
     </Tooltip>

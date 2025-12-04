@@ -68,43 +68,52 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     return this.mapInspectedContainer(info);
   }
 
-  private mapContainerInfo(container: Docker.ContainerInfo): DiscoveredService | null {
-    const labels = container.Labels || {};
-    const enabled = labels[`${this.labelPrefix}.enable`];
+  private isEnabled(enableValue: string | undefined): boolean {
+    return enableValue === 'true' || enableValue === 'auto';
+  }
 
-    logger.debug({ id: container.Id, labels, enabled }, 'Checking container');
-
-    if (enabled !== 'true') return null;
-
+  private resolvePortFromInfo(
+    labels: Record<string, string>,
+    ports: Docker.Port[]
+  ): { port: number; scheme: string } | null {
     const explicitPort = labels[`${this.labelPrefix}.port`];
     const explicitScheme = labels[`${this.labelPrefix}.scheme`];
 
-    let port: number | null;
-    let scheme: string;
-
     if (explicitPort) {
-      port = parseInt(explicitPort, 10);
-      scheme = explicitScheme || 'http';
-    } else {
-      const { selectedPort, detectedScheme } = this.selectBestPortFromInfo(container.Ports);
-      port = selectedPort;
-      scheme = explicitScheme || detectedScheme;
+      return { port: parseInt(explicitPort, 10), scheme: explicitScheme || 'http' };
     }
 
-    if (!port) {
+    const { selectedPort, detectedScheme } = this.selectBestPortFromInfo(ports);
+    if (!selectedPort) return null;
+
+    return { port: selectedPort, scheme: explicitScheme || detectedScheme };
+  }
+
+  private mapContainerInfo(container: Docker.ContainerInfo): DiscoveredService | null {
+    const labels = container.Labels || {};
+    const enableValue = labels[`${this.labelPrefix}.enable`];
+
+    logger.debug({ id: container.Id, labels, enable: enableValue }, 'Checking container');
+
+    if (!this.isEnabled(enableValue)) return null;
+
+    const resolved = this.resolvePortFromInfo(labels, container.Ports);
+    if (!resolved) {
       logger.debug({ id: container.Id }, 'No port found');
       return null;
     }
 
     const name = container.Names?.[0]?.replace(/^\//, '') || '';
+    const subdomain = labels[`${this.labelPrefix}.subdomain`] || '';
     return {
       id: container.Id,
       name: labels[`${this.labelPrefix}.name`] || name,
-      domain: labels[`${this.labelPrefix}.domain`] || '',
-      port,
-      scheme,
+      subdomain,
+      port: resolved.port,
+      scheme: resolved.scheme,
       source: 'docker',
       labels,
+      autoExpose: enableValue === 'auto',
     };
   }
 
@@ -136,38 +145,44 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     return { selectedPort: mappings[0].publicPort, detectedScheme: 'http' };
   }
 
-  private mapInspectedContainer(info: Docker.ContainerInspectInfo): DiscoveredService | null {
-    const labels = info.Config.Labels || {};
-    const enabled = labels[`${this.labelPrefix}.enable`];
-
-    if (enabled !== 'true') return null;
-
+  private resolvePortFromBindings(
+    labels: Record<string, string>,
+    bindings: Record<string, unknown>
+  ): { port: number; scheme: string } | null {
     const explicitPort = labels[`${this.labelPrefix}.port`];
     const explicitScheme = labels[`${this.labelPrefix}.scheme`];
 
-    let port: number | null;
-    let scheme: string;
-
     if (explicitPort) {
-      port = parseInt(explicitPort, 10);
-      scheme = explicitScheme || 'http';
-    } else {
-      const portBindings = info.NetworkSettings.Ports || {};
-      const { selectedPort, detectedScheme } = this.selectBestPortFromBindings(portBindings);
-      port = selectedPort;
-      scheme = explicitScheme || detectedScheme;
+      return { port: parseInt(explicitPort, 10), scheme: explicitScheme || 'http' };
     }
 
-    if (!port) return null;
+    const { selectedPort, detectedScheme } = this.selectBestPortFromBindings(bindings);
+    if (!selectedPort) return null;
 
+    return { port: selectedPort, scheme: explicitScheme || detectedScheme };
+  }
+
+  private mapInspectedContainer(info: Docker.ContainerInspectInfo): DiscoveredService | null {
+    const labels = info.Config.Labels || {};
+    const enableValue = labels[`${this.labelPrefix}.enable`];
+
+    if (!this.isEnabled(enableValue)) return null;
+
+    const portBindings = info.NetworkSettings.Ports || {};
+    const resolved = this.resolvePortFromBindings(labels, portBindings);
+    if (!resolved) return null;
+
+    const name = info.Name.replace(/^\//, '');
+    const subdomain = labels[`${this.labelPrefix}.subdomain`] || '';
     return {
       id: info.Id,
-      name: labels[`${this.labelPrefix}.name`] || info.Name.replace(/^\//, ''),
-      domain: labels[`${this.labelPrefix}.domain`] || '',
-      port,
-      scheme,
+      name: labels[`${this.labelPrefix}.name`] || name,
+      subdomain,
+      port: resolved.port,
+      scheme: resolved.scheme,
       source: 'docker',
       labels,
+      autoExpose: enableValue === 'auto',
     };
   }
 

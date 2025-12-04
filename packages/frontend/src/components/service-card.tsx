@@ -4,12 +4,12 @@ import type { ServiceRecord } from '../lib/api';
 type Props = { service: ServiceRecord };
 
 function getPublicUrl(svc: ServiceRecord, exposed: boolean): string {
-  if (!svc.domain || !exposed) return '';
-  return `https://${svc.domain}`;
+  if (!svc.subdomain || !exposed) return '';
+  return `https://${svc.subdomain}`;
 }
 
 function ServiceLink({ url }: { url: string }): JSX.Element {
-  if (!url) return <p className="mt-1 text-sm text-neutral-500">No domain configured</p>;
+  if (!url) return <p className="mt-1 text-sm text-neutral-500">No subdomain configured</p>;
   return (
     <a
       href={url}

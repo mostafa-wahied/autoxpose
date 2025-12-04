@@ -2,9 +2,9 @@ import type { SettingsService } from '../settings/settings.service.js';
 import { emit, emitError, type ExposeContext } from './progress-emitter.js';
 import { updateStep } from './progress.types.js';
 
-type DnsService = { domain: string; dnsRecordId: string | null };
+type DnsService = { subdomain: string; dnsRecordId: string | null };
 type ProxyService = {
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string | null;
   proxyHostId: string | null;
@@ -62,10 +62,10 @@ export async function handleDnsExpose(
     }
 
     emitRunning(ctx, 'dns', 50, 'Creating record...');
-    const subdomain = svc.domain.split('.')[0];
+    const subdomain = svc.subdomain.split('.')[0];
     const record = await dns.createRecord({ subdomain, ip: publicIp });
 
-    emitSuccess(ctx, 'dns', svc.domain);
+    emitSuccess(ctx, 'dns', svc.subdomain);
     return record.id;
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'DNS error';
@@ -74,13 +74,20 @@ export async function handleDnsExpose(
   }
 }
 
+type ProxyExposeParams = {
+  ctx: ExposeContext;
+  svc: ProxyService;
+  fullDomain: string;
+  settings: SettingsService;
+  lanIp: string;
+};
+
 /**Handle proxy host creation during expose */
 export async function handleProxyExpose(
-  ctx: ExposeContext,
-  svc: ProxyService,
-  settings: SettingsService,
-  lanIp: string
+  params: ProxyExposeParams
 ): Promise<string | null | undefined> {
+  const { ctx, svc, fullDomain, settings, lanIp } = params;
+
   if (svc.proxyHostId) {
     emitSkipped(ctx, 'proxy', 'Already configured');
     return svc.proxyHostId;
@@ -95,9 +102,9 @@ export async function handleProxyExpose(
       return undefined;
     }
 
-    emitRunning(ctx, 'proxy', 50, `Configuring ${svc.domain}...`);
+    emitRunning(ctx, 'proxy', 50, `Configuring ${fullDomain}...`);
     const host = await proxy.createHost({
-      domain: svc.domain,
+      domain: fullDomain,
       targetHost: lanIp,
       targetPort: svc.port,
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',

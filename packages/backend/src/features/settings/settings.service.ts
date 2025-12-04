@@ -21,11 +21,27 @@ export class SettingsService {
   }
 
   async saveDnsConfig(provider: string, config: Record<string, string>): Promise<void> {
-    await this.repository.save({ type: 'dns', provider, config });
+    const existing = await this.getDnsConfig();
+    const newConfig = { ...config };
+
+    //Keep existing token if new one is empty or masked
+    if (existing && (!newConfig.token || newConfig.token.includes('••••'))) {
+      newConfig.token = existing.config.token;
+    }
+
+    await this.repository.save({ type: 'dns', provider, config: newConfig });
   }
 
   async saveProxyConfig(provider: string, config: Record<string, string>): Promise<void> {
-    await this.repository.save({ type: 'proxy', provider, config });
+    const existing = await this.getProxyConfig();
+    const newConfig = { ...config };
+
+    //Keep existing password if new one is empty or masked
+    if (existing && (!newConfig.password || newConfig.password.includes('••••'))) {
+      newConfig.password = existing.config.password;
+    }
+
+    await this.repository.save({ type: 'proxy', provider, config: newConfig });
   }
 
   async getDnsProvider(): Promise<DnsProvider | null> {

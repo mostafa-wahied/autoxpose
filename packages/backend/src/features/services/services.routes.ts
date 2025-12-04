@@ -1,16 +1,17 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppContext } from '../../core/context.js';
 import { probeBackend } from '../discovery/probe.js';
+import { checkDomainReachable } from '../settings/validation.js';
 
 interface CreateBody {
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme?: string;
 }
 interface UpdateBody {
   name?: string;
-  domain?: string;
+  subdomain?: string;
   port?: number;
   scheme?: string;
   enabled?: boolean;
@@ -72,6 +73,17 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const { host, port } = request.body;
       const result = await probeBackend(host, port);
       return result;
+    });
+
+    server.post<{ Params: IdParams }>('/:id/online', async (request, reply) => {
+      const service = await ctx.services.getServiceById(request.params.id);
+      if (!service) return notFound(reply);
+      if (!service.enabled || !service.subdomain) return { online: false };
+      const dns = await ctx.settings.getDnsConfig();
+      if (!dns?.config.domain) return { online: false };
+      const fqdn = `${service.subdomain}.${dns.config.domain}`;
+      const result = await checkDomainReachable(fqdn);
+      return { online: result.ok, domain: fqdn };
     });
   };
 };

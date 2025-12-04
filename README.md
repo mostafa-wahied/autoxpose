@@ -31,8 +31,31 @@ services:
     image: myapp:latest
     labels:
       - autoxpose.enable=true
-      - autoxpose.domain=myapp
-      - autoxpose.port=8080
+      - autoxpose.subdomain=myapp
+```
+
+### Label Reference
+
+| Label                 | Values                  | Default        | Description                                       |
+| --------------------- | ----------------------- | -------------- | ------------------------------------------------- |
+| `autoxpose.enable`    | `true`, `auto`, `false` | -              | `true` = show in UI, `auto` = auto-expose on scan |
+| `autoxpose.subdomain` | string                  | container name | Subdomain for the service                         |
+| `autoxpose.port`      | number                  | auto-detected  | Override port detection                           |
+| `autoxpose.scheme`    | `http`, `https`         | auto-detected  | Override scheme detection                         |
+| `autoxpose.name`      | string                  | container name | Display name in UI                                |
+
+### Minimal Setup
+
+Only `autoxpose.enable=true` is required. Everything else is auto-detected.
+
+### Auto-Expose
+
+Use `autoxpose.enable=auto` to automatically expose services when discovered:
+
+```yaml
+labels:
+  - autoxpose.enable=auto
+  - autoxpose.subdomain=myapp
 ```
 
 ## Configuration

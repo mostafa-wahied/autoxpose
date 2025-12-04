@@ -11,42 +11,50 @@ import { TerminalThemeProvider } from '../components/terminal/theme';
 import { api, type ServiceRecord } from '../lib/api';
 import { ConfirmDialogs } from './terminal/confirm-dialogs';
 import { ServiceGrid } from './terminal/service-grid';
+import { ErrorView, LoadingView, ScanSuccessNotice } from './terminal/status-views';
 import { useTerminalActions } from './terminal/use-terminal-actions';
+
+type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 
 function getConnectionStatus(
   isLoading: boolean,
-  dnsConfigured: boolean,
-  proxyConfigured: boolean
-): 'connected' | 'disconnected' | 'connecting' {
+  dnsOk: boolean,
+  proxyOk: boolean
+): ConnectionStatus {
   if (isLoading) return 'connecting';
-  if (dnsConfigured && proxyConfigured) return 'connected';
-  return 'disconnected';
+  return dnsOk && proxyOk ? 'connected' : 'disconnected';
+}
+
+function checkNeedsSetup(isLoading: boolean, dnsOk: boolean, proxyOk: boolean): boolean {
+  return !isLoading && (!dnsOk || !proxyOk);
+}
+
+function getLoadingId(
+  streamState: { isActive: boolean; serviceId: string | null },
+  deletingId: string | null
+): string | null {
+  const streamLoading = streamState.isActive ? streamState.serviceId : null;
+  return streamLoading || deletingId;
 }
 
 function TerminalDashboard(): JSX.Element {
   const servicesQuery = useQuery({ queryKey: ['services'], queryFn: api.services.list });
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings.status });
-
   const services = servicesQuery.data?.services || [];
-  const { actions, state } = useTerminalActions({ services });
+  const settings = settingsQuery.data;
+  const dnsOk = settings?.dns?.configured ?? false;
+  const proxyOk = settings?.proxy?.configured ?? false;
+  const needsSetup = checkNeedsSetup(settingsQuery.isLoading, dnsOk, proxyOk);
+  const canExpose = dnsOk && proxyOk;
+  const { actions, state } = useTerminalActions({ services, needsSetup });
 
-  if (servicesQuery.isLoading) {
-    return <LoadingView />;
-  }
-
-  if (servicesQuery.error) {
-    return <ErrorView />;
-  }
+  if (servicesQuery.isLoading) return <LoadingView />;
+  if (servicesQuery.error) return <ErrorView />;
 
   const exposedCount = services.filter(s => s.enabled).length;
   const activeService = services.find(s => s.id === state.streamState.serviceId);
-  const loadingId = state.streamState.isActive
-    ? state.streamState.serviceId
-    : state.deletingServiceId;
-  const dnsOk = settingsQuery.data?.dns?.configured ?? false;
-  const proxyOk = settingsQuery.data?.proxy?.configured ?? false;
+  const loadingId = getLoadingId(state.streamState, state.deletingServiceId);
   const connectionStatus = getConnectionStatus(settingsQuery.isLoading, dnsOk, proxyOk);
-  const platformName = settingsQuery.data?.platform?.name ?? 'Server';
 
   return (
     <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
@@ -54,7 +62,7 @@ function TerminalDashboard(): JSX.Element {
         serviceCount={services.length}
         exposedCount={exposedCount}
         connectionStatus={connectionStatus}
-        serverName={platformName}
+        serverName={settings?.platform?.name ?? 'Server'}
         onExposeAll={actions.handleExposeAll}
         onUnexposeAll={actions.handleUnexposeAll}
         onScan={actions.handleScan}
@@ -66,7 +74,9 @@ function TerminalDashboard(): JSX.Element {
         actions={actions}
         activeService={activeService}
         loadingId={loadingId}
-        settingsData={settingsQuery.data}
+        settingsData={settings}
+        baseDomain={settings?.dns?.domain ?? null}
+        canExpose={canExpose}
       />
       <ConfirmDialogs
         action={state.confirmAction}
@@ -86,6 +96,8 @@ interface MainContentProps {
   activeService: ServiceRecord | undefined;
   loadingId: string | null;
   settingsData: Awaited<ReturnType<typeof api.settings.status>> | undefined;
+  baseDomain: string | null;
+  canExpose: boolean;
 }
 
 function MainContent({
@@ -95,6 +107,8 @@ function MainContent({
   activeService,
   loadingId,
   settingsData,
+  baseDomain,
+  canExpose,
 }: MainContentProps): JSX.Element {
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -107,6 +121,8 @@ function MainContent({
             actions={actions}
             activeService={activeService}
             loadingId={loadingId}
+            baseDomain={baseDomain}
+            canExpose={canExpose}
           />
         </div>
         <SettingsPanel
@@ -130,6 +146,8 @@ interface ContentAreaProps {
   actions: ReturnType<typeof useTerminalActions>['actions'];
   activeService: ServiceRecord | undefined;
   loadingId: string | null;
+  baseDomain: string | null;
+  canExpose: boolean;
 }
 
 function ContentArea({
@@ -138,6 +156,8 @@ function ContentArea({
   actions,
   activeService,
   loadingId,
+  baseDomain,
+  canExpose,
 }: ContentAreaProps): JSX.Element {
   return (
     <div className="space-y-6">
@@ -148,7 +168,10 @@ function ContentArea({
         activeServiceId={state.streamState.serviceId}
         onExpose={actions.handleExpose}
         onDelete={actions.handleDelete}
+        onSubdomainChange={actions.handleSubdomainChange}
         loadingServiceId={loadingId}
+        baseDomain={baseDomain}
+        canExpose={canExpose}
       />
       {state.streamState.serviceId && activeService && (
         <ProgressOutput
@@ -160,36 +183,6 @@ function ContentArea({
         />
       )}
       {!state.streamState.isActive && <CommandPrompt />}
-    </div>
-  );
-}
-
-interface ScanNoticeData {
-  created: number;
-  updated: number;
-}
-
-function ScanSuccessNotice({ data }: { data: ScanNoticeData }): JSX.Element {
-  return (
-    <div className="rounded border border-[#238636] bg-[#23863620] px-4 py-2 text-sm">
-      <span className="text-[#3fb950]">{'\u2713'}</span> Scan complete: {data.created} created,{' '}
-      {data.updated} updated
-    </div>
-  );
-}
-
-function LoadingView(): JSX.Element {
-  return (
-    <div className="flex h-screen items-center justify-center bg-[#0d1117] font-mono text-[#c9d1d9]">
-      <CommandPrompt command="Loading services..." />
-    </div>
-  );
-}
-
-function ErrorView(): JSX.Element {
-  return (
-    <div className="flex h-screen items-center justify-center bg-[#0d1117] font-mono text-[#f85149]">
-      [ERROR] Failed to load services. Check your connection.
     </div>
   );
 }

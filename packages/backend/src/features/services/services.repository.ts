@@ -6,7 +6,7 @@ import * as schema from '../../core/database/schema.js';
 export interface ServiceRecord {
   id: string;
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string | null;
   enabled: boolean | null;
@@ -20,7 +20,7 @@ export interface ServiceRecord {
 
 export interface CreateServiceInput {
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme?: string;
   source: string;
@@ -29,7 +29,7 @@ export interface CreateServiceInput {
 
 export interface UpdateServiceInput {
   name?: string;
-  domain?: string;
+  subdomain?: string;
   port?: number;
   scheme?: string;
   enabled?: boolean;
@@ -68,10 +68,10 @@ export class ServicesRepository {
     const record = {
       id,
       name: input.name,
-      domain: input.domain,
+      subdomain: input.subdomain,
       port: input.port,
       scheme: input.scheme ?? 'http',
-      enabled: true,
+      enabled: false,
       source: input.source,
       sourceId: input.sourceId ?? null,
       dnsRecordId: null,

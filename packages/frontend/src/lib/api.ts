@@ -3,7 +3,7 @@ const API_BASE = '/api';
 export interface ServiceRecord {
   id: string;
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string | null;
   enabled: boolean | null;
@@ -18,7 +18,7 @@ export interface ServiceRecord {
 export interface DiscoveredContainer {
   id: string;
   name: string;
-  domain: string;
+  subdomain: string;
   port: number;
   scheme: string;
   source: string;
@@ -30,13 +30,17 @@ export interface ProviderStatus {
   config: Record<string, string> | null;
 }
 
+export interface DnsStatus extends ProviderStatus {
+  domain: string | null;
+}
+
 export interface PlatformInfo {
   name: string;
   os: string;
 }
 
 export interface SettingsStatus {
-  dns: ProviderStatus;
+  dns: DnsStatus;
   proxy: ProviderStatus;
   platform?: PlatformInfo;
 }
@@ -71,7 +75,7 @@ export const api = {
       request<{ service: ServiceRecord }>(`/services/${id}`),
     create: (data: {
       name: string;
-      domain: string;
+      subdomain: string;
       port: number;
       scheme?: string;
     }): Promise<{ service: ServiceRecord }> =>
@@ -81,7 +85,7 @@ export const api = {
       }),
     update: (
       id: string,
-      data: Partial<{ name: string; domain: string; port: number; enabled: boolean }>
+      data: Partial<{ name: string; subdomain: string; port: number; enabled: boolean }>
     ): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}`, {
         method: 'PATCH',
@@ -93,6 +97,8 @@ export const api = {
       request<{ service: ServiceRecord }>(`/services/${id}/expose`, { method: 'POST' }),
     unexpose: (id: string): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}/unexpose`, { method: 'POST' }),
+    checkOnline: (id: string): Promise<{ online: boolean; domain?: string }> =>
+      request<{ online: boolean; domain?: string }>(`/services/${id}/online`, { method: 'POST' }),
   },
   discovery: {
     containers: (): Promise<{ containers: DiscoveredContainer[] }> =>
@@ -105,15 +111,28 @@ export const api = {
   },
   settings: {
     status: (): Promise<SettingsStatus> => request<SettingsStatus>('/settings/status'),
-    saveDns: (provider: string, config: Record<string, string>): Promise<{ success: boolean }> =>
-      request<{ success: boolean }>('/settings/dns', {
+    saveDns: (
+      provider: string,
+      config: Record<string, string>
+    ): Promise<{ success: boolean; validation?: { ok: boolean; error?: string } }> =>
+      request<{ success: boolean; validation?: { ok: boolean; error?: string } }>('/settings/dns', {
         method: 'POST',
         body: JSON.stringify({ provider, config }),
       }),
-    saveProxy: (provider: string, config: Record<string, string>): Promise<{ success: boolean }> =>
-      request<{ success: boolean }>('/settings/proxy', {
-        method: 'POST',
-        body: JSON.stringify({ provider, config }),
-      }),
+    saveProxy: (
+      provider: string,
+      config: Record<string, string>
+    ): Promise<{ success: boolean; validation?: { ok: boolean; error?: string } }> =>
+      request<{ success: boolean; validation?: { ok: boolean; error?: string } }>(
+        '/settings/proxy',
+        {
+          method: 'POST',
+          body: JSON.stringify({ provider, config }),
+        }
+      ),
+    testDns: (): Promise<{ ok: boolean; error?: string }> =>
+      request<{ ok: boolean; error?: string }>('/settings/dns/test', { method: 'POST' }),
+    testProxy: (): Promise<{ ok: boolean; error?: string }> =>
+      request<{ ok: boolean; error?: string }>('/settings/proxy/test', { method: 'POST' }),
   },
 };

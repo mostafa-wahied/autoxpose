@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, type SettingsStatus } from '../../lib/api';
 import { FormActions, FormInput, FormSelect } from './form-components';
+import { TestConnectionButton, type TestState } from './test-button';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -154,6 +155,18 @@ function ProxyForm(props: ProxyFormProps): JSX.Element {
 }
 
 function ProxyDisplay({ current }: { current: SettingsStatus['proxy'] | null }): JSX.Element {
+  const [testState, setTestState] = useState<TestState>({ status: 'idle' });
+
+  const handleTest = async (): Promise<void> => {
+    setTestState({ status: 'testing' });
+    try {
+      const result = await api.settings.testProxy();
+      setTestState(result.ok ? { status: 'success' } : { status: 'error', error: result.error });
+    } catch {
+      setTestState({ status: 'error', error: 'Connection test failed' });
+    }
+  };
+
   return (
     <div className="space-y-2 text-xs text-[#8b949e]">
       <p>
@@ -168,6 +181,7 @@ function ProxyDisplay({ current }: { current: SettingsStatus['proxy'] | null }):
       <p>
         <span className="text-[#484f58]">Password:</span> Saved
       </p>
+      <TestConnectionButton status={testState.status} error={testState.error} onTest={handleTest} />
     </div>
   );
 }

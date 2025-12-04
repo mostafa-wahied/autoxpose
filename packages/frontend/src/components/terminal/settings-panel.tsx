@@ -9,13 +9,13 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps): JSX.Element {
-  const visClass = isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0';
+  const visClass = isOpen ? 'max-h-[60vh] opacity-100' : 'max-h-0 opacity-0';
 
   return (
     <div
-      className={`overflow-hidden border-t border-[#30363d] bg-[#0d1117] transition-all duration-300 ease-in-out ${visClass}`}
+      className={`overflow-y-auto border-t border-[#30363d] bg-[#0d1117] transition-all duration-300 ease-in-out ${visClass}`}
     >
-      <div className="p-6">
+      <div className="p-6 pb-8">
         <PanelHeader onClose={onClose} />
         <div className="grid gap-6 md:grid-cols-2">
           <DnsConfigSection current={settings?.dns ?? null} />

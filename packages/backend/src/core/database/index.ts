@@ -13,7 +13,7 @@ export function getDatabase(path: string): AppDatabase {
       CREATE TABLE IF NOT EXISTS services (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        domain TEXT NOT NULL,
+        subdomain TEXT NOT NULL,
         port INTEGER NOT NULL,
         scheme TEXT DEFAULT 'http',
         enabled INTEGER DEFAULT 1,

@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api } from '../../lib/api';
+import { api, type ServiceRecord } from '../../lib/api';
 
 type ScanResult = { discovered: number; created: number; updated: number; removed: number };
 type DeleteResult = { success: boolean };
+type UpdateResult = { service: ServiceRecord };
+type UpdateInput = { id: string; subdomain: string };
 
 interface MutationsReturn {
   scanMutation: UseMutationResult<ScanResult, Error, void>;
   deleteMutation: UseMutationResult<DeleteResult, Error, string>;
+  updateMutation: UseMutationResult<UpdateResult, Error, UpdateInput>;
   deletingServiceId: string | null;
   setDeletingServiceId: (id: string | null) => void;
 }
@@ -31,5 +34,13 @@ export function useTerminalMutations(): MutationsReturn {
     },
   });
 
-  return { scanMutation, deleteMutation, deletingServiceId, setDeletingServiceId };
+  const updateMutation = useMutation({
+    mutationFn: (input: UpdateInput) =>
+      api.services.update(input.id, { subdomain: input.subdomain }),
+    onSuccess: (): void => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+    },
+  });
+
+  return { scanMutation, deleteMutation, updateMutation, deletingServiceId, setDeletingServiceId };
 }

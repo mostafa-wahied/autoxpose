@@ -5,7 +5,7 @@ export function ServicesTable({ children }: { children: React.ReactNode }): JSX.
         <thead>
           <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
             <th className="py-3 pl-4 pr-4">Name</th>
-            <th className="py-3 pr-4">Domain</th>
+            <th className="py-3 pr-4">Subdomain</th>
             <th className="py-3 pr-4">Endpoint</th>
             <th className="py-3 pr-4">Status</th>
             <th className="py-3 pr-4">Source</th>
