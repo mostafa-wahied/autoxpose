@@ -1,4 +1,5 @@
 import type { SettingsService } from '../settings/settings.service.js';
+import { waitForDnsPropagation, type PropagationCallback } from './dns-propagation.js';
 import { emit, emitError, type ExposeContext } from './progress-emitter.js';
 import { updateStep } from './progress.types.js';
 
@@ -9,77 +10,104 @@ type ProxyService = {
   scheme: string | null;
   proxyHostId: string | null;
 };
+type StepType = 'dns' | 'proxy';
 
-function emitSkipped(ctx: ExposeContext, step: 'dns' | 'proxy', detail: string): void {
+function emitSkipped(ctx: ExposeContext, step: StepType, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'success', progress: 100, detail });
   emit(ctx);
 }
 
-function emitRunning(
-  ctx: ExposeContext,
-  step: 'dns' | 'proxy',
-  progress: number,
-  detail: string
-): void {
+function emitRunning(ctx: ExposeContext, step: StepType, progress: number, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'running', progress, detail });
   emit(ctx);
 }
 
-function emitSuccess(ctx: ExposeContext, step: 'dns' | 'proxy', detail: string): void {
+function emitSuccess(ctx: ExposeContext, step: StepType, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'success', progress: 100, detail });
   emit(ctx);
 }
 
-function emitStepError(
-  ctx: ExposeContext,
-  step: 'dns' | 'proxy',
-  msg: string,
-  prefix: string
-): void {
+function emitStepError(ctx: ExposeContext, step: StepType, msg: string, prefix: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'error', progress: 100, detail: msg });
   emitError(ctx, `${prefix}: ${msg}`);
 }
 
-/**Handle DNS record creation during expose */
-export async function handleDnsExpose(
-  ctx: ExposeContext,
-  svc: DnsService,
-  settings: SettingsService,
-  publicIp: string
-): Promise<string | null | undefined> {
+export type DnsExposeResult = {
+  recordId: string | null | undefined;
+  propagationSuccess: boolean;
+  globalVerified: boolean;
+};
+
+type DnsExposeParams = {
+  ctx: ExposeContext;
+  svc: DnsService;
+  settings: SettingsService;
+  publicIp: string;
+  fullDomain: string;
+};
+
+export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResult> {
+  const { ctx, svc, settings, publicIp, fullDomain } = p;
   if (svc.dnsRecordId) {
     emitSkipped(ctx, 'dns', 'Already configured');
-    return svc.dnsRecordId;
+    return { recordId: svc.dnsRecordId, propagationSuccess: true, globalVerified: true };
   }
 
-  emitRunning(ctx, 'dns', 20, 'Connecting...');
+  emitRunning(ctx, 'dns', 5, 'Connecting...');
 
   try {
     const dns = await settings.getDnsProvider();
     if (!dns) {
       emitSkipped(ctx, 'dns', 'Skipped');
-      return undefined;
+      return { recordId: undefined, propagationSuccess: true, globalVerified: true };
     }
 
     const subdomain = svc.subdomain.split('.')[0];
-    emitRunning(ctx, 'dns', 40, 'Checking existing records...');
+    emitRunning(ctx, 'dns', 10, 'Checking existing records...');
     const existing = await dns.findByHostname(subdomain);
 
+    let recordId: string;
     if (existing) {
-      emitSuccess(ctx, 'dns', `Found existing: ${svc.subdomain}`);
-      return existing.id;
+      emitRunning(ctx, 'dns', 20, `Found existing: ${svc.subdomain}`);
+      recordId = existing.id;
+    } else {
+      emitRunning(ctx, 'dns', 15, 'Creating record...');
+      const record = await dns.createRecord({ subdomain, ip: publicIp });
+      recordId = record.id;
+      emitRunning(ctx, 'dns', 25, `Created: ${svc.subdomain}`);
     }
 
-    emitRunning(ctx, 'dns', 60, 'Creating record...');
-    const record = await dns.createRecord({ subdomain, ip: publicIp });
+    const propagation = await runPropagationWithinDns(ctx, fullDomain);
+    if (!propagation.success) {
+      emitStepError(ctx, 'dns', 'DNS not propagated after 2 minutes', 'DNS failed');
+      return { recordId: null, propagationSuccess: false, globalVerified: false };
+    }
 
-    emitSuccess(ctx, 'dns', svc.subdomain);
-    return record.id;
+    const detail = propagation.globalVerified ? 'Verified globally' : svc.subdomain;
+    emitSuccess(ctx, 'dns', detail);
+    return { recordId, propagationSuccess: true, globalVerified: propagation.globalVerified };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'DNS error';
     emitStepError(ctx, 'dns', msg, 'DNS failed');
-    return null;
+    return { recordId: null, propagationSuccess: false, globalVerified: false };
   }
+}
+
+async function runPropagationWithinDns(
+  ctx: ExposeContext,
+  domain: string
+): Promise<{ success: boolean; globalVerified: boolean }> {
+  emitRunning(ctx, 'dns', 30, 'Checking local DNS...');
+  const onProgress: PropagationCallback = p => {
+    const base = p.phase === 'local' ? 30 : 70;
+    const range = p.phase === 'local' ? 40 : 25;
+    const pct = base + Math.round((p.attempt / p.maxAttempts) * range);
+    const secs = Math.round(p.elapsed / 1000);
+    const label = p.phase === 'local' ? 'Local' : 'Global';
+    emitRunning(ctx, 'dns', pct, `${label} check ${p.attempt}/${p.maxAttempts} (${secs}s)`);
+  };
+  const result = await waitForDnsPropagation(domain, onProgress);
+  return { success: result.success, globalVerified: result.globalVerified };
 }
 
 type ProxyExposeParams = {
@@ -90,15 +118,22 @@ type ProxyExposeParams = {
   lanIp: string;
 };
 
+export type ProxyExposeResult =
+  | {
+      id: string;
+      sslPending?: boolean;
+      sslError?: string;
+    }
+  | null
+  | undefined;
+
 /**Handle proxy host creation during expose */
-export async function handleProxyExpose(
-  params: ProxyExposeParams
-): Promise<string | null | undefined> {
+export async function handleProxyExpose(params: ProxyExposeParams): Promise<ProxyExposeResult> {
   const { ctx, svc, fullDomain, settings, lanIp } = params;
 
   if (svc.proxyHostId) {
     emitSkipped(ctx, 'proxy', 'Already configured');
-    return svc.proxyHostId;
+    return { id: svc.proxyHostId };
   }
 
   emitRunning(ctx, 'proxy', 20, 'Connecting...');
@@ -115,20 +150,28 @@ export async function handleProxyExpose(
 
     if (existing) {
       emitSuccess(ctx, 'proxy', `Found existing: Port ${svc.port} → 443`);
-      return existing.id;
+      return { id: existing.id };
     }
 
-    emitRunning(ctx, 'proxy', 60, `Configuring ${fullDomain}...`);
+    emitRunning(ctx, 'proxy', 50, `Creating proxy host...`);
+    emitRunning(ctx, 'proxy', 70, `Requesting SSL certificate...`);
     const host = await proxy.createHost({
       domain: fullDomain,
       targetHost: lanIp,
       targetPort: svc.port,
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
+      skipDnsWait: true,
     });
 
-    emitSuccess(ctx, 'proxy', `Port ${svc.port} → 443`);
-    return host.id;
+    if (host.sslPending) {
+      const detail = `HTTP only - SSL failed: ${host.sslError || 'unknown'}`;
+      ctx.steps = updateStep(ctx.steps, 'proxy', { status: 'warning', progress: 100, detail });
+      emit(ctx);
+    } else {
+      emitSuccess(ctx, 'proxy', `Port ${svc.port} → 443`);
+    }
+    return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Proxy error';
     emitStepError(ctx, 'proxy', msg, 'Proxy failed');

@@ -38,19 +38,25 @@ export class StreamingExposeService {
     const baseDomain = await this.getBaseDomain();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
 
-    const dnsId = await handleDnsExpose(ctx, service, this.settings, this.publicIp);
-    if (dnsId === null) return;
+    const dnsResult = await handleDnsExpose({
+      ctx,
+      svc: service,
+      settings: this.settings,
+      publicIp: this.publicIp,
+      fullDomain,
+    });
+    if (dnsResult.recordId === null || !dnsResult.propagationSuccess) return;
 
-    const proxyId = await handleProxyExpose({
+    const proxyResult = await handleProxyExpose({
       ctx,
       svc: service,
       fullDomain,
       settings: this.settings,
       lanIp: this.lanIp,
     });
-    if (proxyId === null) return;
+    if (proxyResult === null) return;
 
-    const nothingConfigured = dnsId === undefined && proxyId === undefined;
+    const nothingConfigured = dnsResult.recordId === undefined && proxyResult === undefined;
     if (nothingConfigured) {
       emitError(ctx, 'No providers configured. Set up DNS and Proxy in settings first.');
       return;
@@ -58,11 +64,14 @@ export class StreamingExposeService {
 
     await this.servicesRepo.update(serviceId, {
       enabled: true,
-      dnsRecordId: dnsId || null,
-      proxyHostId: proxyId || null,
+      dnsRecordId: dnsResult.recordId || null,
+      proxyHostId: proxyResult?.id || null,
     });
 
-    emitComplete(ctx, fullDomain, { dns: dnsId, proxy: proxyId });
+    const sslStatus = proxyResult
+      ? { pending: proxyResult.sslPending, error: proxyResult.sslError }
+      : undefined;
+    emitComplete(ctx, fullDomain, { dns: dnsResult.recordId, proxy: proxyResult?.id }, sslStatus);
   }
 
   async unexposeWithProgress(serviceId: string, onProgress: ProgressCallback): Promise<void> {

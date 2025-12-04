@@ -25,7 +25,8 @@ export function emit(ctx: ExposeContext, updates?: Partial<ProgressEvent>): void
 export function emitComplete(
   ctx: ExposeContext,
   domain: string,
-  ids: { dns?: string; proxy?: string }
+  ids: { dns?: string; proxy?: string },
+  ssl?: { pending?: boolean; error?: string }
 ): void {
   ctx.onProgress({
     type: 'complete',
@@ -33,7 +34,14 @@ export function emitComplete(
     action: ctx.action,
     steps: ctx.steps,
     timestamp: Date.now(),
-    result: { success: true, domain, dnsRecordId: ids.dns, proxyHostId: ids.proxy },
+    result: {
+      success: true,
+      domain,
+      dnsRecordId: ids.dns,
+      proxyHostId: ids.proxy,
+      sslPending: ssl?.pending,
+      sslError: ssl?.error,
+    },
   });
 }
 

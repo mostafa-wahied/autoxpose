@@ -99,6 +99,10 @@ export const api = {
       request<{ service: ServiceRecord }>(`/services/${id}/unexpose`, { method: 'POST' }),
     checkOnline: (id: string): Promise<{ online: boolean; domain?: string }> =>
       request<{ online: boolean; domain?: string }>(`/services/${id}/online`, { method: 'POST' }),
+    retrySsl: (id: string): Promise<{ success: boolean; error?: string }> =>
+      request<{ success: boolean; error?: string }>(`/services/${id}/retry-ssl`, {
+        method: 'POST',
+      }),
   },
   discovery: {
     containers: (): Promise<{ containers: DiscoveredContainer[] }> =>

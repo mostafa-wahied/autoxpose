@@ -1,3 +1,4 @@
+import dns from 'node:dns/promises';
 import { ProviderError } from '../../../core/errors/index.js';
 import { createLogger } from '../../../core/logger/index.js';
 import type {
@@ -24,8 +25,23 @@ export class NpmProxyProvider implements ProxyProvider {
 
   async createHost(input: CreateProxyHostInput): Promise<ProxyHost> {
     await this.authenticate();
+    const body = this.buildHostBody(input);
+    const response = await this.request<Record<string, unknown>>('/nginx/proxy-hosts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const host = this.mapHost(response);
+    if (input.ssl) {
+      const sslResult = await this.trySslSetup(host.id, input.domain, input.skipDnsWait);
+      host.sslPending = !sslResult.success;
+      host.sslError = sslResult.error;
+      host.ssl = sslResult.success;
+    }
+    return host;
+  }
 
-    const body: Record<string, unknown> = {
+  private buildHostBody(input: CreateProxyHostInput): Record<string, unknown> {
+    return {
       domain_names: [input.domain],
       forward_host: input.targetHost,
       forward_port: input.targetPort,
@@ -36,44 +52,56 @@ export class NpmProxyProvider implements ProxyProvider {
       certificate_id: 0,
       ssl_forced: false,
       http2_support: false,
-      meta: {
-        letsencrypt_agree: false,
-        dns_challenge: false,
-      },
+      meta: { letsencrypt_agree: false, dns_challenge: false },
     };
-
-    const response = await this.request<Record<string, unknown>>('/nginx/proxy-hosts', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-
-    const host = this.mapHost(response);
-
-    if (input.ssl) {
-      try {
-        await this.setupSsl(host.id, input.domain);
-      } catch (err) {
-        logger.warn({ err, domain: input.domain }, 'Failed to setup SSL');
-      }
-    }
-
-    return host;
   }
 
-  private async setupSsl(hostId: string, domain: string): Promise<void> {
-    const certId = await this.findOrCreateCertificate(domain);
-    await this.assignCertificateToHost(hostId, certId);
+  private async trySslSetup(
+    hostId: string,
+    domain: string,
+    skipDnsWait?: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!skipDnsWait) {
+        const isDnsReady = await this.waitForDns(domain);
+        if (!isDnsReady) {
+          const err = 'DNS not propagated after 2 minutes';
+          logger.warn({ domain }, err);
+          return { success: false, error: err };
+        }
+        logger.info({ domain }, 'Waiting for global DNS propagation (30s)...');
+        await new Promise(r => setTimeout(r, 30000));
+      }
+      const certId = await this.findOrCreateCertificate(domain);
+      await this.assignCertificateToHost(hostId, certId);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'SSL setup failed';
+      logger.warn({ err, domain }, 'Failed to setup SSL');
+      return { success: false, error: msg };
+    }
+  }
+
+  private async waitForDns(domain: string, maxAttempts = 12): Promise<boolean> {
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        logger.info({ domain, attempt: i, maxAttempts }, 'Checking DNS...');
+        await dns.lookup(domain);
+        logger.info({ domain }, 'DNS resolves locally');
+        return true;
+      } catch {
+        if (i < maxAttempts) await new Promise(r => setTimeout(r, 10000));
+      }
+    }
+    return false;
   }
 
   private async findOrCreateCertificate(domain: string): Promise<number> {
     const existing = await this.findCertificateByDomain(domain);
-    if (existing) {
-      logger.info({ certId: existing, domain }, 'Using existing certificate');
-      return existing;
-    }
+    if (existing) return existing;
 
     logger.info({ domain }, "Creating Let's Encrypt certificate");
-    const certResponse = await this.request<{ id: number }>('/nginx/certificates', {
+    const resp = await this.request<{ id: number }>('/nginx/certificates', {
       method: 'POST',
       body: JSON.stringify({
         domain_names: [domain],
@@ -81,15 +109,13 @@ export class NpmProxyProvider implements ProxyProvider {
         provider: 'letsencrypt',
       }),
     });
-    logger.info({ certId: certResponse.id, domain }, 'Certificate created');
-    return certResponse.id;
+    return resp.id;
   }
 
   private async findCertificateByDomain(domain: string): Promise<number | null> {
     type Cert = { id: number; domain_names: string[] };
     const certs = await this.request<Cert[]>('/nginx/certificates');
-    const match = certs.find(c => c.domain_names.includes(domain));
-    return match?.id ?? null;
+    return certs.find(c => c.domain_names.includes(domain))?.id ?? null;
   }
 
   private async assignCertificateToHost(hostId: string, certId: number): Promise<void> {
@@ -136,6 +162,11 @@ export class NpmProxyProvider implements ProxyProvider {
   async findByDomain(domain: string): Promise<ProxyHost | null> {
     const hosts = await this.listHosts();
     return hosts.find(h => h.domain === domain) ?? null;
+  }
+
+  async retrySsl(hostId: string, domain: string): Promise<{ success: boolean; error?: string }> {
+    await this.authenticate();
+    return this.trySslSetup(hostId, domain, true);
   }
 
   private async authenticate(): Promise<void> {

@@ -32,6 +32,10 @@ export class TraefikProxyProvider implements ProxyProvider {
     return hosts.find(h => h.domain === domain) ?? null;
   }
 
+  async retrySsl(_hostId: string, _domain: string): Promise<{ success: boolean; error?: string }> {
+    return { success: false, error: 'Traefik manages SSL via labels, not API' };
+  }
+
   private async request<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       headers: { 'Content-Type': 'application/json' },

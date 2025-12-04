@@ -4,6 +4,8 @@ export type ProxyHost = {
   targetHost: string;
   targetPort: number;
   ssl: boolean;
+  sslPending?: boolean;
+  sslError?: string;
   enabled: boolean;
 };
 
@@ -20,6 +22,7 @@ export type CreateProxyHostInput = {
   targetPort: number;
   targetScheme?: 'http' | 'https';
   ssl?: boolean;
+  skipDnsWait?: boolean;
 };
 
 export interface ProxyProvider {
@@ -28,4 +31,5 @@ export interface ProxyProvider {
   deleteHost(hostId: string): Promise<void>;
   listHosts(): Promise<ProxyHost[]>;
   findByDomain(domain: string): Promise<ProxyHost | null>;
+  retrySsl(hostId: string, domain: string): Promise<{ success: boolean; error?: string }>;
 }

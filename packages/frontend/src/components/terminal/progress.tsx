@@ -1,4 +1,5 @@
 import type { ProgressEvent, ProgressStep } from '../../lib/progress.types';
+import { ResultDisplay } from './result-display';
 import { TERMINAL_COLORS } from './theme';
 
 const PROGRESS_CHARS = {
@@ -12,7 +13,23 @@ const STATUS_ICONS = {
   running: '◐',
   success: '✓',
   error: '✗',
+  warning: '⚠',
 };
+
+function getStatusColor(status: ProgressStep['status']): string {
+  switch (status) {
+    case 'success':
+      return TERMINAL_COLORS.success;
+    case 'error':
+      return TERMINAL_COLORS.error;
+    case 'warning':
+      return TERMINAL_COLORS.warning;
+    case 'running':
+      return TERMINAL_COLORS.accent;
+    default:
+      return TERMINAL_COLORS.textMuted;
+  }
+}
 
 interface ProgressBarProps {
   progress: number;
@@ -36,14 +53,7 @@ interface ProgressStepRowProps {
 }
 export function ProgressStepRow({ step, label }: ProgressStepRowProps): JSX.Element {
   const icon = STATUS_ICONS[step.status];
-  const iconColor =
-    step.status === 'success'
-      ? TERMINAL_COLORS.success
-      : step.status === 'error'
-        ? TERMINAL_COLORS.error
-        : step.status === 'running'
-          ? TERMINAL_COLORS.accent
-          : TERMINAL_COLORS.textMuted;
+  const iconColor = getStatusColor(step.status);
 
   const spinnerFrames = ['\u25D0', '\u25D3', '\u25D1', '\u25D2'];
   const [spinnerIndex, setSpinnerIndex] = React.useState(0);
@@ -78,13 +88,20 @@ interface ProgressOutputProps {
   action: 'expose' | 'unexpose' | null;
   steps: ProgressStep[];
   result: ProgressEvent['result'] | null;
+  onRetrySsl?: () => void;
+  isRetrying?: boolean;
+  retryResult?: { success: boolean; error?: string } | null;
 }
 
 export function ProgressOutput({
+  serviceId,
   serviceName,
   action,
   steps,
   result,
+  onRetrySsl,
+  isRetrying,
+  retryResult,
 }: ProgressOutputProps): JSX.Element | null {
   if (!action) return null;
 
@@ -96,7 +113,16 @@ export function ProgressOutput({
           <ProgressStepRow key={step.phase} step={step} label={step.phase.toUpperCase()} />
         ))}
       </div>
-      {result && <ResultDisplay result={result} action={action} />}
+      {result && (
+        <ResultDisplay
+          result={result}
+          action={action}
+          serviceId={serviceId}
+          onRetrySsl={onRetrySsl}
+          isRetrying={isRetrying}
+          retryResult={retryResult}
+        />
+      )}
     </div>
   );
 }
@@ -113,47 +139,6 @@ function CommandLine({
       <span style={{ color: TERMINAL_COLORS.success }}>{'->'}</span>{' '}
       <span className="font-bold">autoxpose</span> {action} {serviceName}
     </div>
-  );
-}
-
-interface ResultDisplayProps {
-  result: NonNullable<ProgressEvent['result']>;
-  action: 'expose' | 'unexpose';
-}
-
-function ResultDisplay({ result, action }: ResultDisplayProps): JSX.Element {
-  if (result.success) {
-    return (
-      <div className="mt-4 pl-4 font-mono text-sm" style={{ color: TERMINAL_COLORS.success }}>
-        <span className="mr-2">{'\u2713'}</span>
-        {action === 'expose' ? <ExposedLink domain={result.domain} /> : 'Service unexposed'}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 pl-4 font-mono text-sm" style={{ color: TERMINAL_COLORS.error }}>
-      <span className="mr-2">{'\u2717'}</span>
-      {result.error || 'Operation failed'}
-    </div>
-  );
-}
-
-function ExposedLink({ domain }: { domain?: string }): JSX.Element {
-  if (!domain) return <>Service exposed</>;
-
-  return (
-    <>
-      Service exposed at{' '}
-      <a
-        href={`https://${domain}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline hover:opacity-80"
-      >
-        https://{domain}
-      </a>
-    </>
   );
 }
 

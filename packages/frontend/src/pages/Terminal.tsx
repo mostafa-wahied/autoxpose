@@ -180,6 +180,9 @@ function ContentArea({
           action={state.streamState.action}
           steps={state.streamState.steps}
           result={state.streamState.result}
+          onRetrySsl={actions.handleRetrySsl}
+          isRetrying={state.retrySslMutation.isPending}
+          retryResult={state.retrySslMutation.data}
         />
       )}
       {!state.streamState.isActive && <CommandPrompt />}

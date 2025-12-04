@@ -15,12 +15,14 @@ export interface TerminalActions {
   handleUnexposeAll: () => void;
   handleScan: () => void;
   handleConfirm: () => void;
+  handleRetrySsl: () => void;
   setConfirmAction: (action: ConfirmAction) => void;
 }
 
 export interface TerminalState {
   streamState: ExposeStreamState;
   scanMutation: ScanMutation;
+  retrySslMutation: ReturnType<typeof useTerminalMutations>['retrySslMutation'];
   confirmAction: ConfirmAction;
   deletingServiceId: string | null;
   settingsOpen: boolean;
@@ -63,6 +65,8 @@ interface Handlers {
   clear: () => void;
   scanMutation: ScanMutation;
   updateMutation: ReturnType<typeof useTerminalMutations>['updateMutation'];
+  retrySslMutation: ReturnType<typeof useTerminalMutations>['retrySslMutation'];
+  activeServiceId: string | null;
 }
 
 function useHandlers(
@@ -90,6 +94,9 @@ function useHandlers(
     [setConfirmAction]
   );
   const handleScan = useCallback((): void => h.scanMutation.mutate(), [h.scanMutation]);
+  const handleRetrySsl = useCallback((): void => {
+    if (h.activeServiceId) h.retrySslMutation.mutate(h.activeServiceId);
+  }, [h.activeServiceId, h.retrySslMutation]);
   return {
     handleExpose,
     handleDelete,
@@ -97,16 +104,23 @@ function useHandlers(
     handleExposeAll,
     handleUnexposeAll,
     handleScan,
+    handleRetrySsl,
   };
 }
 
-export function useTerminalActions({ services, needsSetup = false }: Params): {
-  actions: TerminalActions;
-  state: TerminalState;
+function useMutationsAndState(needsSetup: boolean): {
+  streamState: ExposeStreamState;
+  expose: (id: string) => void;
+  unexpose: (id: string) => void;
+  clear: () => void;
+  mutations: ReturnType<typeof useTerminalMutations>;
+  settingsOpen: boolean;
+  setSettingsOpen: (v: boolean) => void;
+  confirmAction: ConfirmAction;
+  setConfirmAction: (a: ConfirmAction) => void;
 } {
   const { state: streamState, expose, unexpose, clear } = useExposeStream();
-  const { scanMutation, deleteMutation, updateMutation, deletingServiceId, setDeletingServiceId } =
-    useTerminalMutations();
+  const mutations = useTerminalMutations();
   const [settingsOpen, setSettingsOpen] = useState(needsSetup);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
@@ -114,38 +128,70 @@ export function useTerminalActions({ services, needsSetup = false }: Params): {
     if (needsSetup && !settingsOpen) setSettingsOpen(true);
   }, [needsSetup, settingsOpen]);
 
+  return {
+    streamState,
+    expose,
+    unexpose,
+    clear,
+    mutations,
+    settingsOpen,
+    setSettingsOpen,
+    confirmAction,
+    setConfirmAction,
+  };
+}
+
+export function useTerminalActions({ services, needsSetup = false }: Params): {
+  actions: TerminalActions;
+  state: TerminalState;
+} {
+  const ctx = useMutationsAndState(needsSetup);
+  const { streamState, expose, unexpose, clear, mutations, confirmAction, setConfirmAction } = ctx;
+
   const handlers = useHandlers(
-    { expose, unexpose, clear, scanMutation, updateMutation },
+    {
+      expose,
+      unexpose,
+      clear,
+      scanMutation: mutations.scanMutation,
+      updateMutation: mutations.updateMutation,
+      retrySslMutation: mutations.retrySslMutation,
+      activeServiceId: streamState.serviceId,
+    },
     setConfirmAction
   );
+
   const handleConfirm = useCallback(
     (): void =>
       executeConfirm({
         confirmAction,
         services,
-        deleteMutation,
+        deleteMutation: mutations.deleteMutation,
         expose,
         unexpose,
-        setDeletingServiceId,
+        setDeletingServiceId: mutations.setDeletingServiceId,
         setConfirmAction,
       }),
-    [confirmAction, services, deleteMutation, expose, unexpose, setDeletingServiceId]
+    [confirmAction, services, mutations, expose, unexpose, setConfirmAction]
   );
 
   const actions = useMemo(
     (): TerminalActions => ({ ...handlers, handleConfirm, setConfirmAction }),
-    [handlers, handleConfirm]
+    [handlers, handleConfirm, setConfirmAction]
   );
+
   const state = useMemo(
     (): TerminalState => ({
       streamState,
-      scanMutation,
+      scanMutation: mutations.scanMutation,
+      retrySslMutation: mutations.retrySslMutation,
       confirmAction,
-      deletingServiceId,
-      settingsOpen,
-      setSettingsOpen,
+      deletingServiceId: mutations.deletingServiceId,
+      settingsOpen: ctx.settingsOpen,
+      setSettingsOpen: ctx.setSettingsOpen,
     }),
-    [streamState, scanMutation, confirmAction, deletingServiceId, settingsOpen]
+    [streamState, mutations, confirmAction, ctx.settingsOpen, ctx.setSettingsOpen]
   );
+
   return { actions, state };
 }

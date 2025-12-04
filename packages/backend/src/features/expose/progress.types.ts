@@ -4,7 +4,7 @@
  */
 
 export type ProgressPhase = 'dns' | 'proxy';
-export type ProgressStatus = 'pending' | 'running' | 'success' | 'error';
+export type ProgressStatus = 'pending' | 'running' | 'success' | 'error' | 'warning';
 
 export interface ProgressStep {
   phase: ProgressPhase;
@@ -20,6 +20,8 @@ export interface ProgressResult {
   dnsRecordId?: string;
   proxyHostId?: string;
   error?: string;
+  sslPending?: boolean;
+  sslError?: string;
 }
 
 export interface ProgressEvent {

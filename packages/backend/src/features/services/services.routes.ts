@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppContext } from '../../core/context.js';
 import { probeBackend } from '../discovery/probe.js';
 import { checkDomainReachable } from '../settings/validation.js';
+import { createSslRoutes } from './ssl.routes.js';
 import { createSyncRoutes } from './sync.routes.js';
 
 interface CreateBody {
@@ -83,6 +84,7 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return { online: result.ok, domain: fqdn };
     });
 
+    await server.register(createSslRoutes(ctx));
     await server.register(createSyncRoutes(ctx), { prefix: '/sync' });
   };
 };

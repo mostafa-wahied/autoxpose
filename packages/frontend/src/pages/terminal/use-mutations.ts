@@ -6,11 +6,13 @@ type ScanResult = { discovered: number; created: number; updated: number; remove
 type DeleteResult = { success: boolean };
 type UpdateResult = { service: ServiceRecord };
 type UpdateInput = { id: string; subdomain: string };
+type RetrySslResult = { success: boolean; error?: string };
 
 interface MutationsReturn {
   scanMutation: UseMutationResult<ScanResult, Error, void>;
   deleteMutation: UseMutationResult<DeleteResult, Error, string>;
   updateMutation: UseMutationResult<UpdateResult, Error, UpdateInput>;
+  retrySslMutation: UseMutationResult<RetrySslResult, Error, string>;
   deletingServiceId: string | null;
   setDeletingServiceId: (id: string | null) => void;
 }
@@ -42,5 +44,19 @@ export function useTerminalMutations(): MutationsReturn {
     },
   });
 
-  return { scanMutation, deleteMutation, updateMutation, deletingServiceId, setDeletingServiceId };
+  const retrySslMutation = useMutation({
+    mutationFn: (serviceId: string) => api.services.retrySsl(serviceId),
+    onSuccess: (): void => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+    },
+  });
+
+  return {
+    scanMutation,
+    deleteMutation,
+    updateMutation,
+    retrySslMutation,
+    deletingServiceId,
+    setDeletingServiceId,
+  };
 }
