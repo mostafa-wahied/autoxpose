@@ -61,10 +61,21 @@ export class CloudflareDnsProvider implements DnsProvider {
     const data = await response.json();
 
     if (!response.ok || !(data as { success?: boolean }).success) {
-      throw new ProviderError('cloudflare', `API error: ${response.status}`);
+      const msg = this.getErrorMessage(response.status, path);
+      throw new ProviderError('cloudflare', msg);
     }
 
     return data as T;
+  }
+
+  private getErrorMessage(status: number, path: string): string {
+    const isZoneOp = path.includes('/zones/');
+    if (status === 404 && isZoneOp) {
+      return `Zone '${this.zoneId}' not found. Check your Zone ID in Cloudflare dashboard.`;
+    }
+    if (status === 401) return 'Invalid API token. Check your Cloudflare token.';
+    if (status === 403) return 'Token lacks permissions. Enable Zone:DNS:Edit.';
+    return `API error: ${status}`;
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {

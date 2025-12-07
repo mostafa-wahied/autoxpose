@@ -1,10 +1,33 @@
 import { ProviderError } from '../../../core/errors/index.js';
+import { createLogger } from '../../../core/logger/index.js';
 import type {
   CreateProxyHostInput,
   ProxyHost,
   ProxyProvider,
   ProxyProviderConfig,
 } from '../proxy.types.js';
+
+const logger = createLogger('caddy-provider');
+
+type CaddyRoute = {
+  '@id'?: string;
+  match?: Array<{ host?: string[] }>;
+  handle?: Array<{ handler: string; upstreams?: Array<{ dial: string }> }>;
+  terminal?: boolean;
+};
+
+type CaddyServer = {
+  listen?: string[];
+  routes?: CaddyRoute[];
+};
+
+type CaddyConfig = {
+  apps?: {
+    http?: {
+      servers?: Record<string, CaddyServer>;
+    };
+  };
+};
 
 export class CaddyProxyProvider implements ProxyProvider {
   readonly name = 'caddy';
@@ -14,25 +37,41 @@ export class CaddyProxyProvider implements ProxyProvider {
     this.baseUrl = config.url.replace(/\/$/, '');
   }
 
-  async createHost(input: CreateProxyHostInput): Promise<ProxyHost> {
-    const config = {
-      [`${input.domain}`]: {
-        handle: [
-          {
-            handler: 'reverse_proxy',
-            upstreams: [{ dial: `${input.targetHost}:${input.targetPort}` }],
-          },
-        ],
+  private buildRoute(domain: string, targetHost: string, targetPort: number): CaddyRoute {
+    return {
+      '@id': this.domainToId(domain),
+      match: [{ host: [domain] }],
+      handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: `${targetHost}:${targetPort}` }] }],
+      terminal: true,
+    };
+  }
+
+  private buildConfig(serverName: string, server: CaddyServer, routes: CaddyRoute[]): object {
+    return {
+      apps: {
+        http: { servers: { [serverName]: { ...server, listen: [':80', ':443'], routes } } },
+        tls: { automation: { policies: [{ issuers: [{ module: 'acme' }] }] } },
       },
     };
+  }
 
-    await this.request('/config/apps/http/servers/srv0/routes', {
+  async createHost(input: CreateProxyHostInput): Promise<ProxyHost> {
+    const route = this.buildRoute(input.domain, input.targetHost, input.targetPort);
+    const serverName = await this.getServerName();
+    const config = await this.request<CaddyConfig>('/config/');
+    const existingServer = config?.apps?.http?.servers?.[serverName] || {};
+    const newRoutes = [route, ...(existingServer.routes || [])];
+
+    await this.request(`/load`, {
       method: 'POST',
-      body: JSON.stringify(config),
+      body: JSON.stringify(this.buildConfig(serverName, existingServer, newRoutes)),
+      headers: { 'Content-Type': 'application/json' },
     });
 
+    logger.info({ domain: input.domain, server: serverName }, 'Created Caddy route');
+
     return {
-      id: input.domain,
+      id: this.domainToId(input.domain),
       domain: input.domain,
       targetHost: input.targetHost,
       targetPort: input.targetPort,
@@ -43,11 +82,12 @@ export class CaddyProxyProvider implements ProxyProvider {
 
   async deleteHost(hostId: string): Promise<void> {
     await this.request(`/id/${hostId}`, { method: 'DELETE' });
+    logger.info({ hostId }, 'Deleted Caddy route');
   }
 
   async listHosts(): Promise<ProxyHost[]> {
-    const response = await this.request<Record<string, unknown>>('/config/apps/http/servers');
-    return this.parseHosts(response);
+    const config = await this.request<CaddyConfig>('/config/');
+    return this.parseHosts(config);
   }
 
   async findByDomain(domain: string): Promise<ProxyHost | null> {
@@ -56,7 +96,17 @@ export class CaddyProxyProvider implements ProxyProvider {
   }
 
   async retrySsl(_hostId: string, _domain: string): Promise<{ success: boolean; error?: string }> {
-    return { success: false, error: 'Caddy handles SSL automatically' };
+    return { success: true };
+  }
+
+  private async getServerName(): Promise<string> {
+    const config = await this.request<CaddyConfig>('/config/');
+    const servers = config?.apps?.http?.servers || {};
+    const serverNames = Object.keys(servers);
+    if (serverNames.length === 0) {
+      throw new ProviderError('caddy', 'No HTTP servers found in Caddy config');
+    }
+    return serverNames[0];
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -69,15 +119,45 @@ export class CaddyProxyProvider implements ProxyProvider {
     });
 
     if (!response.ok) {
-      throw new ProviderError('caddy', `API error: ${response.status}`);
+      const body = await response.text();
+      throw new ProviderError('caddy', `API error: ${response.status} - ${body}`);
     }
 
-    if (response.status === 204) return null as T;
-    return response.json() as Promise<T>;
+    if (response.status === 200 && response.headers.get('content-length') === '0') {
+      return null as T;
+    }
+
+    const text = await response.text();
+    if (!text) return null as T;
+    return JSON.parse(text) as T;
   }
 
-  private parseHosts(_servers: Record<string, unknown>): ProxyHost[] {
+  private parseHosts(config: CaddyConfig): ProxyHost[] {
     const hosts: ProxyHost[] = [];
+    const servers = config?.apps?.http?.servers || {};
+
+    for (const server of Object.values(servers)) {
+      for (const route of server.routes || []) {
+        const domain = route.match?.[0]?.host?.[0];
+        const upstream = route.handle?.[0]?.upstreams?.[0]?.dial;
+        if (!domain || !upstream) continue;
+
+        const [targetHost, portStr] = upstream.split(':');
+        hosts.push({
+          id: route['@id'] || domain,
+          domain,
+          targetHost,
+          targetPort: parseInt(portStr, 10) || 80,
+          ssl: true,
+          enabled: true,
+        });
+      }
+    }
+
     return hosts;
+  }
+
+  private domainToId(domain: string): string {
+    return `autoxpose-${domain.replace(/\./g, '-')}`;
   }
 }

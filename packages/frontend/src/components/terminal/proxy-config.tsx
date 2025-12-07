@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, type SettingsStatus } from '../../lib/api';
 import { FormActions, FormInput, FormSelect } from './form-components';
-import { TestConnectionButton, type TestState } from './test-button';
+import { PROXY_PROVIDERS, ProxyDisplay } from './proxy-display';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -11,27 +11,8 @@ interface ProxyConfigSectionProps {
 }
 
 export function ProxyConfigSection({ current }: ProxyConfigSectionProps): JSX.Element {
-  const [provider] = useState('npm');
-  const [url, setUrl] = useState(current?.config?.url || '');
-  const [username, setUsername] = useState(current?.config?.username || '');
-  const [password, setPassword] = useState('');
   const [isEditing, setIsEditing] = useState(!current?.configured);
-  const queryClient = useQueryClient();
   const isConfigured = current?.configured ?? false;
-
-  useEffect(() => {
-    if (current?.config?.url) setUrl(current.config.url);
-    if (current?.config?.username) setUsername(current.config.username);
-  }, [current]);
-
-  const mutation = useMutation({
-    mutationFn: () => api.settings.saveProxy(provider, { url, username, password }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      setPassword('');
-      setIsEditing(false);
-    },
-  });
 
   return (
     <div className="rounded border border-[#30363d] bg-[#161b22] p-4">
@@ -41,21 +22,7 @@ export function ProxyConfigSection({ current }: ProxyConfigSectionProps): JSX.El
         onEdit={() => setIsEditing(true)}
       />
       {isEditing ? (
-        <ProxyForm
-          provider={provider}
-          url={url}
-          username={username}
-          password={password}
-          isConfigured={isConfigured}
-          isPending={mutation.isPending}
-          isError={mutation.isError}
-          onUrlChange={setUrl}
-          onUsernameChange={setUsername}
-          onPasswordChange={setPassword}
-          onSave={() => mutation.mutate()}
-          onCancel={() => setIsEditing(false)}
-          hasPassword={Boolean(current?.config?.password)}
-        />
+        <ProxyEditForm current={current} onDone={() => setIsEditing(false)} />
       ) : (
         <ProxyDisplay current={current} />
       )}
@@ -94,94 +61,118 @@ function ProxyHeader({ isConfigured, isEditing, onEdit }: ProxyHeaderProps): JSX
   );
 }
 
-interface ProxyFormProps {
+interface ProxyEditFormProps {
+  current: SettingsStatus['proxy'] | null;
+  onDone: () => void;
+}
+
+type ProxyFormState = {
   provider: string;
   url: string;
   username: string;
   password: string;
-  isConfigured: boolean;
   isPending: boolean;
   isError: boolean;
+  mutate: () => void;
+  isConfigured: boolean;
+  isNpm: boolean;
+  canSave: boolean;
+  setProvider: (v: string) => void;
+  setUrl: (v: string) => void;
+  setUsername: (v: string) => void;
+  setPassword: (v: string) => void;
   hasPassword: boolean;
-  onUrlChange: (v: string) => void;
-  onUsernameChange: (v: string) => void;
-  onPasswordChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
+};
+
+function useProxyForm(current: SettingsStatus['proxy'] | null, onDone: () => void): ProxyFormState {
+  const [provider, setProvider] = useState(current?.provider || 'npm');
+  const [url, setUrl] = useState(current?.config?.url || '');
+  const [username, setUsername] = useState(current?.config?.username || '');
+  const [password, setPassword] = useState('');
+  const queryClient = useQueryClient();
+  const isConfigured = current?.configured ?? false;
+  const isNpm = provider === 'npm';
+
+  useEffect(() => {
+    if (current?.provider) setProvider(current.provider);
+    if (current?.config?.url) setUrl(current.config.url);
+    if (current?.config?.username) setUsername(current.config.username);
+  }, [current]);
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const config: Record<string, string> =
+        provider === 'caddy' ? { url } : { url, username, password };
+      return api.settings.saveProxy(provider, config);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      onDone();
+    },
+  });
+
+  return {
+    provider,
+    url,
+    username,
+    password,
+    isConfigured,
+    isNpm,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    mutate: () => mutation.mutate(),
+    canSave: Boolean(isNpm ? url && username && (password || isConfigured) : url),
+    setProvider,
+    setUrl,
+    setUsername,
+    setPassword,
+    hasPassword: Boolean(current?.config?.password),
+  };
 }
 
-function ProxyForm(props: ProxyFormProps): JSX.Element {
-  const canSave = props.url && props.username && (props.password || props.isConfigured);
-  const pwPlaceholder = props.hasPassword ? 'Saved' : 'Enter password';
+function ProxyEditForm({ current, onDone }: ProxyEditFormProps): JSX.Element {
+  const form = useProxyForm(current, onDone);
+  const pwPlaceholder = form.hasPassword ? 'Saved' : 'Enter password';
 
   return (
     <div className="space-y-3">
       <FormSelect
         label="Provider"
-        value={props.provider}
-        onChange={() => {}}
-        options={[{ value: 'npm', label: 'Nginx Proxy Manager' }]}
-        disabled
+        value={form.provider}
+        onChange={form.setProvider}
+        options={PROXY_PROVIDERS}
       />
       <FormInput
-        label="NPM URL"
-        placeholder="http://192.168.1.100:81"
-        value={props.url}
-        onChange={props.onUrlChange}
+        label={form.isNpm ? 'NPM URL' : 'Caddy Admin API'}
+        placeholder={form.isNpm ? 'http://192.168.1.100:81' : 'http://localhost:2019'}
+        value={form.url}
+        onChange={form.setUrl}
       />
-      <FormInput
-        label="Username"
-        placeholder="admin@example.com"
-        value={props.username}
-        onChange={props.onUsernameChange}
-      />
-      <FormInput
-        label="Password"
-        type="password"
-        placeholder={pwPlaceholder}
-        value={props.password}
-        onChange={props.onPasswordChange}
-      />
+      {form.isNpm && (
+        <>
+          <FormInput
+            label="Username"
+            placeholder="admin@example.com"
+            value={form.username}
+            onChange={form.setUsername}
+          />
+          <FormInput
+            label="Password"
+            type="password"
+            placeholder={pwPlaceholder}
+            value={form.password}
+            onChange={form.setPassword}
+          />
+        </>
+      )}
       <FormActions
-        isPending={props.isPending}
-        canSave={Boolean(canSave)}
-        showCancel={props.isConfigured}
-        onSave={props.onSave}
-        onCancel={props.onCancel}
+        isPending={form.isPending}
+        canSave={form.canSave}
+        showCancel={form.isConfigured}
+        onSave={form.mutate}
+        onCancel={onDone}
       />
-      {props.isError && <p className="text-xs text-[#f85149]">Failed to save settings</p>}
-    </div>
-  );
-}
-
-function ProxyDisplay({ current }: { current: SettingsStatus['proxy'] | null }): JSX.Element {
-  const [testState, setTestState] = useState<TestState>({ status: 'idle' });
-
-  const handleTest = async (): Promise<void> => {
-    setTestState({ status: 'testing' });
-    try {
-      const result = await api.settings.testProxy();
-      setTestState(result.ok ? { status: 'success' } : { status: 'error', error: result.error });
-    } catch {
-      setTestState({ status: 'error', error: 'Connection test failed' });
-    }
-  };
-
-  return (
-    <div className="space-y-2 text-xs text-[#8b949e]">
-      <p>
-        <span className="text-[#484f58]">Provider:</span> Nginx Proxy Manager
-      </p>
-      <p>
-        <span className="text-[#484f58]">URL:</span> {current?.config?.url}
-      </p>
-      <p>
-        <span className="text-[#484f58]">Username:</span> {current?.config?.username}
-      </p>
-      <p>
-        <span className="text-[#484f58]">Password:</span> Saved
-      </p>
-      <TestConnectionButton status={testState.status} error={testState.error} onTest={handleTest} />
+      {form.isError && <p className="text-xs text-[#f85149]">Failed to save settings</p>}
     </div>
   );
 }

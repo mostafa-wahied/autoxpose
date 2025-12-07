@@ -16,35 +16,61 @@ type DnsConfigResponse = {
   configured: boolean;
   provider: string | null;
   domain: string | null;
-  config: { token: string; zoneId: string } | null;
+  config: Record<string, string> | null;
 };
 type ProxyConfigResponse = {
   configured: boolean;
   provider: string | null;
-  config: { url: string; username: string; password: string } | null;
+  config: Record<string, string> | null;
 };
 
 function formatDnsConfig(cfg: ParsedConfig): DnsConfigResponse {
   if (!cfg) return { configured: false, provider: null, domain: null, config: null };
+
+  const baseConfig: Record<string, string> = {};
+
+  if (cfg.provider === 'cloudflare' || cfg.provider === 'netlify') {
+    baseConfig.token = maskSecret(cfg.config.token);
+    baseConfig.zoneId = cfg.config.zoneId ?? '';
+  } else if (cfg.provider === 'digitalocean') {
+    baseConfig.token = maskSecret(cfg.config.token);
+  } else if (cfg.provider === 'porkbun') {
+    baseConfig.apiKey = maskSecret(cfg.config.apiKey);
+    baseConfig.secretKey = maskSecret(cfg.config.secretKey);
+  }
+
   return {
     configured: true,
     provider: cfg.provider,
     domain: cfg.config.domain ?? null,
-    config: { token: maskSecret(cfg.config.token), zoneId: cfg.config.zoneId ?? '' },
+    config: baseConfig,
   };
 }
 
 function formatProxyConfig(cfg: ParsedConfig): ProxyConfigResponse {
   if (!cfg) return { configured: false, provider: null, config: null };
-  return {
-    configured: true,
-    provider: cfg.provider,
-    config: {
-      url: cfg.config.url ?? '',
-      username: cfg.config.username ?? '',
-      password: maskSecret(cfg.config.password),
-    },
-  };
+
+  if (cfg.provider === 'npm') {
+    return {
+      configured: true,
+      provider: cfg.provider,
+      config: {
+        url: cfg.config.url ?? '',
+        username: cfg.config.username ?? '',
+        password: maskSecret(cfg.config.password),
+      },
+    };
+  }
+
+  if (cfg.provider === 'caddy') {
+    return {
+      configured: true,
+      provider: cfg.provider,
+      config: { url: cfg.config.url ?? '' },
+    };
+  }
+
+  return { configured: true, provider: cfg.provider, config: cfg.config };
 }
 
 export function createSettingsRoutes(settings: SettingsService): FastifyPluginAsync {

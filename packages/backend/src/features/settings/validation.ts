@@ -1,7 +1,10 @@
 import { createLogger } from '../../core/logger/index.js';
 import type { DnsProviderConfig } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
+import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
+import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
+import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProviderConfig } from '../proxy/proxy.types.js';
 
@@ -9,10 +12,11 @@ const logger = createLogger('validation');
 const DOMAIN_CHECK_TIMEOUT = 5000;
 
 type TestResult = { ok: boolean; error?: string };
+type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
 
 export async function testDnsProvider(
   provider: string,
-  config: DnsProviderConfig
+  config: DnsProviderConfig | PorkbunConfig
 ): Promise<TestResult> {
   try {
     const dns = createDnsProvider(provider, config);
@@ -57,26 +61,36 @@ export async function checkDomainReachable(domain: string): Promise<TestResult> 
   }
 }
 
+type DnsProviderType =
+  | NetlifyDnsProvider
+  | CloudflareDnsProvider
+  | DigitalOceanDnsProvider
+  | PorkbunDnsProvider
+  | null;
+
 function createDnsProvider(
   provider: string,
-  config: DnsProviderConfig
-): ReturnType<typeof createDns> {
-  return createDns(provider, config);
-}
-
-function createDns(
-  provider: string,
-  config: DnsProviderConfig
-): NetlifyDnsProvider | CloudflareDnsProvider | null {
+  config: DnsProviderConfig | PorkbunConfig
+): DnsProviderType {
   if (provider === 'netlify') return new NetlifyDnsProvider(config);
   if (provider === 'cloudflare') return new CloudflareDnsProvider(config);
+  if (provider === 'digitalocean') return new DigitalOceanDnsProvider(config);
+  if (provider === 'porkbun') {
+    const pbConfig = config as PorkbunConfig;
+    return new PorkbunDnsProvider({
+      token: pbConfig.apiKey,
+      apiKey: pbConfig.apiKey,
+      secretKey: pbConfig.secretKey,
+      domain: pbConfig.domain,
+    });
+  }
   return null;
 }
 
-function createProxyProvider(
-  provider: string,
-  config: ProxyProviderConfig
-): NpmProxyProvider | null {
+type ProxyProviderType = NpmProxyProvider | CaddyProxyProvider | null;
+
+function createProxyProvider(provider: string, config: ProxyProviderConfig): ProxyProviderType {
   if (provider === 'npm') return new NpmProxyProvider(config);
+  if (provider === 'caddy') return new CaddyProxyProvider(config);
   return null;
 }

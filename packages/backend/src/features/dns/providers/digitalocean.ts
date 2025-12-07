@@ -59,11 +59,22 @@ export class DigitalOceanDnsProvider implements DnsProvider {
     });
 
     if (!response.ok) {
-      throw new ProviderError('digitalocean', `API error: ${response.status}`);
+      const msg = this.getErrorMessage(response.status, path);
+      throw new ProviderError('digitalocean', msg);
     }
 
     if (response.status === 204) return null as T;
     return response.json() as Promise<T>;
+  }
+
+  private getErrorMessage(status: number, path: string): string {
+    const isDomainOp = path.includes('/domains/');
+    if (status === 404 && isDomainOp) {
+      return `Domain '${this.domain}' not found. Add it to DigitalOcean Networking > Domains first.`;
+    }
+    if (status === 401) return 'Invalid API token. Check your DigitalOcean token.';
+    if (status === 403) return 'Token lacks permissions. Enable read/write for Domains.';
+    return `API error: ${status}`;
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {

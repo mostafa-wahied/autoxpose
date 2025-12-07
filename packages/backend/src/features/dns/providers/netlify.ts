@@ -59,12 +59,22 @@ export class NetlifyDnsProvider implements DnsProvider {
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new ProviderError('netlify', `API error: ${response.status} - ${errorBody}`);
+      const msg = this.getErrorMessage(response.status, path);
+      throw new ProviderError('netlify', msg);
     }
 
     if (response.status === 204) return null as T;
     return response.json() as Promise<T>;
+  }
+
+  private getErrorMessage(status: number, path: string): string {
+    const isZoneOp = path.includes('/dns_zones/');
+    if (status === 404 && isZoneOp) {
+      return `DNS Zone '${this.zoneId}' not found. Check zone ID in Netlify DNS settings.`;
+    }
+    if (status === 401) return 'Invalid token. Check your Netlify personal access token.';
+    if (status === 403) return 'Token lacks permissions for DNS management.';
+    return `API error: ${status}`;
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {
