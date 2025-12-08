@@ -3,6 +3,7 @@ import { ProgressOutput } from '../../components/terminal/progress';
 import { ScanSuccessNotice } from './status-views';
 import { ServiceGrid } from './service-grid';
 import { type ServiceRecord } from '../../lib/api';
+import { CommandConsole } from './command-console';
 import { type useTerminalActions } from './use-terminal-actions';
 
 interface ContentAreaProps {
@@ -13,11 +14,20 @@ interface ContentAreaProps {
   loadingServiceId: string | null;
   baseDomain: string | null;
   canExpose: boolean;
+  settingsData: Awaited<ReturnType<typeof import('../../lib/api').api.settings.status>> | undefined;
 }
 
 export function ContentArea(props: ContentAreaProps): JSX.Element {
-  const { services, state, actions, activeService, loadingServiceId, baseDomain, canExpose } =
-    props;
+  const {
+    services,
+    state,
+    actions,
+    activeService,
+    loadingServiceId,
+    baseDomain,
+    canExpose,
+    settingsData,
+  } = props;
   return (
     <div className="space-y-6">
       <CommandPrompt command={`autoxpose status --services ${services.length}`} />
@@ -46,7 +56,13 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
           retryResult={state.retrySslMutation.data}
         />
       )}
-      {!state.streamState.isActive && <CommandPrompt />}
+      <CommandConsole
+        services={services}
+        settings={settingsData}
+        onExpose={actions.handleExpose}
+        onUnexpose={actions.handleExpose}
+        onToggleSettings={state.setSettingsOpen}
+      />
     </div>
   );
 }

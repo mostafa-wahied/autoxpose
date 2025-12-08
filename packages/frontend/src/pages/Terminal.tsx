@@ -136,6 +136,7 @@ function MainContent({
             actions={actions}
             activeService={activeService}
             loadingServiceId={loadingId}
+            settingsData={settingsData}
             baseDomain={baseDomain}
             canExpose={canExpose}
           />

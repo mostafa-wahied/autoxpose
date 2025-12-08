@@ -1,0 +1,48 @@
+const LUCKY_LINES = [
+  "The self-hoster's morning ritual: 1. DNS check. 2. Coffee. 3. Blame DNS anyway.",
+  "Containers: cats in boxes. You only know if they're running when you look.",
+  "That moment your UPS battery backup costs more than the server it's protecting.",
+  "SERVER_IP is 'localhost'? That's not a public IP, that's a cry for help.",
+  'Home is where your reverse proxy lives.',
+  'Let autoxpose do the clicky parts; you just have to remember what you exposed.',
+  "portracker doesn't judge. It just remembers.",
+  'Remember: unexpose is also a feature.',
+  'autoxpose just opened a door. portracker is already watching it.',
+  'If it is not in portracker, did you really deploy it?',
+  'autoxpose shows the world what you built. portracker helps you ask why.',
+  'A service is both running and crashed until you check the logs.',
+  'Your cable management is a reflection of your own internal chaos.',
+  'That service you forgot you were running? It is the one using all the RAM.',
+  'This service is now exposed. We are not liable for the resulting power bill discussion.',
+  'Is this new service WAF-compliant? Look it up.',
+  'Looks like you are exposing another service. Did you file the WAF paperwork first?',
+  'Exposing a service without WAF approval is like deploying to production on a Friday.',
+  "You have unlocked the achievement: 'Hello, World!'.",
+  'Every exposed service adds a new variable to an untested equation. Good luck.',
+  'Consider this TLS certificate a force field for your data packets.',
+  'portracker found three ports you forgot. It is okay, we will not tell.',
+  'That one weird networking issue? It is probably DNS. If not, it is still probably DNS.',
+  'The most expensive part of a homelab is the electricity.',
+  'test proxy passed? You have earned 100 XP.',
+  'Press expose. Feel the power. Now go check your firewall.',
+  "That green 'exposed' light is the best kind of dopamine hit.",
+  'The list command: proving you do not have too many services, just not enough RAM.',
+  'A passed test dns is a beautiful thing. Do not take it for granted.',
+  'Every service you expose is a tiny beacon in the vast, cold emptiness of the internet.',
+  'Think of your reverse proxy as a wormhole for your data. A secure, encrypted wormhole.',
+  'You have officially leveled up your self-hosting game. Your public attack surface has leveled up, too.',
+  'You have mastered autoxpose. You can now list "Manages ingress routing for hyper-local cloud infrastructure" on your LinkedIn.',
+  "You do not have 'old hardware', you have a 'vintage computing collection'.",
+  "It is not a 'messy server rack', it is 'high-density, organic cable routing'.",
+  "It is not 'playing with servers', it is 'managing enterprise-grade infrastructure in a pre-production environment'.",
+  '99.9 percent uptime just means there are 8.76 hours a year where everything can break at once.',
+  'The most secure server is the one that is unplugged. It is also the most useless.',
+  'Remember when you started a homelab to save money? Good times.',
+  'Feeling lucky? Try entering the Konami code.',
+];
+
+export function getLuckyLine(): string {
+  if (LUCKY_LINES.length === 0) return '';
+  const idx = Math.floor(Math.random() * LUCKY_LINES.length);
+  return LUCKY_LINES[idx];
+}
