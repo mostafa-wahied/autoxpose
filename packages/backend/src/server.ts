@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import type { AppConfig } from './core/config/schema.js';
 import type { AppContext } from './core/context.js';
-import { createDiscoveryRoutes } from './features/discovery/discovery.routes.js';
+import { createDiscoveryRoutes } from './features/discovery/docker.js';
 import { dnsRoutes } from './features/dns/dns.routes.js';
 import { createExposeRoutes, createStreamingExposeRoutes } from './features/expose/index.js';
 import { proxyRoutes } from './features/proxy/proxy.routes.js';

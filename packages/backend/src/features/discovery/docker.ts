@@ -1,10 +1,30 @@
+import type { FastifyPluginAsync } from 'fastify';
 import Docker from 'dockerode';
+import type { AppContext } from '../../core/context.js';
 import { createLogger } from '../../core/logger/index.js';
-import type { DiscoveredService, DiscoveryProvider } from './discovery.types.js';
+
+export type DiscoveredService = {
+  id: string;
+  name: string;
+  subdomain: string;
+  port: number;
+  scheme: string;
+  source: string;
+  labels: Record<string, string>;
+  autoExpose: boolean;
+};
+
+export interface DiscoveryProvider {
+  readonly name: string;
+  discover(): Promise<DiscoveredService[]>;
+  watch(callback: (service: DiscoveredService, event: string) => void): void;
+  stop(): void;
+}
 
 type EventStream = NodeJS.ReadableStream & { destroy(): void };
 
 const logger = createLogger('docker-discovery');
+const routesLogger = createLogger('discovery-routes');
 
 const HTTPS_PRIVATE_PORTS = [443, 8443, 9443];
 
@@ -222,3 +242,38 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     return { selectedPort: mappings[0].publicPort, detectedScheme: 'http' };
   }
 }
+
+export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
+  return async server => {
+    server.get('/containers', async (_request, reply) => {
+      if (!ctx.discovery) {
+        return reply.status(503).send({ error: 'Docker discovery not available' });
+      }
+      const containers = await ctx.discovery.discover();
+      return { containers };
+    });
+
+    server.post('/scan', async (_request, reply) => {
+      if (!ctx.discovery) {
+        return reply.status(503).send({ error: 'Docker discovery not available' });
+      }
+      const discovered = await ctx.discovery.discover();
+      const result = await ctx.services.syncFromDiscovery(discovered);
+
+      for (const svc of result.autoExpose) {
+        routesLogger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing service');
+        ctx.expose.expose(svc.id).catch(err => {
+          routesLogger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
+        });
+      }
+
+      return {
+        discovered: discovered.length,
+        created: result.created.length,
+        updated: result.updated.length,
+        removed: result.removed.length,
+        autoExposed: result.autoExpose.length,
+      };
+    });
+  };
+};

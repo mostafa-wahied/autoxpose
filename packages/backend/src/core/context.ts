@@ -1,4 +1,4 @@
-import type { DiscoveredService } from '../features/discovery/discovery.types.js';
+import type { DiscoveredService } from '../features/discovery/docker.js';
 import { DockerDiscoveryProvider } from '../features/discovery/docker.js';
 import { ExposeService, StreamingExposeService } from '../features/expose/index.js';
 import { ServicesRepository } from '../features/services/services.repository.js';

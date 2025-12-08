@@ -1,7 +1,44 @@
 import { api, type ServiceRecord, type SettingsStatus } from '../../lib/api';
 import { getLuckyLine } from './command-lucky';
-import { type CommandContext, type CommandResult, type OutputLine } from './command-types';
 import { resolveService } from './command-utils';
+
+export type CommandTone = 'info' | 'success' | 'error' | 'muted';
+
+export type OutputLine = { text: string; tone: CommandTone };
+
+export type CommandResult = {
+  lines: OutputLine[];
+  clearOutput?: boolean;
+  openSettings?: boolean;
+  exposeServiceId?: string;
+  unexposeServiceId?: string;
+  openUrl?: string;
+  scan?: boolean;
+};
+
+export type CommandContext = { services: ServiceRecord[]; settings: SettingsStatus | undefined };
+
+export type CommandSuggestion = { id: string; label: string; value: string };
+
+export const KONAMI_SEQUENCE = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'b',
+  'a',
+];
+
+export function toneColor(tone: CommandTone): string {
+  if (tone === 'success') return '#3fb950';
+  if (tone === 'error') return '#f85149';
+  if (tone === 'muted') return '#8b949e';
+  return '#58a6ff';
+}
 
 type ParsedCommand = { name: string; arg: string };
 type HandlerMap = Record<

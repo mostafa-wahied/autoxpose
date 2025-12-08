@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { TERMINAL_COLORS } from '../../components/terminal';
 import type { ServiceRecord } from '../../lib/api';
-import type { CommandTone } from './command-types';
-import { toneColor } from './command-constants';
+import type { CommandTone } from './command-engine';
+import { toneColor } from './command-engine';
 import { useCommandConsole } from './use-command-console';
 
 const CLICK_PAD_CLASS = 'min-h-32';

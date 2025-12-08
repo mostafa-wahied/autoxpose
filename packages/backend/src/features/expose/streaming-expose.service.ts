@@ -5,17 +5,15 @@ import {
   handleDnsUnexpose,
   handleProxyExpose,
   handleProxyUnexpose,
-} from './expose-handlers.js';
-import {
   emit,
   emitComplete,
   emitError,
   type ExposeContext,
   type ProgressCallback,
-} from './progress-emitter.js';
+} from './expose-handlers.js';
 import { createInitialSteps } from './progress.types.js';
 
-export type { ProgressCallback } from './progress-emitter.js';
+export type { ProgressCallback } from './expose-handlers.js';
 
 export class StreamingExposeService {
   constructor(

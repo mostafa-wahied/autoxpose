@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ServiceRecord } from '../../lib/api';
-import { type CommandSuggestion, type OutputLine } from './command-types';
+import { type CommandSuggestion, type OutputLine } from './command-engine';
 import { buildSuggestions } from './command-utils';
 
 const MAX_HISTORY = 50;

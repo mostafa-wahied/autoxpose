@@ -1,4 +1,4 @@
-import type { DiscoveredService } from '../discovery/discovery.types.js';
+import type { DiscoveredService } from '../discovery/docker.js';
 import type {
   CreateServiceInput,
   ServiceRecord,

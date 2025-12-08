@@ -5,8 +5,8 @@ import {
   type CommandResult,
   type CommandSuggestion,
   type OutputLine,
-} from './command-types';
-import { executeCommand } from './command-engine';
+  executeCommand,
+} from './command-engine';
 import { useConsoleHistory, useConsoleOutputs, useConsoleSuggestions } from './command-hooks';
 import { useKeyRuntime } from './command-key-runtime';
 

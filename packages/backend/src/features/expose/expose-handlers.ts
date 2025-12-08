@@ -1,8 +1,61 @@
+import https from 'node:https';
 import type { SettingsService } from '../settings/settings.service.js';
 import { waitForDnsPropagation, type PropagationCallback } from './dns-propagation.js';
-import { emit, emitError, type ExposeContext } from './progress-emitter.js';
-import { finishProxyStep } from './proxy-reachability.js';
-import { updateStep } from './progress.types.js';
+import { updateStep, type ProgressEvent, type ProgressStep } from './progress.types.js';
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
+export interface ExposeContext {
+  serviceId: string;
+  action: 'expose' | 'unexpose';
+  steps: ProgressStep[];
+  onProgress: ProgressCallback;
+}
+
+export function emit(ctx: ExposeContext, updates?: Partial<ProgressEvent>): void {
+  ctx.onProgress({
+    type: 'progress',
+    serviceId: ctx.serviceId,
+    action: ctx.action,
+    steps: [...ctx.steps],
+    timestamp: Date.now(),
+    ...updates,
+  });
+}
+
+export function emitComplete(
+  ctx: ExposeContext,
+  domain: string,
+  ids: { dns?: string; proxy?: string },
+  ssl?: { pending?: boolean; error?: string }
+): void {
+  ctx.onProgress({
+    type: 'complete',
+    serviceId: ctx.serviceId,
+    action: ctx.action,
+    steps: ctx.steps,
+    timestamp: Date.now(),
+    result: {
+      success: true,
+      domain,
+      dnsRecordId: ids.dns,
+      proxyHostId: ids.proxy,
+      sslPending: ssl?.pending,
+      sslError: ssl?.error,
+    },
+  });
+}
+
+export function emitError(ctx: ExposeContext, error: string): void {
+  ctx.onProgress({
+    type: 'error',
+    serviceId: ctx.serviceId,
+    action: ctx.action,
+    steps: ctx.steps,
+    timestamp: Date.now(),
+    result: { success: false, error },
+  });
+}
 type DnsService = { subdomain: string; dnsRecordId: string | null };
 type ProxyService = {
   subdomain: string;
@@ -97,6 +150,58 @@ async function runPropagationWithinDns(
   };
   const result = await waitForDnsPropagation(domain, onProgress);
   return { success: result.success, globalVerified: result.globalVerified };
+}
+
+async function verifyHttpsReachability(
+  domain: string,
+  attempts = 6,
+  intervalMs = 5000
+): Promise<boolean> {
+  for (let i = 1; i <= attempts; i++) {
+    if (await headHttps(domain)) return true;
+    if (i < attempts) await delay(intervalMs);
+  }
+  return false;
+}
+
+function headHttps(domain: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const req = https.request({ hostname: domain, port: 443, method: 'HEAD', timeout: 5000 }, () =>
+      resolve(true)
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+async function finishProxyStep(
+  ctx: ExposeContext,
+  port: number,
+  domain: string,
+  existing: boolean
+): Promise<void> {
+  ctx.steps = updateStep(ctx.steps, 'proxy', {
+    status: 'running',
+    progress: 85,
+    detail: 'Verifying reachability...',
+  });
+  emit(ctx);
+  const reachable = await verifyHttpsReachability(domain);
+  const prefix = existing ? 'Found existing: ' : '';
+  const detail = reachable
+    ? `${prefix}Port ${port} -> 443 (reachable)`
+    : `${prefix}Port ${port} -> 443 (not reachable yet)`;
+  const status = reachable ? 'success' : 'warning';
+  ctx.steps = updateStep(ctx.steps, 'proxy', { status, progress: 100, detail });
+  emit(ctx);
 }
 
 type ProxyExposeParams = {

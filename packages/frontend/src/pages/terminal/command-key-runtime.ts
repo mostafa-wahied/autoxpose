@@ -1,5 +1,5 @@
 import React from 'react';
-import { KONAMI_SEQUENCE } from './command-constants';
+import { KONAMI_SEQUENCE } from './command-engine';
 import { useConsoleHistory, useConsoleOutputs, useConsoleSuggestions } from './command-hooks';
 
 export type KeyRuntimeArgs = {

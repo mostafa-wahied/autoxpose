@@ -1,11 +1,17 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, type SettingsStatus } from '../../lib/api';
-import { DNS_PROVIDERS, DnsFormFields } from './dns-form-fields';
-import { FormActions } from './form-components';
+import { FormActions, FormInput, FormSelect } from './form-components';
 import { TestConnectionButton, type TestState } from './test-button';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
+
+export const DNS_PROVIDERS = [
+  { value: 'cloudflare', label: 'Cloudflare' },
+  { value: 'netlify', label: 'Netlify' },
+  { value: 'digitalocean', label: 'DigitalOcean' },
+  { value: 'porkbun', label: 'Porkbun' },
+];
 
 interface DnsConfigSectionProps {
   current: SettingsStatus['dns'] | null;
@@ -65,6 +71,72 @@ function DnsHeader({ isConfigured, isEditing, onEdit }: DnsHeaderProps): JSX.Ele
 interface DnsEditFormProps {
   current: SettingsStatus['dns'] | null;
   onDone: () => void;
+}
+
+interface DnsFieldsProps {
+  provider: string;
+  token: string;
+  zoneId: string;
+  domain: string;
+  apiKey: string;
+  secretKey: string;
+  hasToken: boolean;
+  hasApiKey: boolean;
+  onProviderChange: (v: string) => void;
+  onTokenChange: (v: string) => void;
+  onZoneIdChange: (v: string) => void;
+  onDomainChange: (v: string) => void;
+  onApiKeyChange: (v: string) => void;
+  onSecretKeyChange: (v: string) => void;
+}
+
+function DnsFormFields(props: DnsFieldsProps): JSX.Element {
+  const isPorkbun = props.provider === 'porkbun';
+  const needsZone = props.provider === 'cloudflare' || props.provider === 'netlify';
+  const tokenPlaceholder = props.hasToken ? 'Saved' : 'Enter token';
+  const apiKeyPlaceholder = props.hasApiKey ? 'Saved' : 'Enter API key';
+
+  return (
+    <>
+      <FormInput
+        label="Base Domain"
+        placeholder="example.com"
+        value={props.domain}
+        onChange={props.onDomainChange}
+      />
+      <FormSelect
+        label="Provider"
+        value={props.provider}
+        onChange={props.onProviderChange}
+        options={DNS_PROVIDERS}
+      />
+      {isPorkbun ? (
+        <PorkbunFields
+          apiKey={props.apiKey}
+          secretKey={props.secretKey}
+          apiKeyPlaceholder={apiKeyPlaceholder}
+          onApiKeyChange={props.onApiKeyChange}
+          onSecretKeyChange={props.onSecretKeyChange}
+        />
+      ) : (
+        <FormInput
+          label="API Token"
+          type="password"
+          placeholder={tokenPlaceholder}
+          value={props.token}
+          onChange={props.onTokenChange}
+        />
+      )}
+      {needsZone && (
+        <FormInput
+          label="Zone ID"
+          placeholder="Zone ID"
+          value={props.zoneId}
+          onChange={props.onZoneIdChange}
+        />
+      )}
+    </>
+  );
 }
 
 type DnsFormState = {
@@ -142,6 +214,35 @@ function useDnsForm(current: SettingsStatus['dns'] | null, onDone: () => void): 
     hasToken: Boolean(current?.config?.token),
     hasApiKey: Boolean(current?.config?.apiKey),
   };
+}
+
+interface PorkbunFieldsProps {
+  apiKey: string;
+  secretKey: string;
+  apiKeyPlaceholder: string;
+  onApiKeyChange: (v: string) => void;
+  onSecretKeyChange: (v: string) => void;
+}
+
+function PorkbunFields(props: PorkbunFieldsProps): JSX.Element {
+  return (
+    <>
+      <FormInput
+        label="API Key"
+        type="password"
+        placeholder={props.apiKeyPlaceholder}
+        value={props.apiKey}
+        onChange={props.onApiKeyChange}
+      />
+      <FormInput
+        label="Secret Key"
+        type="password"
+        placeholder="Enter secret key"
+        value={props.secretKey}
+        onChange={props.onSecretKeyChange}
+      />
+    </>
+  );
 }
 
 function DnsEditForm({ current, onDone }: DnsEditFormProps): JSX.Element {

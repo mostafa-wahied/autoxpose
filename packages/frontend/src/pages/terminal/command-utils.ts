@@ -1,5 +1,5 @@
 import type { ServiceRecord } from '../../lib/api';
-import type { CommandSuggestion } from './command-types';
+import type { CommandSuggestion } from './command-engine';
 
 const BASE_COMMANDS = [
   'help',
