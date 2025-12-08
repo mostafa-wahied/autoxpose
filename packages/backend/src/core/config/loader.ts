@@ -7,14 +7,48 @@ const CONFIG_PATHS = ['./config.yaml', './config.yml', '/config/config.yaml'];
 
 function detectLanIp(): string {
   const nets = networkInterfaces();
+  const candidates: string[] = [];
   for (const name of Object.keys(nets)) {
+    if (isBridgeInterface(name)) continue;
     for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
+      if (net.family !== 'IPv4') continue;
+      if (net.internal) continue;
+      if (isLinkLocal(net.address)) continue;
+      candidates.push(net.address);
     }
   }
-  return 'localhost';
+  const preferred = pickPreferredIp(candidates);
+  return preferred ?? 'localhost';
+}
+
+function pickPreferredIp(ips: string[]): string | null {
+  const byPriority = [
+    (ip: string): boolean => ip.startsWith('10.'),
+    (ip: string): boolean => ip.startsWith('192.168.'),
+    (ip: string): boolean => ip.startsWith('172.') && isPrivate172(ip),
+    (_ip: string): boolean => true,
+  ];
+  for (const match of byPriority) {
+    const found = ips.find(ip => match(ip));
+    if (found) return found;
+  }
+  return null;
+}
+
+function isBridgeInterface(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.startsWith('docker') || lower.startsWith('br-') || lower.startsWith('veth');
+}
+
+function isLinkLocal(ip: string): boolean {
+  return ip.startsWith('169.254.');
+}
+
+function isPrivate172(ip: string): boolean {
+  const parts = ip.split('.');
+  if (parts.length < 2) return false;
+  const second = Number(parts[1]);
+  return second >= 16 && second <= 31 && !ip.startsWith('172.17.') && !ip.startsWith('172.18.');
 }
 
 export function loadConfig(): AppConfig {
