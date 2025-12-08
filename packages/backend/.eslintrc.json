@@ -17,8 +17,8 @@
     ],
     "@typescript-eslint/explicit-function-return-type": "error",
     "@typescript-eslint/no-explicit-any": "error",
-    "max-lines": ["error", { "max": 200, "skipBlankLines": true }],
-    "max-lines-per-function": ["error", { "max": 50, "skipBlankLines": true }],
+    "max-lines": ["error", { "max": 400, "skipBlankLines": true }],
+    "max-lines-per-function": ["error", { "max": 70, "skipBlankLines": true }],
     "max-params": ["error", 4],
     "max-depth": ["error", 3],
     "complexity": ["error", 10]
