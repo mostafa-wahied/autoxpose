@@ -1,7 +1,5 @@
 import type { CommandTone } from './command-types';
 
-export const COMMAND_HINT = 'list | status | expose <service> | test dns | test proxy | config';
-
 export const KONAMI_SEQUENCE = [
   'ArrowUp',
   'ArrowUp',

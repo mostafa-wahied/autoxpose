@@ -11,6 +11,7 @@ export type CommandResult = {
   exposeServiceId?: string;
   unexposeServiceId?: string;
   openUrl?: string;
+  scan?: boolean;
 };
 
 export type CommandContext = { services: ServiceRecord[]; settings: SettingsStatus | undefined };

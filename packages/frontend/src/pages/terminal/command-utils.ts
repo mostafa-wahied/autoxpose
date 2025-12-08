@@ -9,10 +9,10 @@ const BASE_COMMANDS = [
   'unexpose',
   'test',
   'open',
+  'scan',
   'config',
   'clear',
   'iamfeelinglucky',
-  '?',
 ];
 
 const MAX_SUGGESTIONS = 5;
@@ -20,10 +20,17 @@ const MAX_SUGGESTIONS = 5;
 export function buildSuggestions(value: string, services: ServiceRecord[]): CommandSuggestion[] {
   const trimmed = value.trim();
   if (trimmed.length === 0) return baseCommandSuggestions('');
-  const [cmd, ...rest] = trimmed.split(' ');
+  const [cmdRaw, ...rest] = trimmed.split(' ');
+  const cmd = cmdRaw.toLowerCase();
   const arg = rest.join(' ').trim();
-  if (!arg) return baseCommandSuggestions(cmd);
-  if (expectsService(cmd)) return serviceSuggestions(cmd, arg, services);
+  const matchesCmd = partialMatchCommand(cmd);
+  if (!matchesCmd && !arg) return baseCommandSuggestions(cmd);
+  const target = matchesCmd ?? cmd;
+  if (target === 'test') return testSuggestions(arg);
+  if (target === 'open') return serviceSuggestions(target, arg, services, { enabledOnly: true });
+  if (expectsService(target)) return serviceSuggestions(target, arg, services);
+  if (target === 'help') return helpSuggestions();
+  if (!arg) return baseCommandSuggestions(target);
   return [];
 }
 
@@ -55,18 +62,20 @@ export function baseCommandSuggestions(start: string): CommandSuggestion[] {
 }
 
 function expectsService(cmd: string): boolean {
-  return cmd === 'expose' || cmd === 'unexpose' || cmd === 'open';
+  return cmd === 'expose' || cmd === 'unexpose';
 }
 
 function serviceSuggestions(
   cmd: string,
   query: string,
-  services: ServiceRecord[]
+  services: ServiceRecord[],
+  opts: { enabledOnly?: boolean } = {}
 ): CommandSuggestion[] {
   const token = query.toLowerCase();
   return services
     .filter(svc => {
       const idx = services.indexOf(svc) + 1;
+      if (opts.enabledOnly && !svc.enabled) return false;
       return (
         svc.name.toLowerCase().includes(token) ||
         (svc.subdomain || '').toLowerCase().includes(token) ||
@@ -79,4 +88,35 @@ function serviceSuggestions(
       label: `${cmd} ${svc.name} (${svc.subdomain || 'no-domain'})`,
       value: `${cmd} ${svc.subdomain || svc.name}`,
     }));
+}
+
+function testSuggestions(query: string): CommandSuggestion[] {
+  const token = query.toLowerCase();
+  const options = ['dns', 'proxy'];
+  const base = [{ id: 'test-self', label: 'test', value: 'test' }];
+  const args = options
+    .filter(opt => opt.startsWith(token))
+    .map((opt, idx) => ({
+      id: `test-${opt}-${idx}`,
+      label: `test ${opt}`,
+      value: `test ${opt}`,
+    }));
+  return [...base, ...args].slice(0, MAX_SUGGESTIONS);
+}
+
+function helpSuggestions(): CommandSuggestion[] {
+  const items: CommandSuggestion[] = [
+    { id: 'help-self', label: 'help', value: 'help' },
+    ...BASE_COMMANDS.filter(c => c !== 'help').map((c, idx) => ({
+      id: `help-${c}-${idx}`,
+      label: `help ${c}`,
+      value: `help ${c}`,
+    })),
+  ];
+  return items.slice(0, MAX_SUGGESTIONS);
+}
+
+function partialMatchCommand(input: string): string | null {
+  const match = BASE_COMMANDS.find(c => c.startsWith(input));
+  return match || null;
 }

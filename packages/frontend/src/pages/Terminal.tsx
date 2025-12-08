@@ -139,6 +139,7 @@ function MainContent({
             settingsData={settingsData}
             baseDomain={baseDomain}
             canExpose={canExpose}
+            onScan={actions.handleScan}
           />
         </div>
         <SettingsPanel

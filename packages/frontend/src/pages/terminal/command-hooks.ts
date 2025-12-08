@@ -67,8 +67,9 @@ export function useConsoleSuggestions(): {
   const [list, setList] = React.useState<CommandSuggestion[]>([]);
   const [selected, setSelected] = React.useState(0);
   const refresh = React.useCallback((value: string, services: ServiceRecord[]): void => {
-    setList(buildSuggestions(value, services));
-    setSelected(0);
+    const nextList = buildSuggestions(value, services);
+    setList(nextList);
+    setSelected(prev => Math.max(0, Math.min(prev, Math.max(nextList.length - 1, 0))));
   }, []);
   const clampedSet = React.useCallback(
     (v: number): void => setSelected(Math.max(0, Math.min(v, Math.max(list.length - 1, 0)))),

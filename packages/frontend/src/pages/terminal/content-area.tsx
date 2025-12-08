@@ -5,6 +5,7 @@ import { ServiceGrid } from './service-grid';
 import { type ServiceRecord } from '../../lib/api';
 import { CommandConsole } from './command-console';
 import { type useTerminalActions } from './use-terminal-actions';
+import type { ExposeStreamState } from '../../hooks/use-expose-stream';
 
 interface ContentAreaProps {
   services: ServiceRecord[];
@@ -15,6 +16,7 @@ interface ContentAreaProps {
   baseDomain: string | null;
   canExpose: boolean;
   settingsData: Awaited<ReturnType<typeof import('../../lib/api').api.settings.status>> | undefined;
+  onScan: () => void;
 }
 
 export function ContentArea(props: ContentAreaProps): JSX.Element {
@@ -27,6 +29,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
     baseDomain,
     canExpose,
     settingsData,
+    onScan,
   } = props;
   return (
     <div className="space-y-6">
@@ -42,27 +45,53 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         baseDomain={baseDomain}
         canExpose={canExpose}
       />
-      {state.streamState.serviceId && activeService && (
-        <ProgressOutput
-          serviceId={state.streamState.serviceId}
-          serviceName={activeService.name}
-          action={state.streamState.action}
-          steps={state.streamState.steps}
-          result={state.streamState.result}
-          startedAt={state.streamState.startedAt}
-          lastEventAt={state.streamState.lastEventAt}
-          onRetrySsl={actions.handleRetrySsl}
-          isRetrying={state.retrySslMutation.isPending}
-          retryResult={state.retrySslMutation.data}
-        />
-      )}
+      <ProgressSection
+        streamState={state.streamState}
+        activeService={activeService}
+        onRetry={actions.handleRetrySsl}
+        retrying={state.retrySslMutation.isPending}
+        retryResult={state.retrySslMutation.data}
+      />
       <CommandConsole
         services={services}
         settings={settingsData}
         onExpose={actions.handleExpose}
         onUnexpose={actions.handleExpose}
         onToggleSettings={state.setSettingsOpen}
+        onScan={onScan}
       />
     </div>
+  );
+}
+
+function ProgressSection({
+  streamState,
+  activeService,
+  onRetry,
+  retrying,
+  retryResult,
+}: {
+  streamState: ExposeStreamState;
+  activeService: ServiceRecord | undefined;
+  onRetry: () => void;
+  retrying: boolean;
+  retryResult: ReturnType<
+    (typeof import('./use-terminal-actions'))['useTerminalActions']
+  >['state']['retrySslMutation']['data'];
+}): JSX.Element | null {
+  if (!streamState.serviceId || !activeService) return null;
+  return (
+    <ProgressOutput
+      serviceId={streamState.serviceId}
+      serviceName={activeService.name}
+      action={streamState.action}
+      steps={streamState.steps}
+      result={streamState.result}
+      startedAt={streamState.startedAt}
+      lastEventAt={streamState.lastEventAt}
+      onRetrySsl={onRetry}
+      isRetrying={retrying}
+      retryResult={retryResult}
+    />
   );
 }

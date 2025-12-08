@@ -2,7 +2,6 @@ import { api, type ServiceRecord, type SettingsStatus } from '../../lib/api';
 import { getLuckyLine } from './command-lucky';
 import { type CommandContext, type CommandResult, type OutputLine } from './command-types';
 import { resolveService } from './command-utils';
-import { COMMAND_HINT } from './command-constants';
 
 type ParsedCommand = { name: string; arg: string };
 type HandlerMap = Record<
@@ -11,7 +10,7 @@ type HandlerMap = Record<
 >;
 
 const SIMPLE_HANDLERS: HandlerMap = {
-  help: (arg: string): CommandResult => ({ lines: [{ text: helpText(arg), tone: 'info' }] }),
+  help: (arg: string): CommandResult => helpResult(arg),
   list: (_arg: string, ctx: CommandContext): CommandResult => ({ lines: listLines(ctx.services) }),
   status: (_arg: string, ctx: CommandContext): CommandResult => ({
     lines: [statusLine(ctx.services, ctx.settings)],
@@ -22,7 +21,6 @@ const SIMPLE_HANDLERS: HandlerMap = {
   }),
   clear: (): CommandResult => ({ lines: [], clearOutput: true }),
   iamfeelinglucky: (): CommandResult => ({ lines: [{ text: getLuckyLine(), tone: 'info' }] }),
-  '?': (): CommandResult => ({ lines: [{ text: COMMAND_HINT, tone: 'muted' }] }),
 };
 
 export async function executeCommand(raw: string, ctx: CommandContext): Promise<CommandResult> {
@@ -37,6 +35,7 @@ export async function executeCommand(raw: string, ctx: CommandContext): Promise<
     return exposeResult(parsed.name, parsed.arg, ctx.services);
   if (parsed.name === 'test') return testResult(parsed.arg);
   if (parsed.name === 'open') return openResult(parsed.arg, ctx.services, ctx.settings);
+  if (parsed.name === 'scan') return scanResult();
   return { lines: [{ text: "Unknown command. Try 'help'.", tone: 'error' }] };
 }
 
@@ -47,24 +46,36 @@ function parseCommand(raw: string): ParsedCommand | null {
   return { name: cmd.toLowerCase(), arg: rest.join(' ').trim() };
 }
 
-function helpText(arg: string): string {
-  const base =
-    'Commands: help, list, status, expose, unexpose, test dns, test proxy, open, config, clear, iamfeelinglucky, ?';
-  const key = arg.toLowerCase();
-  if (!key) return base;
-  const map: Record<string, string> = {
-    expose: 'expose <service> | pick by name, subdomain, or list index',
-    unexpose: 'unexpose <service> | pick by name, subdomain, or list index',
-    test: 'test dns | test proxy',
-    open: 'open <service> | show the exposed URL',
-    config: 'config | toggle settings panel',
-    clear: 'clear | clear output',
-    list: 'list | show services with index',
-    status: 'status | show DNS/Proxy state and counts',
-    iamfeelinglucky: 'iamfeelinglucky | random tip or quip',
-    '?': '? | quick usage hints',
-  };
-  return map[key] || 'Unknown command. Try help.';
+function helpResult(arg: string): CommandResult {
+  const entries: { cmd: string; desc: string }[] = [
+    { cmd: 'help', desc: 'help | help <command> for details' },
+    { cmd: 'list', desc: 'list services with index' },
+    { cmd: 'status', desc: 'show DNS/Proxy status and counts' },
+    { cmd: 'expose', desc: 'expose <service> by name, subdomain, or index' },
+    { cmd: 'unexpose', desc: 'unexpose <service> by name, subdomain, or index' },
+    { cmd: 'test', desc: 'test dns | test proxy' },
+    { cmd: 'open', desc: 'open <service> to launch exposed URL' },
+    { cmd: 'config', desc: 'toggle settings panel' },
+    { cmd: 'clear', desc: 'clear terminal output' },
+    { cmd: 'iamfeelinglucky', desc: 'random tip or quip' },
+    { cmd: 'scan', desc: 'scan for services' },
+  ];
+  const key = arg.trim().toLowerCase();
+  if (!key) {
+    const lines: OutputLine[] = [{ text: 'Commands:', tone: 'info' }];
+    return {
+      lines: [
+        ...lines,
+        ...entries.map(entry => ({
+          text: `${entry.cmd.padEnd(14, ' ')} - ${entry.desc}`,
+          tone: 'muted' as const,
+        })),
+      ],
+    };
+  }
+  const match = entries.find(e => e.cmd === key);
+  if (!match) return { lines: [{ text: 'Unknown command. Try help.', tone: 'error' }] };
+  return { lines: [{ text: match.desc, tone: 'info' }] };
 }
 
 function listLines(services: ServiceRecord[]): OutputLine[] {
@@ -142,6 +153,16 @@ function openResult(
   const url = buildUrl(svc, settings);
   if (!url) return { lines: [{ text: 'No domain found for this service.', tone: 'error' }] };
   return { lines: [{ text: `Open: ${url}`, tone: 'info' }], openUrl: url };
+}
+
+function scanResult(): CommandResult {
+  return {
+    lines: [
+      { text: 'Scanning for services...', tone: 'info' },
+      { text: 'Scan started. Check status for counts.', tone: 'muted' },
+    ],
+    scan: true,
+  };
 }
 
 function buildUrl(service: ServiceRecord, settings: SettingsStatus | undefined): string | null {

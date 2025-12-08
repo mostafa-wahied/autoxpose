@@ -1,9 +1,11 @@
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import { TERMINAL_COLORS } from '../../components/terminal';
 import type { ServiceRecord } from '../../lib/api';
 import type { CommandTone } from './command-types';
 import { toneColor } from './command-constants';
 import { useCommandConsole } from './use-command-console';
+
+const CLICK_PAD_CLASS = 'min-h-32';
 
 type CommandConsoleProps = {
   services: ServiceRecord[];
@@ -11,6 +13,7 @@ type CommandConsoleProps = {
   onExpose: (service: ServiceRecord) => void;
   onUnexpose: (service: ServiceRecord) => void;
   onToggleSettings: (open: boolean) => void;
+  onScan: () => void;
 };
 
 export function CommandConsole(props: CommandConsoleProps): JSX.Element {
@@ -30,34 +33,32 @@ export function CommandConsole(props: CommandConsoleProps): JSX.Element {
     onExpose: props.onExpose,
     onUnexpose: props.onUnexpose,
     onToggleSettings: props.onToggleSettings,
+    onScan: props.onScan,
   });
 
   const focusInput = (): void => inputRef.current?.focus();
 
   return (
-    <div className="flex flex-col space-y-2" onClick={focusInput} role="presentation">
+    <div
+      className="flex flex-col space-y-2 cursor-text"
+      onMouseDown={e => {
+        e.preventDefault();
+        focusInput();
+      }}
+      role="presentation"
+    >
       <OutputList items={outputs} />
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 font-mono text-sm whitespace-nowrap">
-          <span style={{ color: TERMINAL_COLORS.success }}>-{'>'}</span>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="min-w-0 flex-1 bg-transparent text-[#c9d1d9] outline-none"
-            aria-label="terminal input"
-          />
-        </div>
-        {suggestions.length > 0 && (
-          <SuggestionList
-            items={suggestions}
-            selected={selectedSuggestion}
-            onSelect={value => handleSuggestionClick(value)}
-            onHighlight={setSelectedSuggestion}
-          />
-        )}
-      </div>
+      <PromptArea
+        inputRef={inputRef}
+        input={input}
+        onChange={setInput}
+        onKeyDown={handleKeyDown}
+        suggestions={suggestions}
+        selectedSuggestion={selectedSuggestion}
+        onSelectSuggestion={handleSuggestionClick}
+        onHighlight={setSelectedSuggestion}
+      />
+      <ClickCatcher onFocus={focusInput} />
     </div>
   );
 }
@@ -106,6 +107,78 @@ function OutputList({ items }: OutputListProps): JSX.Element | null {
           <span className="text-[#c9d1d9]">{line.text}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ClickCatcher({ onFocus }: { onFocus: () => void }): JSX.Element {
+  return (
+    <div
+      className={`w-full ${CLICK_PAD_CLASS}`}
+      role="presentation"
+      onMouseDown={e => {
+        e.preventDefault();
+        onFocus();
+      }}
+    />
+  );
+}
+
+type PromptAreaProps = {
+  inputRef: React.RefObject<HTMLInputElement>;
+  input: string;
+  onChange: (value: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  suggestions: { id: string; label: string; value: string }[];
+  selectedSuggestion: number;
+  onSelectSuggestion: (value: string) => void;
+  onHighlight: (index: number) => void;
+};
+
+function PromptArea({
+  inputRef,
+  input,
+  onChange,
+  onKeyDown,
+  suggestions,
+  selectedSuggestion,
+  onSelectSuggestion,
+  onHighlight,
+}: PromptAreaProps): JSX.Element {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 font-mono text-sm whitespace-nowrap">
+        <span style={{ color: TERMINAL_COLORS.success }}>-{'>'}</span>
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          className="min-w-0 flex-1 bg-transparent text-[#c9d1d9] outline-none"
+          aria-label="terminal input"
+        />
+      </div>
+      {suggestions.length > 0 && (
+        <SuggestionList
+          items={suggestions}
+          selected={selectedSuggestion}
+          onSelect={value => onSelectSuggestion(value)}
+          onHighlight={onHighlight}
+        />
+      )}
+      {suggestions.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-[#8b949e]">
+          <span className="rounded border border-[#30363d] bg-[#0f141a] px-2 py-0.5 text-[#c9d1d9]">
+            Tab
+          </span>
+          <span>select</span>
+          <span className="rounded border border-[#30363d] bg-[#0f141a] px-2 py-0.5 text-[#c9d1d9]">
+            ↑ ↓
+          </span>
+          <span>history</span>
+        </div>
+      )}
+      <div className="h-6 w-full" />
     </div>
   );
 }
