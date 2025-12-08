@@ -104,10 +104,23 @@ function OutputList({ items }: OutputListProps): JSX.Element | null {
       {items.map(line => (
         <div key={line.id} className="flex items-center gap-2 font-mono">
           <span style={{ color: toneColor(line.tone) }}>-{'>'}</span>
-          <span className="text-[#c9d1d9]">{line.text}</span>
+          <LineText line={line} />
         </div>
       ))}
     </div>
+  );
+}
+
+function LineText({ line }: { line: { text: string; tone: CommandTone } }): JSX.Element {
+  const match = line.text.match(/^([^\s>]+)>\s+(.*)$/);
+  if (!match) return <span style={{ color: toneColor(line.tone) }}>{line.text}</span>;
+  const [, cmd, rest] = match;
+  return (
+    <span className="flex items-baseline gap-1">
+      <span className="text-[#58a6ff]">{cmd}</span>
+      <span style={{ color: TERMINAL_COLORS.success }}>{'>'}</span>
+      <span style={{ color: toneColor(line.tone) }}>{rest}</span>
+    </span>
   );
 }
 

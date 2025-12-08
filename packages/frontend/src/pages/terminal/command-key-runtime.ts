@@ -80,6 +80,9 @@ function handleTabKey(
   e.preventDefault();
   if (modeRef.current === 'history') {
     modeRef.current = 'suggestions';
+    args.suggestions.setSelected(0);
+    const first = args.suggestions.list[0];
+    if (first) args.setInput(first.value);
     return true;
   }
   const choice = args.suggestions.list[args.suggestions.selected];
