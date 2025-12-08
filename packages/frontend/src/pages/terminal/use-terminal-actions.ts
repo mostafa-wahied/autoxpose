@@ -15,6 +15,7 @@ export interface TerminalActions {
   handleUnexposeAll: () => void;
   handleScan: () => void;
   handleConfirm: () => void;
+  handleUnexpose: (service: ServiceRecord) => void;
   handleRetrySsl: () => void;
   setConfirmAction: (action: ConfirmAction) => void;
 }
@@ -77,6 +78,10 @@ function useHandlers(
     (s: ServiceRecord): void => (h.clear(), s.enabled ? h.unexpose(s.id) : h.expose(s.id)),
     [h]
   );
+  const handleUnexpose = useCallback(
+    (s: ServiceRecord): void => (h.clear(), h.unexpose(s.id)),
+    [h]
+  );
   const handleDelete = useCallback(
     (s: ServiceRecord): void => setConfirmAction({ type: 'delete', service: s }),
     [setConfirmAction]
@@ -104,6 +109,7 @@ function useHandlers(
     handleExposeAll,
     handleUnexposeAll,
     handleScan,
+    handleUnexpose,
     handleRetrySsl,
   };
 }

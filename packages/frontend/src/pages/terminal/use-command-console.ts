@@ -36,14 +36,16 @@ export function useCommandConsole(props: UseCommandConsoleProps): CommandConsole
   const history = useConsoleHistory();
   const suggestions = useConsoleSuggestions();
   const keyBuffer = React.useRef<string[]>([]);
+  const clearSuggestions = suggestions.clear;
+  const refreshSuggestions = suggestions.refresh;
 
   React.useEffect(() => {
     if (input.length === 0) {
-      suggestions.clear();
+      clearSuggestions();
       return;
     }
-    suggestions.refresh(input, props.services);
-  }, [input, props.services, suggestions]);
+    refreshSuggestions(input, props.services);
+  }, [clearSuggestions, input, props.services, refreshSuggestions]);
 
   const applyResult = useApplyResult({
     outputs,
@@ -92,23 +94,24 @@ function useApplyResult(args: {
   onToggleSettings: (open: boolean) => void;
   onScan: () => void;
 }): (result: Awaited<ReturnType<typeof executeCommand>>) => void {
+  const { outputs, services, onExpose, onUnexpose, onToggleSettings, onScan } = args;
   return React.useCallback(
     (result: Awaited<ReturnType<typeof executeCommand>>): void => {
-      if (result.clearOutput) args.outputs.clear();
-      if (result.lines.length > 0) args.outputs.add(result.lines);
-      if (result.openSettings) args.onToggleSettings(true);
+      if (result.clearOutput) outputs.clear();
+      if (result.lines.length > 0) outputs.add(result.lines);
+      if (result.openSettings) onToggleSettings(true);
       if (result.openUrl) window.open(result.openUrl, '_blank', 'noopener');
-      if (result.scan) args.onScan();
+      if (result.scan) onScan();
       if (result.exposeServiceId) {
-        const svc = args.services.find(s => s.id === result.exposeServiceId);
-        if (svc) args.onExpose(svc);
+        const svc = services.find(s => s.id === result.exposeServiceId);
+        if (svc) onExpose(svc);
       }
       if (result.unexposeServiceId) {
-        const svc = args.services.find(s => s.id === result.unexposeServiceId);
-        if (svc) args.onUnexpose(svc);
+        const svc = services.find(s => s.id === result.unexposeServiceId);
+        if (svc) onUnexpose(svc);
       }
     },
-    [args]
+    [onExpose, onScan, onToggleSettings, onUnexpose, outputs, services]
   );
 }
 
@@ -120,13 +123,14 @@ function useRunCommand(args: {
   settings: CommandContext['settings'];
   applyResult: (result: Awaited<ReturnType<typeof executeCommand>>) => void;
 }): (override?: string) => Promise<void> {
+  const { input, setInput, history, services, settings, applyResult } = args;
   return React.useCallback(
     async (override?: string): Promise<void> => {
-      const raw = override ?? args.input;
+      const raw = override ?? input;
       const trimmed = raw.trim();
       if (!trimmed) return;
-      args.history.push(trimmed);
-      const ctx: CommandContext = { services: args.services, settings: args.settings };
+      history.push(trimmed);
+      const ctx: CommandContext = { services, settings };
       const result = await executeCommand(trimmed, ctx);
       const merged: CommandResult =
         result.lines.length > 0
@@ -138,9 +142,9 @@ function useRunCommand(args: {
               ],
             }
           : { ...result, lines: [{ text: trimmed, tone: 'info' }] };
-      args.applyResult(merged);
-      args.setInput('');
+      applyResult(merged);
+      setInput('');
     },
-    [args]
+    [applyResult, history, input, services, setInput, settings]
   );
 }

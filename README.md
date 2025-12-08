@@ -1,5 +1,5 @@
 <div align="center">
-  <h1 style="font-size: 3em; margin-bottom: 0.1em;">AutoXpose</h1>
+  <h1 style="font-size: 3em; margin-bottom: 0.1em;">autoxpose</h1>
 </div>
 
 <p align="center">
@@ -11,13 +11,13 @@
   <a href="https://github.com/mostafa-wahied/autoxpose/releases"><img src="https://img.shields.io/github/v/release/mostafa-wahied/autoxpose?style=flat-square" alt="Latest Release"></a>
 </p>
 
-Add a label to your container, and AutoXpose creates the DNS record and configures your reverse proxy with SSL - no manual setup required.
+Add a label to your container, and autoxpose creates the DNS record and configures your reverse proxy with SSL - no manual setup required.
 
 ---
 
 ## Key Features
 
-- **Automatic Discovery**: Scans Docker containers for AutoXpose labels.
+- **Automatic Discovery**: Scans Docker containers for autoxpose labels.
 - **DNS Management**: Creates and removes DNS records automatically.
 - **Proxy Configuration**: Configures your reverse proxy with SSL certificates.
 - **Auto-Expose Mode**: Automatically expose services when discovered with `autoxpose.enable=auto`.

@@ -56,7 +56,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         services={services}
         settings={settingsData}
         onExpose={actions.handleExpose}
-        onUnexpose={actions.handleExpose}
+        onUnexpose={actions.handleUnexpose}
         onToggleSettings={state.setSettingsOpen}
         onScan={onScan}
       />
