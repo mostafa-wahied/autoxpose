@@ -31,26 +31,37 @@ type CoreServices = {
   sync: SyncService;
 };
 
-function createCoreServices(db: AppDatabase, publicIp: string, lanIp: string): CoreServices {
+function createCoreServices(
+  db: AppDatabase,
+  publicIp: string,
+  lanIp: string,
+  lanProvided: boolean
+): CoreServices {
   const servicesRepo = new ServicesRepository(db);
   const services = new ServicesService(servicesRepo);
   const settingsRepo = new SettingsRepository(db);
-  const settings = new SettingsService(settingsRepo);
+  const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
   const expose = new ExposeService(servicesRepo, settings, publicIp, lanIp);
   const streamingExpose = new StreamingExposeService(servicesRepo, settings, publicIp, lanIp);
   const sync = new SyncService(servicesRepo, settings);
   return { servicesRepo, services, settings, expose, streamingExpose, sync };
 }
 
+type NetworkOptions = { publicIp?: string; lanIp?: string; lanProvided?: boolean };
+
 export function createAppContext(
   db: AppDatabase,
   dockerSocket?: string,
-  publicIp?: string,
-  lanIp?: string
+  network?: NetworkOptions
 ): AppContext {
-  const resolvedLanIp = lanIp || 'localhost';
-  const resolvedPublicIp = publicIp || 'localhost';
-  const core = createCoreServices(db, resolvedPublicIp, resolvedLanIp);
+  const resolvedLanIp = network?.lanIp || 'localhost';
+  const resolvedPublicIp = network?.publicIp || 'localhost';
+  const core = createCoreServices(
+    db,
+    resolvedPublicIp,
+    resolvedLanIp,
+    Boolean(network?.lanProvided)
+  );
 
   const discovery = dockerSocket ? new DockerDiscoveryProvider(dockerSocket, 'autoxpose') : null;
 

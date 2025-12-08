@@ -7,20 +7,23 @@ export class NetlifyDnsProvider implements DnsProvider {
   readonly name = 'netlify';
   private token: string;
   private zoneId: string;
+  private domain: string;
 
   constructor(config: DnsProviderConfig) {
     this.token = config.token;
     this.zoneId = config.zoneId || '';
+    this.domain = config.domain || '';
   }
 
   async createRecord(input: CreateRecordInput): Promise<DnsRecord> {
+    const hostname = this.buildHostname(input.subdomain);
     const response = await this.request<Record<string, unknown>>(
       `/dns_zones/${this.zoneId}/dns_records`,
       {
         method: 'POST',
         body: JSON.stringify({
           type: input.type || 'A',
-          hostname: input.subdomain,
+          hostname,
           value: input.ip,
           ttl: input.ttl || 3600,
         }),
@@ -44,8 +47,15 @@ export class NetlifyDnsProvider implements DnsProvider {
   }
 
   async findByHostname(hostname: string): Promise<DnsRecord | null> {
+    const target = this.buildHostname(hostname);
     const records = await this.listRecords();
-    return records.find(r => r.hostname === hostname && r.type === 'A') ?? null;
+    return (
+      records.find(
+        r =>
+          r.type === 'A' &&
+          (this.matchesHostname(r.hostname, target) || this.matchesHostname(r.hostname, hostname))
+      ) ?? null
+    );
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -59,7 +69,9 @@ export class NetlifyDnsProvider implements DnsProvider {
     });
 
     if (!response.ok) {
-      const msg = this.getErrorMessage(response.status, path);
+      const body = await response.text();
+      const detail = body ? `: ${body}` : '';
+      const msg = this.getErrorMessage(response.status, path) + detail;
       throw new ProviderError('netlify', msg);
     }
 
@@ -75,6 +87,18 @@ export class NetlifyDnsProvider implements DnsProvider {
     if (status === 401) return 'Invalid token. Check your Netlify personal access token.';
     if (status === 403) return 'Token lacks permissions for DNS management.';
     return `API error: ${status}`;
+  }
+
+  private buildHostname(subdomain: string): string {
+    if (!this.domain) return subdomain;
+    if (subdomain.endsWith(this.domain)) return subdomain;
+    return `${subdomain}.${this.domain}`;
+  }
+
+  private matchesHostname(actual: string, expected: string): boolean {
+    const cleanActual = actual.toLowerCase().replace(/\.$/, '');
+    const cleanExpected = expected.toLowerCase().replace(/\.$/, '');
+    return cleanActual === cleanExpected;
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {

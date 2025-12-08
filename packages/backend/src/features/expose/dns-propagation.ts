@@ -31,8 +31,28 @@ async function checkLocalDns(domain: string): Promise<boolean> {
 
 async function checkGlobalDns(domain: string): Promise<boolean> {
   return new Promise(resolve => {
-    const req = https.request({ hostname: domain, port: 443, method: 'HEAD', timeout: 5000 }, () =>
-      resolve(true)
+    const req = https.request(
+      {
+        hostname: 'dns.google',
+        path: `/resolve?name=${encodeURIComponent(domain)}&type=A`,
+        method: 'GET',
+        timeout: 4000,
+      },
+      res => {
+        const chunks: Buffer[] = [];
+        res.on('data', d => chunks.push(d));
+        res.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks).toString('utf8');
+            const data = JSON.parse(body);
+            const answers = Array.isArray(data.Answer) ? data.Answer : [];
+            const hasA = answers.some((a: { type?: number }) => a.type === 1);
+            resolve(hasA);
+          } catch {
+            resolve(false);
+          }
+        });
+      }
     );
     req.on('error', () => resolve(false));
     req.on('timeout', () => {

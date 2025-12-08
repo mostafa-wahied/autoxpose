@@ -75,52 +75,83 @@ function formatProxyConfig(cfg: ParsedConfig): ProxyConfigResponse {
 
 export function createSettingsRoutes(settings: SettingsService): FastifyPluginAsync {
   return async server => {
-    server.get('/dns', async () => formatDnsConfig(await settings.getDnsConfig()));
-
-    server.post<{ Body: ProviderBody }>('/dns', async request => {
-      await settings.saveDnsConfig(request.body.provider, request.body.config);
-      const cfg = await settings.getDnsConfig();
-      if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
-      const validation = await testDnsProvider(
-        cfg.provider,
-        cfg.config as Parameters<typeof testDnsProvider>[1]
-      );
-      return { success: true, validation };
-    });
-
-    server.get('/proxy', async () => formatProxyConfig(await settings.getProxyConfig()));
-
-    server.post<{ Body: ProviderBody }>('/proxy', async request => {
-      const config = { ...request.body.config };
-      if (config.url && !config.url.startsWith('http')) {
-        config.url = `http://${config.url}`;
-      }
-      await settings.saveProxyConfig(request.body.provider, config);
-      const cfg = await settings.getProxyConfig();
-      if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
-      const validation = await testProxyProvider(
-        cfg.provider,
-        cfg.config as Parameters<typeof testProxyProvider>[1]
-      );
-      return { success: true, validation };
-    });
-
-    server.get('/status', async () => ({
-      dns: formatDnsConfig(await settings.getDnsConfig()),
-      proxy: formatProxyConfig(await settings.getProxyConfig()),
-      platform: detectPlatform(),
-    }));
-
-    server.post('/dns/test', async () => {
-      const cfg = await settings.getDnsConfig();
-      if (!cfg) return { ok: false, error: 'DNS not configured' };
-      return testDnsProvider(cfg.provider, cfg.config as Parameters<typeof testDnsProvider>[1]);
-    });
-
-    server.post('/proxy/test', async () => {
-      const cfg = await settings.getProxyConfig();
-      if (!cfg) return { ok: false, error: 'Proxy not configured' };
-      return testProxyProvider(cfg.provider, cfg.config as Parameters<typeof testProxyProvider>[1]);
-    });
+    registerDnsRoutes(server, settings);
+    registerProxyRoutes(server, settings);
+    registerStatusRoute(server, settings);
+    registerTestRoutes(server, settings);
   };
+}
+
+function registerDnsRoutes(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.get('/dns', async () => formatDnsConfig(await settings.getDnsConfig()));
+
+  server.post<{ Body: ProviderBody }>('/dns', async request => {
+    await settings.saveDnsConfig(request.body.provider, request.body.config);
+    const cfg = await settings.getDnsConfig();
+    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
+    const validation = await testDnsProvider(
+      cfg.provider,
+      cfg.config as Parameters<typeof testDnsProvider>[1]
+    );
+    return { success: true, validation };
+  });
+}
+
+function registerProxyRoutes(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.get('/proxy', async () => formatProxyConfig(await settings.getProxyConfig()));
+
+  server.post<{ Body: ProviderBody }>('/proxy', async request => {
+    const config = { ...request.body.config };
+    if (config.url && !config.url.startsWith('http')) {
+      config.url = `http://${config.url}`;
+    }
+    await settings.saveProxyConfig(request.body.provider, config);
+    const cfg = await settings.getProxyConfig();
+    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
+    const validation = await testProxyProvider(
+      cfg.provider,
+      cfg.config as Parameters<typeof testProxyProvider>[1]
+    );
+    return { success: true, validation };
+  });
+}
+
+function registerStatusRoute(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.get('/status', async () => {
+    const dnsCfg = await settings.getDnsConfig();
+    const proxyCfg = await settings.getProxyConfig();
+    const proxyConfigured = Boolean(proxyCfg);
+    return {
+      dns: formatDnsConfig(dnsCfg),
+      proxy: formatProxyConfig(proxyCfg),
+      platform: detectPlatform(),
+      network: settings.getNetworkInfo(proxyConfigured),
+    };
+  });
+}
+
+function registerTestRoutes(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.post('/dns/test', async () => {
+    const cfg = await settings.getDnsConfig();
+    if (!cfg) return { ok: false, error: 'DNS not configured' };
+    return testDnsProvider(cfg.provider, cfg.config as Parameters<typeof testDnsProvider>[1]);
+  });
+
+  server.post('/proxy/test', async () => {
+    const cfg = await settings.getProxyConfig();
+    if (!cfg) return { ok: false, error: 'Proxy not configured' };
+    return testProxyProvider(cfg.provider, cfg.config as Parameters<typeof testProxyProvider>[1]);
+  });
 }

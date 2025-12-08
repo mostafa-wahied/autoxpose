@@ -11,7 +11,10 @@ import type { ProviderConfigRecord, SettingsRepository } from './settings.reposi
 type ParsedConfig = { provider: string; config: Record<string, string> } | null;
 
 export class SettingsService {
-  constructor(private repository: SettingsRepository) {}
+  constructor(
+    private repository: SettingsRepository,
+    private network?: { serverIp: string; lanIp: string; lanProvided?: boolean }
+  ) {}
 
   async getDnsConfig(): Promise<ParsedConfig> {
     const record = await this.repository.getByType('dns');
@@ -65,12 +68,47 @@ export class SettingsService {
     return this.createProxyProvider(cfg.provider, cfg.config);
   }
 
+  getNetworkInfo(proxyConfigured = false): {
+    serverIp: string;
+    lanIp: string;
+    serverIpWarning: boolean;
+    lanIpWarning: boolean;
+  } {
+    const serverIp = this.network?.serverIp || 'localhost';
+    const lanIp = this.network?.lanIp || 'localhost';
+    const lanProvided = Boolean(this.network?.lanProvided);
+    const serverIpWarning =
+      serverIp === 'localhost' ||
+      serverIp.toLowerCase() === 'your-public-ip' ||
+      !this.isValidIp(serverIp);
+    const lanIpWarning =
+      proxyConfigured &&
+      (lanIp.toLowerCase() === 'your-lan-ip' ||
+        lanIp === 'localhost' ||
+        !this.isValidIp(lanIp) ||
+        (!lanProvided && this.isBridgeIp(lanIp)));
+    return { serverIp, lanIp, serverIpWarning, lanIpWarning };
+  }
+
+  private isValidIp(value: string): boolean {
+    const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+    return ipv4.test(value);
+  }
+
+  private isBridgeIp(value: string): boolean {
+    return value.startsWith('172.') || value.startsWith('169.254.');
+  }
+
   private createDnsProvider(provider: string, cfg: Record<string, string>): DnsProvider | null {
     if (provider === 'cloudflare') {
       return new CloudflareDnsProvider({ token: cfg.token, zoneId: cfg.zoneId });
     }
     if (provider === 'netlify') {
-      return new NetlifyDnsProvider({ token: cfg.token, zoneId: cfg.zoneId });
+      return new NetlifyDnsProvider({
+        token: cfg.token,
+        zoneId: cfg.zoneId,
+        domain: cfg.domain,
+      });
     }
     if (provider === 'digitalocean') {
       return new DigitalOceanDnsProvider({ token: cfg.token, domain: cfg.domain });

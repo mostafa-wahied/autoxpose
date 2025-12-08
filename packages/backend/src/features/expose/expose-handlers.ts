@@ -1,8 +1,8 @@
 import type { SettingsService } from '../settings/settings.service.js';
 import { waitForDnsPropagation, type PropagationCallback } from './dns-propagation.js';
 import { emit, emitError, type ExposeContext } from './progress-emitter.js';
+import { finishProxyStep } from './proxy-reachability.js';
 import { updateStep } from './progress.types.js';
-
 type DnsService = { subdomain: string; dnsRecordId: string | null };
 type ProxyService = {
   subdomain: string;
@@ -11,33 +11,27 @@ type ProxyService = {
   proxyHostId: string | null;
 };
 type StepType = 'dns' | 'proxy';
-
 function emitSkipped(ctx: ExposeContext, step: StepType, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'success', progress: 100, detail });
   emit(ctx);
 }
-
 function emitRunning(ctx: ExposeContext, step: StepType, progress: number, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'running', progress, detail });
   emit(ctx);
 }
-
 function emitSuccess(ctx: ExposeContext, step: StepType, detail: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'success', progress: 100, detail });
   emit(ctx);
 }
-
 function emitStepError(ctx: ExposeContext, step: StepType, msg: string, prefix: string): void {
   ctx.steps = updateStep(ctx.steps, step, { status: 'error', progress: 100, detail: msg });
   emitError(ctx, `${prefix}: ${msg}`);
 }
-
 export type DnsExposeResult = {
   recordId: string | null | undefined;
   propagationSuccess: boolean;
   globalVerified: boolean;
 };
-
 type DnsExposeParams = {
   ctx: ExposeContext;
   svc: DnsService;
@@ -45,27 +39,22 @@ type DnsExposeParams = {
   publicIp: string;
   fullDomain: string;
 };
-
 export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResult> {
   const { ctx, svc, settings, publicIp, fullDomain } = p;
   if (svc.dnsRecordId) {
     emitSkipped(ctx, 'dns', 'Already configured');
     return { recordId: svc.dnsRecordId, propagationSuccess: true, globalVerified: true };
   }
-
   emitRunning(ctx, 'dns', 5, 'Connecting...');
-
   try {
     const dns = await settings.getDnsProvider();
     if (!dns) {
       emitSkipped(ctx, 'dns', 'Skipped');
       return { recordId: undefined, propagationSuccess: true, globalVerified: true };
     }
-
     const subdomain = svc.subdomain.split('.')[0];
     emitRunning(ctx, 'dns', 10, 'Checking existing records...');
     const existing = await dns.findByHostname(subdomain);
-
     let recordId: string;
     if (existing) {
       emitRunning(ctx, 'dns', 20, `Found existing: ${svc.subdomain}`);
@@ -76,14 +65,14 @@ export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResu
       recordId = record.id;
       emitRunning(ctx, 'dns', 25, `Created: ${svc.subdomain}`);
     }
-
     const propagation = await runPropagationWithinDns(ctx, fullDomain);
     if (!propagation.success) {
       emitStepError(ctx, 'dns', 'DNS not propagated after 2 minutes', 'DNS failed');
       return { recordId: null, propagationSuccess: false, globalVerified: false };
     }
-
-    const detail = propagation.globalVerified ? 'Verified globally' : svc.subdomain;
+    const detail = propagation.globalVerified
+      ? `${fullDomain} propagated globally`
+      : `${fullDomain} propagated locally`;
     emitSuccess(ctx, 'dns', detail);
     return { recordId, propagationSuccess: true, globalVerified: propagation.globalVerified };
   } catch (err) {
@@ -117,42 +106,29 @@ type ProxyExposeParams = {
   settings: SettingsService;
   lanIp: string;
 };
-
 export type ProxyExposeResult =
-  | {
-      id: string;
-      sslPending?: boolean;
-      sslError?: string;
-    }
+  | { id: string; sslPending?: boolean; sslError?: string }
   | null
   | undefined;
-
-/**Handle proxy host creation during expose */
 export async function handleProxyExpose(params: ProxyExposeParams): Promise<ProxyExposeResult> {
   const { ctx, svc, fullDomain, settings, lanIp } = params;
-
   if (svc.proxyHostId) {
     emitSkipped(ctx, 'proxy', 'Already configured');
     return { id: svc.proxyHostId };
   }
-
   emitRunning(ctx, 'proxy', 20, 'Connecting...');
-
   try {
     const proxy = await settings.getProxyProvider();
     if (!proxy) {
       emitSkipped(ctx, 'proxy', 'Skipped');
       return undefined;
     }
-
     emitRunning(ctx, 'proxy', 40, 'Checking existing hosts...');
     const existing = await proxy.findByDomain(fullDomain);
-
     if (existing) {
-      emitSuccess(ctx, 'proxy', `Found existing: Port ${svc.port} → 443`);
+      await finishProxyStep(ctx, svc.port, fullDomain, true);
       return { id: existing.id };
     }
-
     emitRunning(ctx, 'proxy', 50, `Creating proxy host...`);
     emitRunning(ctx, 'proxy', 70, `Requesting SSL certificate...`);
     const host = await proxy.createHost({
@@ -169,7 +145,7 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
       ctx.steps = updateStep(ctx.steps, 'proxy', { status: 'warning', progress: 100, detail });
       emit(ctx);
     } else {
-      emitSuccess(ctx, 'proxy', `Port ${svc.port} → 443`);
+      await finishProxyStep(ctx, svc.port, fullDomain, false);
     }
     return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   } catch (err) {
@@ -178,8 +154,6 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
     return null;
   }
 }
-
-/**Handle DNS record removal during unexpose */
 export async function handleDnsUnexpose(
   ctx: ExposeContext,
   recordId: string | null,
@@ -189,9 +163,7 @@ export async function handleDnsUnexpose(
     emitSkipped(ctx, 'dns', 'No record');
     return true;
   }
-
   emitRunning(ctx, 'dns', 50, 'Removing...');
-
   try {
     const dns = await settings.getDnsProvider();
     if (dns) await dns.deleteRecord(recordId);
@@ -204,7 +176,6 @@ export async function handleDnsUnexpose(
   }
 }
 
-/**Handle proxy host removal during unexpose */
 export async function handleProxyUnexpose(
   ctx: ExposeContext,
   hostId: string | null,
@@ -214,9 +185,7 @@ export async function handleProxyUnexpose(
     emitSkipped(ctx, 'proxy', 'No host');
     return true;
   }
-
   emitRunning(ctx, 'proxy', 50, 'Removing...');
-
   try {
     const proxy = await settings.getProxyProvider();
     if (proxy) await proxy.deleteHost(hostId);

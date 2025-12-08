@@ -21,7 +21,11 @@ async function main(): Promise<void> {
   }
 
   const db = getDatabase(config.database.path);
-  const ctx = createAppContext(db, config.docker?.socketPath, config.serverIp, config.lanIp);
+  const ctx = createAppContext(db, config.docker?.socketPath, {
+    publicIp: config.serverIp,
+    lanIp: config.lanIp,
+    lanProvided: Boolean(process.env.LAN_IP),
+  });
   const server = await createServer(config, ctx);
 
   ctx.startWatcher();

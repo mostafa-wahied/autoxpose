@@ -9,6 +9,8 @@ export interface ExposeStreamState {
   steps: ProgressStep[];
   result: ProgressEvent['result'] | null;
   error: string | null;
+  startedAt: number | null;
+  lastEventAt: number | null;
 }
 
 const initialState: ExposeStreamState = {
@@ -18,6 +20,8 @@ const initialState: ExposeStreamState = {
   steps: [],
   result: null,
   error: null,
+  startedAt: null,
+  lastEventAt: null,
 };
 
 export interface UseExposeStreamReturn {
@@ -51,7 +55,12 @@ type SetState = React.Dispatch<React.SetStateAction<ExposeStreamState>>;
 
 function handleMessage(event: MessageEvent, setState: SetState, onComplete: () => void): void {
   const data: ProgressEvent = JSON.parse(event.data);
-  setState(prev => ({ ...prev, steps: data.steps, result: data.result ?? prev.result }));
+  setState(prev => ({
+    ...prev,
+    steps: data.steps,
+    result: data.result ?? prev.result,
+    lastEventAt: data.timestamp,
+  }));
 
   if (data.type === 'complete' || data.type === 'error') {
     onComplete();
@@ -115,6 +124,8 @@ export function useExposeStream(): UseExposeStreamReturn {
         steps: createInitialSteps(action),
         result: null,
         error: null,
+        startedAt: Date.now(),
+        lastEventAt: null,
       });
 
       const url = `/api/services/${serviceId}/${action}/stream`;

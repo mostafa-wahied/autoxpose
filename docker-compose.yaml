@@ -4,8 +4,10 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - SERVER_IP=${SERVER_IP:-your-public-ip}
-      - LAN_IP=${LAN_IP:-your-lan-ip}
+      # - SERVER_IP=${SERVER_IP:-your-public-ip}
+      # - LAN_IP=${LAN_IP:-your-lan-ip}
+      - SERVER_IP=your-public-ip
+      - LAN_IP=your-lan-ip
     volumes:
       - autoxpose-data:/app/packages/backend/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

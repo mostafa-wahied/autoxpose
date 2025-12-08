@@ -34,6 +34,13 @@ export interface DnsStatus extends ProviderStatus {
   domain: string | null;
 }
 
+export interface NetworkStatus {
+  serverIp: string;
+  lanIp: string;
+  serverIpWarning: boolean;
+  lanIpWarning: boolean;
+}
+
 export interface PlatformInfo {
   name: string;
   os: string;
@@ -42,6 +49,7 @@ export interface PlatformInfo {
 export interface SettingsStatus {
   dns: DnsStatus;
   proxy: ProviderStatus;
+  network?: NetworkStatus;
   platform?: PlatformInfo;
 }
 

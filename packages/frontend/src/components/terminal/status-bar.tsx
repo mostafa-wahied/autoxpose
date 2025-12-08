@@ -16,32 +16,11 @@ export function SettingsStatusBar({
   isExpanded,
   onToggle,
 }: SettingsStatusBarProps): JSX.Element {
-  const [dnsState, setDnsState] = useState<ConnectionState>('unconfigured');
-  const [proxyState, setProxyState] = useState<ConnectionState>('unconfigured');
-
-  useEffect(() => {
-    if (!settings?.dns?.configured) {
-      setDnsState('unconfigured');
-    } else {
-      setDnsState('checking');
-      api.settings
-        .testDns()
-        .then(r => setDnsState(r.ok ? 'connected' : 'error'))
-        .catch(() => setDnsState('error'));
-    }
-  }, [settings]);
-
-  useEffect(() => {
-    if (!settings?.proxy?.configured) {
-      setProxyState('unconfigured');
-    } else {
-      setProxyState('checking');
-      api.settings
-        .testProxy()
-        .then(r => setProxyState(r.ok ? 'connected' : 'error'))
-        .catch(() => setProxyState('error'));
-    }
-  }, [settings]);
+  const { dnsState, proxyState } = useConnectionStates(settings);
+  const serverIpWarning = settings?.network?.serverIpWarning;
+  const lanIpWarning = settings?.network?.lanIpWarning;
+  const serverIp = settings?.network?.serverIp;
+  const lanIp = settings?.network?.lanIp;
 
   const needsSetup = dnsState !== 'connected' || proxyState !== 'connected';
   const barStyle = needsSetup
@@ -56,11 +35,51 @@ export function SettingsStatusBar({
           <span className="text-[#30363d]">|</span>
           <StatusIndicator label="Proxy" state={proxyState} provider={settings?.proxy?.provider} />
           <StatusMessage dnsState={dnsState} proxyState={proxyState} />
+          <NetworkNotice
+            serverWarning={serverIpWarning}
+            lanWarning={lanIpWarning}
+            serverIp={serverIp}
+            lanIp={lanIp}
+          />
         </div>
         <ConfigureButton isExpanded={isExpanded} needsSetup={needsSetup} onClick={onToggle} />
       </div>
     </div>
   );
+}
+
+function useConnectionStates(settings: SettingsStatus | null | undefined): {
+  dnsState: ConnectionState;
+  proxyState: ConnectionState;
+} {
+  const [dnsState, setDnsState] = useState<ConnectionState>('unconfigured');
+  const [proxyState, setProxyState] = useState<ConnectionState>('unconfigured');
+
+  useEffect(() => {
+    if (!settings?.dns?.configured) {
+      setDnsState('unconfigured');
+      return;
+    }
+    setDnsState('checking');
+    api.settings
+      .testDns()
+      .then(r => setDnsState(r.ok ? 'connected' : 'error'))
+      .catch(() => setDnsState('error'));
+  }, [settings]);
+
+  useEffect(() => {
+    if (!settings?.proxy?.configured) {
+      setProxyState('unconfigured');
+      return;
+    }
+    setProxyState('checking');
+    api.settings
+      .testProxy()
+      .then(r => setProxyState(r.ok ? 'connected' : 'error'))
+      .catch(() => setProxyState('error'));
+  }, [settings]);
+
+  return { dnsState, proxyState };
 }
 
 function getStateInfo(state: ConnectionState): { icon: string; color: string; tip: string } {
@@ -111,6 +130,30 @@ function StatusMessage({
     return <span className="text-[#f85149]">Connection failed - check settings</span>;
   }
   return <span className="animate-pulse text-[#f85149]">Setup required to expose services</span>;
+}
+
+function NetworkNotice({
+  serverWarning,
+  lanWarning,
+  serverIp,
+  lanIp,
+}: {
+  serverWarning: boolean | undefined;
+  lanWarning: boolean | undefined;
+  serverIp: string | undefined;
+  lanIp: string | undefined;
+}): JSX.Element | null {
+  const notices: string[] = [];
+  if (serverWarning) {
+    notices.push(
+      `Public IP not set (current: ${serverIp || 'unknown'}) - set SERVER_IP env before exposing`
+    );
+  }
+  if (lanWarning) {
+    notices.push(`LAN IP not set (current: ${lanIp || 'unknown'}) - set LAN_IP env for proxy`);
+  }
+  if (notices.length === 0) return null;
+  return <span className="text-[#f0883e]">{notices.join(' | ')}</span>;
 }
 
 interface ConfigureButtonProps {
