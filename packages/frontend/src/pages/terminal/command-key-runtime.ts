@@ -81,12 +81,15 @@ function handleTabKey(
   if (modeRef.current === 'history') {
     modeRef.current = 'suggestions';
     args.suggestions.setSelected(0);
-    const first = args.suggestions.list[0];
-    if (first) args.setInput(first.value);
+    if (args.suggestions.list.length === 1) {
+      const only = args.suggestions.list[0];
+      if (only) args.setInput(only.value);
+    }
     return true;
   }
-  const choice = args.suggestions.list[args.suggestions.selected];
-  if (choice) args.setInput(choice.value);
+  const delta = e.shiftKey ? -1 : 1;
+  const next = clampIndex(args.suggestions.selected + delta, args.suggestions.list.length);
+  args.suggestions.setSelected(next);
   return true;
 }
 
