@@ -1,16 +1,35 @@
 services:
+  # Optional: enable this block to avoid mounting /var/run/docker.sock directly.
+  # docker-proxy:
+  #   image: tecnativa/docker-socket-proxy:latest
+  #   container_name: autoxpose-docker-proxy
+  #   restart: unless-stopped
+  #   environment:
+  #     - CONTAINERS=1   # allow listing containers
+  #     - EVENTS=1       # allow event stream for auto-discovery
+  #     - INFO=1         # basic daemon info
+  #     - NETWORKS=1     # needed for network metadata
+  #     - POST=0         # block mutating calls
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   ports:
+  #     - '2375:2375'    # internal Docker API port (do not expose publicly)
+
   autoxpose:
-    image: autoxpose:latest
+    image: mostafawahied/autoxpose:latest
+    container_name: autoxpose
+    restart: unless-stopped
     ports:
-      - '4949:3000'
+      - '4949:3000' # host:container
     environment:
-      - SERVER_IP=${SERVER_IP:-your-public-ip}
-      - LAN_IP=${LAN_IP:-your-lan-ip}
+      - SERVER_IP=${SERVER_IP:-your-public-ip} # public IP for DNS records
+      - LAN_IP=${LAN_IP:-your-lan-ip} # private IP for proxy targets
+      # If using the optional docker-proxy above, set DOCKER_HOST and remove the socket mount:
+      # - DOCKER_HOST=tcp://docker-proxy:2375
     volumes:
       - autoxpose-data:/app/packages/backend/data
+      # Comment this mount if using docker-proxy
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    user: root
-    restart: unless-stopped
 
 volumes:
   autoxpose-data:

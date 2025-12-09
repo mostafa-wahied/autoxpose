@@ -12,6 +12,7 @@ export const appConfigSchema = z.object({
   docker: z
     .object({
       socketPath: z.string().default('/var/run/docker.sock'),
+      host: z.string().optional(),
       labelPrefix: z.string().default('autoxpose'),
     })
     .default({}),

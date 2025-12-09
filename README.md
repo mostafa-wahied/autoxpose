@@ -56,16 +56,56 @@ Then run:
 docker-compose up -d
 ```
 
-Access the dashboard at `http://your-server:3000`
+Access the dashboard at `http://your-server:4949`
+
+See the production template at [docker-compose.yaml](./docker-compose.yaml).
 
 ## Configuration
 
-| Variable    | Description                                       | Required |
-| ----------- | ------------------------------------------------- | -------- |
-| `SERVER_IP` | Public IP used when creating DNS A records        | Yes      |
-| `LAN_IP`    | LAN/private IP used when targeting proxy backends | Yes      |
+| Variable      | Description                                       | Required |
+| ------------- | ------------------------------------------------- | -------- |
+| `SERVER_IP`   | Public IP used when creating DNS A records        | Yes      |
+| `LAN_IP`      | LAN/private IP used when targeting proxy backends | Yes      |
+| `DOCKER_HOST` | TCP endpoint for Docker when using a socket proxy | No       |
 
 DNS and proxy providers are configured through the web UI.
+
+### Optional: Docker socket proxy (read-only)
+
+To avoid mounting the Docker socket directly, run through a read-only proxy:
+
+```yaml
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      - CONTAINERS=1
+      - EVENTS=1
+      - INFO=1
+      - NETWORKS=1
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - '2375:2375'
+
+  autoxpose:
+    image: autoxpose/autoxpose:latest
+    ports:
+      - '4949:3000'
+    environment:
+      - SERVER_IP=203.0.113.50
+      - LAN_IP=192.168.1.100
+      - DOCKER_HOST=tcp://docker-proxy:2375
+    volumes:
+      - autoxpose-data:/app/packages/backend/data
+    depends_on:
+      - docker-proxy
+
+volumes:
+  autoxpose-data:
+```
 
 ## Container Labels
 
@@ -77,15 +117,16 @@ services:
     image: myapp:latest
     labels:
       - autoxpose.enable=true
+      - autoxpose.subdomain=myapp
 ```
 
-| Label                 | Description                                         | Required |
-| --------------------- | --------------------------------------------------- | -------- |
-| `autoxpose.enable`    | `true` to show in UI, `auto` to auto-expose         | Yes      |
-| `autoxpose.subdomain` | Subdomain for the service (default: container name) | No       |
-| `autoxpose.port`      | Override auto-detected port                         | No       |
-| `autoxpose.scheme`    | Override auto-detected scheme (`http`/`https`)      | No       |
-| `autoxpose.name`      | Display name in UI (default: container name)        | No       |
+| Label                 | Description                                            | Required |
+| --------------------- | ------------------------------------------------------ | -------- |
+| `autoxpose.enable`    | `true` to show in UI, `auto` to auto-expose            | Yes      |
+| `autoxpose.subdomain` | Subdomain for the service (defaults to container name) | No       |
+| `autoxpose.port`      | Override auto-detected port                            | No       |
+| `autoxpose.scheme`    | Override auto-detected scheme (`http`/`https`)         | No       |
+| `autoxpose.name`      | Display name in UI (default: container name)           | No       |
 
 ## Roadmap
 

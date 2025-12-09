@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   }
 
   const db = getDatabase(config.database.path);
-  const ctx = createAppContext(db, config.docker?.socketPath, {
+  const ctx = createAppContext(db, config.docker, {
     publicIp: config.serverIp,
     lanIp: config.lanIp,
     lanProvided: Boolean(process.env.LAN_IP),

@@ -34,9 +34,9 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
   private labelPrefix: string;
   private eventStream: EventStream | null = null;
 
-  constructor(socketPath: string, labelPrefix: string = 'autoxpose') {
-    this.docker = new Docker({ socketPath });
-    this.labelPrefix = labelPrefix;
+  constructor(connection: { socketPath?: string; host?: string; labelPrefix?: string }) {
+    this.docker = this.createDockerClient(connection);
+    this.labelPrefix = connection.labelPrefix || 'autoxpose';
   }
 
   async discover(): Promise<DiscoveredService[]> {
@@ -57,18 +57,30 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
         }
 
         this.eventStream = stream as EventStream;
+        let buffer = '';
 
         stream.on('data', (chunk: Buffer) => {
-          const event = JSON.parse(chunk.toString()) as {
-            Action: string;
-            Actor: { ID: string };
-          };
-          if (event.Action === 'start' || event.Action === 'stop') {
-            this.inspectContainer(event.Actor.ID).then(service => {
-              if (service) {
-                callback(service, event.Action);
+          buffer += chunk.toString();
+          const parts = buffer.split('\n');
+          buffer = parts.pop() ?? '';
+
+          for (const part of parts) {
+            if (!part.trim()) continue;
+            try {
+              const event = JSON.parse(part) as {
+                Action: string;
+                Actor: { ID: string };
+              };
+              if (event.Action === 'start' || event.Action === 'stop') {
+                this.inspectContainer(event.Actor.ID).then(service => {
+                  if (service) {
+                    callback(service, event.Action);
+                  }
+                });
               }
-            });
+            } catch (err) {
+              logger.warn({ err, raw: part }, 'Failed to parse Docker event chunk');
+            }
           }
         });
       }
@@ -124,7 +136,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     }
 
     const name = container.Names?.[0]?.replace(/^\//, '') || '';
-    const subdomain = labels[`${this.labelPrefix}.subdomain`] || '';
+    const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
     return {
       id: container.Id,
       name: labels[`${this.labelPrefix}.name`] || name,
@@ -193,7 +205,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     if (!resolved) return null;
 
     const name = info.Name.replace(/^\//, '');
-    const subdomain = labels[`${this.labelPrefix}.subdomain`] || '';
+    const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
     return {
       id: info.Id,
       name: labels[`${this.labelPrefix}.name`] || name,
@@ -240,6 +252,49 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     }
 
     return { selectedPort: mappings[0].publicPort, detectedScheme: 'http' };
+  }
+
+  private createDockerClient(connection: { socketPath?: string; host?: string }): Docker {
+    if (connection.host) {
+      const parsed = this.parseHost(connection.host);
+      if (parsed.socketPath) {
+        return new Docker({ socketPath: parsed.socketPath });
+      }
+      return new Docker({
+        protocol: parsed.protocol,
+        host: parsed.host,
+        port: parsed.port,
+      });
+    }
+
+    return new Docker({ socketPath: connection.socketPath || '/var/run/docker.sock' });
+  }
+
+  private parseHost(host: string): {
+    socketPath?: string;
+    protocol?: 'http' | 'https' | 'ssh';
+    host?: string;
+    port?: number;
+  } {
+    if (host.startsWith('unix://')) {
+      return { socketPath: host.replace('unix://', '') };
+    }
+
+    let target = host;
+    const hasProtocol =
+      host.startsWith('tcp://') || host.startsWith('http://') || host.startsWith('https://');
+    if (!hasProtocol) {
+      target = `tcp://${host}`;
+    }
+
+    const url = new URL(target);
+    const protocol =
+      url.protocol.replace(':', '') === 'tcp'
+        ? 'http'
+        : (url.protocol.replace(':', '') as 'http' | 'https' | 'ssh');
+    const port = url.port ? parseInt(url.port, 10) : 2375;
+
+    return { protocol, host: url.hostname, port };
   }
 }
 

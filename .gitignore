@@ -21,6 +21,7 @@ coverage/
 *.tsbuildinfo
 
 .dev/
+docker-compose.dev.yaml
 .github/copilot-instructions.md
 packages/backend/.eslintrc.json
 packages/frontend/.eslintrc.json

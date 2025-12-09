@@ -76,6 +76,17 @@ export function loadConfig(): AppConfig {
     envConfig.port = parseInt(process.env.PORT, 10);
   }
 
+  const dockerEnv: Record<string, unknown> = {};
+  if (process.env.DOCKER_HOST) {
+    dockerEnv.host = process.env.DOCKER_HOST;
+  }
+  if (process.env.DOCKER_SOCKET) {
+    dockerEnv.socketPath = process.env.DOCKER_SOCKET;
+  }
+  if (Object.keys(dockerEnv).length > 0) {
+    envConfig.docker = dockerEnv;
+  }
+
   return appConfigSchema.parse({ ...fileConfig, ...envConfig });
 }
 

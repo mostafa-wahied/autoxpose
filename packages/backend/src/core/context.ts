@@ -51,7 +51,7 @@ type NetworkOptions = { publicIp?: string; lanIp?: string; lanProvided?: boolean
 
 export function createAppContext(
   db: AppDatabase,
-  dockerSocket?: string,
+  dockerConfig?: { socketPath?: string; host?: string; labelPrefix?: string },
   network?: NetworkOptions
 ): AppContext {
   const resolvedLanIp = network?.lanIp || 'localhost';
@@ -63,7 +63,7 @@ export function createAppContext(
     Boolean(network?.lanProvided)
   );
 
-  const discovery = dockerSocket ? new DockerDiscoveryProvider(dockerSocket, 'autoxpose') : null;
+  const discovery = dockerConfig ? new DockerDiscoveryProvider(dockerConfig) : null;
 
   const startWatcher = (): void => {
     if (!discovery) return;
