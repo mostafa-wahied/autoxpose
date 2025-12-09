@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 export const proxyRoutes: FastifyPluginAsync = async server => {
   server.get('/providers', async () => {
-    return { providers: ['npm', 'traefik', 'caddy'] };
+    return { providers: ['npm', 'caddy'] };
   });
 
   server.get('/hosts', async () => {

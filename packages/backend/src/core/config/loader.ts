@@ -26,7 +26,7 @@ function pickPreferredIp(ips: string[]): string | null {
     (ip: string): boolean => ip.startsWith('10.'),
     (ip: string): boolean => ip.startsWith('192.168.'),
     (ip: string): boolean => ip.startsWith('172.') && isPrivate172(ip),
-    (_ip: string): boolean => true,
+    (): boolean => true,
   ];
   for (const match of byPriority) {
     const found = ips.find(ip => match(ip));

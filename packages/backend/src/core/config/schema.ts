@@ -25,7 +25,7 @@ export const appConfigSchema = z.object({
     .optional(),
   proxy: z
     .object({
-      provider: z.enum(['npm', 'traefik', 'caddy']).optional(),
+      provider: z.enum(['npm', 'caddy']).optional(),
       url: z.string().optional(),
       username: z.string().optional(),
       password: z.string().optional(),

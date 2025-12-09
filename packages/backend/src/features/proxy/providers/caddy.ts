@@ -95,7 +95,8 @@ export class CaddyProxyProvider implements ProxyProvider {
     return hosts.find(h => h.domain === domain) ?? null;
   }
 
-  async retrySsl(_hostId: string, _domain: string): Promise<{ success: boolean; error?: string }> {
+  async retrySsl(hostId: string, domain: string): Promise<{ success: boolean; error?: string }> {
+    logger.info({ hostId, domain }, 'Caddy manages TLS automatically; retry not required');
     return { success: true };
   }
 
