@@ -37,9 +37,18 @@ export interface DnsStatus extends ProviderStatus {
 export interface NetworkStatus {
   serverIp: string;
   lanIp: string;
-  serverIpWarning: boolean;
-  lanIpWarning: boolean;
+  serverIpState: IpState;
+  lanIpState: IpState;
+  detectedIp: string | null;
 }
+
+export type IpState =
+  | 'valid'
+  | 'missing'
+  | 'invalid'
+  | 'placeholder'
+  | 'bridge-autodetected'
+  | 'mismatch';
 
 export interface PlatformInfo {
   name: string;

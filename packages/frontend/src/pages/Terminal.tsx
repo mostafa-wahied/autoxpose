@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SettingsStatusBar, TerminalHeader, TerminalSidebar } from '../components/terminal';
+import { KeyboardShortcutsModal } from '../components/terminal/keyboard-shortcuts-modal';
 import { SettingsPanel } from '../components/terminal/settings-panel';
 import { TerminalThemeProvider } from '../components/terminal/theme';
 import { api, type ServiceRecord } from '../lib/api';
@@ -57,7 +58,6 @@ function trySettingsShortcut(
 }
 
 function handleActionShortcut(
-  key: string,
   event: KeyboardEvent,
   actions: {
     canExpose: boolean;
@@ -67,17 +67,18 @@ function handleActionShortcut(
   }
 ): void {
   if (!event.altKey) return;
-  if (key === 'e') {
+  const code = event.code.toLowerCase();
+  if (code === 'keye') {
     event.preventDefault();
     if (actions.canExpose) actions.onExposeAll();
     return;
   }
-  if (key === 'u') {
+  if (code === 'keyu') {
     event.preventDefault();
     actions.onUnexposeAll();
     return;
   }
-  if (key === 's') {
+  if (code === 'keys') {
     event.preventDefault();
     actions.onScan();
   }
@@ -90,20 +91,38 @@ function useTerminalShortcuts(params: {
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   canExpose: boolean;
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (open: boolean) => void;
 }): void {
-  const { onExposeAll, onUnexposeAll, onScan, settingsOpen, setSettingsOpen, canExpose } = params;
+  const {
+    onExposeAll,
+    onUnexposeAll,
+    onScan,
+    settingsOpen,
+    setSettingsOpen,
+    canExpose,
+    shortcutsOpen,
+    setShortcutsOpen,
+  } = params;
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent): void => {
       if (isTextTarget(event.target)) return;
       const key = event.key.toLowerCase();
+
+      if (key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setShortcutsOpen(!shortcutsOpen);
+        return;
+      }
+
       const ctrl = event.ctrlKey || event.metaKey;
       if (!ctrl) return;
 
       const toggled = trySettingsShortcut(key, event, settingsOpen, setSettingsOpen);
       if (toggled) return;
 
-      handleActionShortcut(key, event, {
+      handleActionShortcut(event, {
         canExpose,
         onExposeAll,
         onUnexposeAll,
@@ -114,7 +133,16 @@ function useTerminalShortcuts(params: {
     const remove = (): void => window.removeEventListener('keydown', handleShortcut);
     window.addEventListener('keydown', handleShortcut);
     return remove;
-  }, [canExpose, onExposeAll, onScan, onUnexposeAll, setSettingsOpen, settingsOpen]);
+  }, [
+    canExpose,
+    onExposeAll,
+    onScan,
+    onUnexposeAll,
+    setSettingsOpen,
+    settingsOpen,
+    shortcutsOpen,
+    setShortcutsOpen,
+  ]);
 }
 
 function TerminalDashboard(): JSX.Element {
@@ -142,12 +170,14 @@ function TerminalDashboardContent({
   settings,
   settingsLoading,
 }: DashboardContentProps): JSX.Element {
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const dnsOk = settings?.dns?.configured ?? false;
   const proxyOk = settings?.proxy?.configured ?? false;
-  const serverIpWarning = settings?.network?.serverIpWarning ?? false;
-  const needsSetup = checkNeedsSetup(settingsLoading, dnsOk, proxyOk, serverIpWarning);
-  const canExpose = dnsOk && proxyOk && !serverIpWarning;
-  const canExposeReason = serverIpWarning
+  const serverIpState = settings?.network?.serverIpState ?? 'missing';
+  const serverIpBlocking = ['missing', 'invalid', 'placeholder'].includes(serverIpState);
+  const needsSetup = checkNeedsSetup(settingsLoading, dnsOk, proxyOk, serverIpBlocking);
+  const canExpose = dnsOk && proxyOk && !serverIpBlocking;
+  const canExposeReason = serverIpBlocking
     ? 'Public IP not set. Set SERVER_IP before exposing.'
     : 'Set subdomain and configure DNS/Proxy first';
   const { actions, state } = useTerminalActions({ services, needsSetup });
@@ -162,6 +192,8 @@ function TerminalDashboardContent({
     settingsOpen: state.settingsOpen,
     setSettingsOpen: state.setSettingsOpen,
     canExpose,
+    shortcutsOpen,
+    setShortcutsOpen,
   });
 
   return (
@@ -195,6 +227,7 @@ function TerminalDashboardContent({
         onConfirm={actions.handleConfirm}
         onCancel={() => actions.setConfirmAction(null)}
       />
+      <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

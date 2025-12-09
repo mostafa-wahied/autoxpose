@@ -7,6 +7,7 @@ import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProvider } from '../proxy/proxy.types.js';
 import type { ProviderConfigRecord, SettingsRepository } from './settings.repository.js';
+import { detectPublicIp, determineIpState, isBridgeIp, type IpState } from '../../core/platform.js';
 
 type ParsedConfig = { provider: string; config: Record<string, string> } | null;
 
@@ -68,35 +69,30 @@ export class SettingsService {
     return this.createProxyProvider(cfg.provider, cfg.config);
   }
 
-  getNetworkInfo(proxyConfigured = false): {
+  async getNetworkInfo(proxyConfigured = false): Promise<{
     serverIp: string;
     lanIp: string;
-    serverIpWarning: boolean;
-    lanIpWarning: boolean;
-  } {
+    serverIpState: IpState;
+    lanIpState: IpState;
+    detectedIp: string | null;
+  }> {
     const serverIp = this.network?.serverIp || 'localhost';
     const lanIp = this.network?.lanIp || 'localhost';
+    const serverProvided = Boolean(this.network?.serverIp);
     const lanProvided = Boolean(this.network?.lanProvided);
-    const serverIpWarning =
-      serverIp === 'localhost' ||
-      serverIp.toLowerCase() === 'your-public-ip' ||
-      !this.isValidIp(serverIp);
-    const lanIpWarning =
-      proxyConfigured &&
-      (lanIp.toLowerCase() === 'your-lan-ip' ||
-        lanIp === 'localhost' ||
-        !this.isValidIp(lanIp) ||
-        (!lanProvided && this.isBridgeIp(lanIp)));
-    return { serverIp, lanIp, serverIpWarning, lanIpWarning };
-  }
 
-  private isValidIp(value: string): boolean {
-    const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-    return ipv4.test(value);
-  }
+    const detectedIp = await detectPublicIp();
 
-  private isBridgeIp(value: string): boolean {
-    return value.startsWith('172.') || value.startsWith('169.254.');
+    const serverIpState = determineIpState(serverIp, serverProvided, false, detectedIp);
+
+    const lanIsBridge = isBridgeIp(lanIp);
+    let lanIpState = determineIpState(lanIp, lanProvided, lanIsBridge, null);
+
+    if (!proxyConfigured && lanIpState !== 'missing' && lanIpState !== 'invalid') {
+      lanIpState = 'valid';
+    }
+
+    return { serverIp, lanIp, serverIpState, lanIpState, detectedIp };
   }
 
   private createDnsProvider(provider: string, cfg: Record<string, string>): DnsProvider | null {

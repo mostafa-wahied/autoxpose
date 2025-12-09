@@ -133,8 +133,11 @@ function statusLine(services: ServiceRecord[], settings: SettingsStatus | undefi
   const proxyOk = settings?.proxy?.configured ? 'ok' : 'missing';
   const count = `${services.filter(s => s.enabled).length}/${services.length} exposed`;
   const warnings: string[] = [];
-  if (settings?.network?.serverIpWarning) warnings.push('public ip missing');
-  if (settings?.network?.lanIpWarning) warnings.push('lan ip warning');
+  const serverState = settings?.network?.serverIpState;
+  const lanState = settings?.network?.lanIpState;
+  if (serverState && !['valid', 'mismatch'].includes(serverState)) warnings.push('server ip issue');
+  if (lanState && !['valid', 'bridge-autodetected', 'mismatch'].includes(lanState))
+    warnings.push('lan ip issue');
   const warnText = warnings.length > 0 ? ` | warnings: ${warnings.join(', ')}` : '';
   return {
     text: `DNS: ${dnsOk} | Proxy: ${proxyOk} | Services: ${count}${warnText}`,

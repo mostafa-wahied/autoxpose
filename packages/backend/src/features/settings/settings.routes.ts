@@ -134,7 +134,7 @@ function registerStatusRoute(
       dns: formatDnsConfig(dnsCfg),
       proxy: formatProxyConfig(proxyCfg),
       platform: detectPlatform(),
-      network: settings.getNetworkInfo(proxyConfigured),
+      network: await settings.getNetworkInfo(proxyConfigured),
     };
   });
 }
