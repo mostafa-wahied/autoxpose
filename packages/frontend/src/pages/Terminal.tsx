@@ -165,10 +165,7 @@ function TerminalDashboardContent({
   });
 
   return (
-    <div
-      className="flex h-screen flex-col font-mono text-sm text-[#e2e8f0]"
-      style={{ background: 'linear-gradient(135deg, #0b0d11 0%, #0f1218 50%, #0a0c11 100%)' }}
-    >
+    <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
       <TerminalHeader
         serviceCount={services.length}
         exposedCount={exposedCount}

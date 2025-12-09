@@ -14,9 +14,9 @@ export function TerminalSidebar({
   onServiceClick,
 }: TerminalSidebarProps): JSX.Element {
   return (
-    <div className="flex w-56 flex-col border-r border-[#1b1f29] bg-[#0b0d11]">
+    <div className="flex w-56 flex-col border-r border-[#30363d] bg-[#0d1117]">
       <div className="flex-1 overflow-auto p-4">
-        <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#9aa0aa]">
+        <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8b949e]">
           Services
         </div>
         <div className="space-y-0.5">
@@ -44,8 +44,8 @@ interface SidebarItemProps {
 function SidebarItem({ service, isActive, onClick }: SidebarItemProps): JSX.Element {
   const tipText = service.enabled ? 'Online - Click to view' : 'Offline';
   const activeCss = isActive
-    ? 'bg-[#101218] text-[#e2e8f0]'
-    : 'text-[#e2e8f0] opacity-70 hover:bg-[#101218] hover:opacity-100';
+    ? 'bg-[#161b22] text-white'
+    : 'text-[#c9d1d9] opacity-70 hover:bg-[#161b22] hover:opacity-100';
   const dotColor = service.enabled ? TERMINAL_COLORS.success : TERMINAL_COLORS.textMuted;
 
   return (

@@ -16,10 +16,7 @@ export function ScanSuccessNotice({ data }: { data: ScanNoticeData }): JSX.Eleme
 
 export function LoadingView(): JSX.Element {
   return (
-    <div
-      className="flex h-screen items-center justify-center font-mono text-[#e2e8f0]"
-      style={{ background: 'linear-gradient(135deg, #0b0d11 0%, #0f1218 50%, #0a0c11 100%)' }}
-    >
+    <div className="flex h-screen items-center justify-center bg-[#0d1117] font-mono text-[#c9d1d9]">
       <CommandPrompt command="Loading services..." />
     </div>
   );
@@ -27,10 +24,7 @@ export function LoadingView(): JSX.Element {
 
 export function ErrorView(): JSX.Element {
   return (
-    <div
-      className="flex h-screen items-center justify-center font-mono text-[#f07b7b]"
-      style={{ background: 'linear-gradient(135deg, #0b0d11 0%, #0f1218 50%, #0a0c11 100%)' }}
-    >
+    <div className="flex h-screen items-center justify-center bg-[#0d1117] font-mono text-[#f85149]">
       [ERROR] Failed to load services. Check your connection.
     </div>
   );
