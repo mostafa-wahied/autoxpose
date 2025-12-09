@@ -1,15 +1,15 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
 export const TERMINAL_COLORS = {
-  bg: '#0d1117',
-  bgSecondary: '#161b22',
-  border: '#30363d',
-  text: '#c9d1d9',
-  textMuted: '#8b949e',
-  accent: '#58a6ff',
-  success: '#3fb950',
-  error: '#f85149',
-  warning: '#d29922',
+  bg: '#0b0d11',
+  bgSecondary: '#101218',
+  border: '#1b1f29',
+  text: '#e2e8f0',
+  textMuted: '#9aa0aa',
+  accent: '#50c4e6',
+  success: '#8dd39f',
+  error: '#f07b7b',
+  warning: '#f2c46d',
 };
 
 type TerminalThemeContextValue = {

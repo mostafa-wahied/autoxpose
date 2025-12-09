@@ -9,15 +9,15 @@ interface FormSelectProps {
 }
 
 export function FormSelect(props: FormSelectProps): JSX.Element {
-  const cls = props.disabled ? 'text-[#8b949e]' : 'text-[#c9d1d9]';
+  const cls = props.disabled ? 'text-[#9aa0aa]' : 'text-[#e2e8f0]';
   return (
     <div>
-      <label className="mb-1 block text-xs text-[#8b949e]">{props.label}</label>
+      <label className="mb-1 block text-xs text-[#9aa0aa]">{props.label}</label>
       <select
         value={props.value}
         onChange={(e): void => props.onChange(e.target.value)}
         disabled={props.disabled}
-        className={`w-full rounded border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm focus:border-[#58a6ff] focus:outline-none ${cls}`}
+        className={`w-full rounded border border-[#1b1f29] bg-[#0b0d11] px-3 py-2 text-sm focus:border-[#50c4e6] focus:outline-none ${cls}`}
       >
         {props.options.map(o => (
           <option key={o.value} value={o.value}>
@@ -40,13 +40,13 @@ interface FormInputProps {
 export function FormInput(props: FormInputProps): JSX.Element {
   return (
     <div>
-      <label className="mb-1 block text-xs text-[#8b949e]">{props.label}</label>
+      <label className="mb-1 block text-xs text-[#9aa0aa]">{props.label}</label>
       <input
         type={props.type || 'text'}
         placeholder={props.placeholder}
         value={props.value}
         onChange={(e): void => props.onChange(e.target.value)}
-        className="w-full rounded border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#c9d1d9] placeholder-[#484f58] focus:border-[#58a6ff] focus:outline-none"
+        className="w-full rounded border border-[#1b1f29] bg-[#0b0d11] px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#6b7280] focus:border-[#50c4e6] focus:outline-none"
       />
     </div>
   );
@@ -74,7 +74,7 @@ export function FormActions(props: FormActionsProps): JSX.Element {
       {props.showCancel && (
         <button
           onClick={props.onCancel}
-          className="rounded border border-[#30363d] px-3 py-1.5 text-xs text-[#c9d1d9] transition-colors hover:bg-[#30363d]"
+          className="rounded border border-[#1b1f29] px-3 py-1.5 text-xs text-[#e2e8f0] transition-colors hover:bg-[#1b1f29]"
         >
           Cancel
         </button>

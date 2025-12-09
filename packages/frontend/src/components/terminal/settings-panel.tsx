@@ -13,7 +13,7 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
 
   return (
     <div
-      className={`overflow-y-auto border-t border-[#30363d] bg-[#0d1117] transition-all duration-300 ease-in-out ${visClass}`}
+      className={`overflow-y-auto border-t border-[#1b1f29] bg-[#0b0d11] transition-all duration-300 ease-in-out ${visClass}`}
     >
       <div className="p-6 pb-8">
         <PanelHeader onClose={onClose} />
@@ -29,10 +29,10 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
 function PanelHeader({ onClose }: { onClose: () => void }): JSX.Element {
   return (
     <div className="mb-4 flex items-center justify-between">
-      <h3 className="text-sm font-bold text-[#c9d1d9]">Configuration</h3>
+      <h3 className="text-sm font-bold text-[#e2e8f0]">Configuration</h3>
       <button
         onClick={onClose}
-        className="text-xs text-[#8b949e] transition-colors hover:text-[#c9d1d9]"
+        className="text-xs text-[#9aa0aa] transition-colors hover:text-[#e2e8f0]"
       >
         Close
       </button>
