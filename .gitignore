@@ -5,6 +5,8 @@ build/
 .env.local
 .env.*.local
 
+autoxpose.tar
+
 *.log
 npm-debug.log*
 
