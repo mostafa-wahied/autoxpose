@@ -12,6 +12,7 @@ export interface TerminalActions {
   handleExpose: (service: ServiceRecord) => void;
   handleDelete: (service: ServiceRecord) => void;
   handleSubdomainChange: (service: ServiceRecord, subdomain: string) => void;
+  handleNameChange: (service: ServiceRecord, name: string) => void;
   handleExposeAll: () => void;
   handleUnexposeAll: () => void;
   handleScan: () => void;
@@ -92,6 +93,10 @@ function useHandlers(
     (s: ServiceRecord, subdomain: string): void => h.updateMutation.mutate({ id: s.id, subdomain }),
     [h.updateMutation]
   );
+  const handleNameChange = useCallback(
+    (s: ServiceRecord, name: string): void => h.updateMutation.mutate({ id: s.id, name }),
+    [h.updateMutation]
+  );
   const handleExposeAll = useCallback(
     (): void => setConfirmAction({ type: 'expose-all' }),
     [setConfirmAction]
@@ -108,6 +113,7 @@ function useHandlers(
     handleExpose,
     handleDelete,
     handleSubdomainChange,
+    handleNameChange,
     handleExposeAll,
     handleUnexposeAll,
     handleScan,

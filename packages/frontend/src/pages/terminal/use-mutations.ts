@@ -5,7 +5,7 @@ import { api, type ServiceRecord } from '../../lib/api';
 type ScanResult = { discovered: number; created: number; updated: number; removed: number };
 type DeleteResult = { success: boolean };
 type UpdateResult = { service: ServiceRecord };
-type UpdateInput = { id: string; subdomain: string };
+type UpdateInput = { id: string; subdomain?: string; name?: string };
 type RetrySslResult = { success: boolean; error?: string };
 
 interface MutationsReturn {
@@ -37,8 +37,12 @@ export function useTerminalMutations(): MutationsReturn {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateInput) =>
-      api.services.update(input.id, { subdomain: input.subdomain }),
+    mutationFn: (input: UpdateInput) => {
+      const updates: Partial<{ name: string; subdomain: string }> = {};
+      if (input.subdomain !== undefined) updates.subdomain = input.subdomain;
+      if (input.name !== undefined) updates.name = input.name;
+      return api.services.update(input.id, updates);
+    },
     onSuccess: (): void => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
     },
