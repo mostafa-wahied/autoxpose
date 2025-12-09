@@ -18,10 +18,15 @@ Add a label to your container, and autoxpose creates the DNS record and configur
 ## Key Features
 
 - **Automatic Discovery**: Scans Docker containers for autoxpose labels.
-- **DNS Management**: Creates and removes DNS records automatically.
-- **Proxy Configuration**: Configures your reverse proxy with SSL certificates.
+- **DNS Management**: Creates and removes DNS records for supported providers.
+- **Proxy Configuration**: Configures your reverse proxy with SSL certificates (Nginx Proxy Manager or Caddy).
 - **Auto-Expose Mode**: Automatically expose services when discovered with `autoxpose.enable=auto`.
 - **Lightweight**: Single container with embedded database. No external dependencies.
+
+## Supported Providers
+
+- **DNS**: Cloudflare, Netlify, DigitalOcean, Porkbun
+- **Proxy**: Nginx Proxy Manager, Caddy
 
 ## Deployment
 
@@ -32,7 +37,7 @@ services:
   autoxpose:
     image: autoxpose/autoxpose:latest
     ports:
-      - '3000:3000'
+      - '4949:3000'
     environment:
       - SERVER_IP=203.0.113.50 # Your public IP for DNS records
       - LAN_IP=192.168.1.100 # Your LAN IP for proxy targets
@@ -55,16 +60,12 @@ Access the dashboard at `http://your-server:3000`
 
 ## Configuration
 
-| Variable    | Description                    | Required |
-| ----------- | ------------------------------ | -------- |
-| `SERVER_IP` | Your public IP for DNS records | Yes      |
-| `LAN_IP`    | Your LAN IP for proxy targets  | Yes      |
+| Variable    | Description                                       | Required |
+| ----------- | ------------------------------------------------- | -------- |
+| `SERVER_IP` | Public IP used when creating DNS A records        | Yes      |
+| `LAN_IP`    | LAN/private IP used when targeting proxy backends | Yes      |
 
 DNS and proxy providers are configured through the web UI.
-
-**Supported DNS Providers:** Netlify, Cloudflare, DigitalOcean
-
-**Supported Proxy Providers:** Nginx Proxy Manager, Traefik, Caddy
 
 ## Container Labels
 
@@ -88,9 +89,9 @@ services:
 
 ## Roadmap
 
-- [ ] Traefik and Caddy proxy provider implementations
-- [ ] DigitalOcean DNS provider implementation
-- [ ] Manual service entries (non-Docker)
+- [x] Caddy proxy provider implementation
+- [x] DigitalOcean DNS provider implementation
+- [x] Porkbun DNS provider implementation
 - [ ] Health check monitoring
 
 ## Contributing
