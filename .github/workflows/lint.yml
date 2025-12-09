@@ -1,13 +1,13 @@
-name: CI
+name: Lint
 
 on:
   pull_request:
-    branches: [ "main", "**" ]
+    branches: ['main', '**']
   push:
-    branches: [ "main" ]
+    branches: ['main']
 
 jobs:
-  lint-type-build:
+  eslint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
