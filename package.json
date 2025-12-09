@@ -11,6 +11,9 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,yaml,md}\""
   },
+  "eslintConfig": {
+    "extends": "./.eslintrc.json"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "prettier": "^3.2.0"
