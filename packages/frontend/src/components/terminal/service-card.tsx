@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type ServiceRecord } from '../../lib/api';
+import { EditableServiceName } from './editable-service-name';
 import { EditableSubdomain } from './editable-subdomain';
 import { InlineSpinner } from './progress';
 import { TERMINAL_COLORS } from './theme';
@@ -11,6 +12,7 @@ interface TerminalServiceCardProps {
   onExpose: () => void;
   onDelete: () => void;
   onSubdomainChange: (subdomain: string) => void;
+  onNameChange: (name: string) => void;
   isLoading: boolean;
   isActive?: boolean;
   canExpose: boolean;
@@ -24,6 +26,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     onExpose,
     onDelete,
     onSubdomainChange,
+    onNameChange,
     isLoading,
     isActive,
     canExposeBlockedReason,
@@ -39,7 +42,12 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
       onMouseEnter={() => setShowDelete(true)}
       onMouseLeave={() => setShowDelete(false)}
     >
-      <CardHeader name={service.name} port={service.port} />
+      <CardHeader
+        name={service.name}
+        containerName={service.sourceId || service.name}
+        port={service.port}
+        onNameChange={onNameChange}
+      />
       <EditableSubdomain
         value={service.subdomain}
         baseDomain={baseDomain}
@@ -60,10 +68,22 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
   );
 }
 
-function CardHeader({ name, port }: { name: string; port: number }): JSX.Element {
+interface CardHeaderProps {
+  name: string;
+  containerName: string;
+  port: number;
+  onNameChange: (name: string) => void;
+}
+
+function CardHeader({ name, containerName, port, onNameChange }: CardHeaderProps): JSX.Element {
   return (
     <div className="mb-2 flex items-center justify-between">
-      <span className="font-bold text-[#c9d1d9]">{name}</span>
+      <EditableServiceName
+        value={name}
+        containerName={containerName}
+        port={port}
+        onChange={onNameChange}
+      />
       <Tooltip content="Internal port">
         <span className="text-xs text-[#8b949e]">:{port}</span>
       </Tooltip>

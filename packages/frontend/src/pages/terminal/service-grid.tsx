@@ -7,6 +7,7 @@ interface ServiceGridProps {
   onExpose: (service: ServiceRecord) => void;
   onDelete: (service: ServiceRecord) => void;
   onSubdomainChange: (service: ServiceRecord, subdomain: string) => void;
+  onNameChange: (service: ServiceRecord, name: string) => void;
   loadingServiceId: string | null;
   baseDomain: string | null;
   canExpose: boolean;
@@ -19,6 +20,7 @@ export function ServiceGrid({
   onExpose,
   onDelete,
   onSubdomainChange,
+  onNameChange,
   loadingServiceId,
   baseDomain,
   canExpose,
@@ -46,6 +48,7 @@ export function ServiceGrid({
             onExpose={() => onExpose(service)}
             onDelete={() => onDelete(service)}
             onSubdomainChange={sub => onSubdomainChange(service, sub)}
+            onNameChange={name => onNameChange(service, name)}
             isLoading={loadingServiceId === service.id}
             canExpose={serviceReady}
             canExposeBlockedReason={!serviceReady ? blockedReason : undefined}
