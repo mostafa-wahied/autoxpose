@@ -11,6 +11,7 @@ interface TerminalHeaderProps {
   onUnexposeAll: () => void;
   onScan: () => void;
   isScanning?: boolean;
+  canExpose: boolean;
 }
 
 function getStatusInfo(status: TerminalHeaderProps['connectionStatus']): [string, string] {
@@ -26,6 +27,7 @@ interface TrafficLightsProps {
   exposedCount: number;
   serviceCount: number;
   isScanning?: boolean;
+  canExpose: boolean;
 }
 
 function TrafficLights(p: TrafficLightsProps): JSX.Element {
@@ -34,23 +36,23 @@ function TrafficLights(p: TrafficLightsProps): JSX.Element {
       <TrafficLightButton
         color="red"
         tooltip="Unexpose all"
-        shortcut="Ctrl+Shift+U"
+        shortcut="Ctrl+Alt+U"
         onClick={p.onUnexposeAll}
         disabled={p.exposedCount === 0}
       />
       <TrafficLightButton
         color="yellow"
         tooltip="Scan containers"
-        shortcut="Ctrl+Shift+S"
+        shortcut="Ctrl+Alt+S"
         onClick={p.onScan}
         disabled={p.isScanning}
       />
       <TrafficLightButton
         color="green"
         tooltip="Expose all"
-        shortcut="Ctrl+Shift+E"
+        shortcut="Ctrl+Alt+E"
         onClick={p.onExposeAll}
-        disabled={p.serviceCount === 0 || p.exposedCount === p.serviceCount}
+        disabled={p.serviceCount === 0 || p.exposedCount === p.serviceCount || !p.canExpose}
       />
     </div>
   );
@@ -61,6 +63,9 @@ export function TerminalHeader(props: TerminalHeaderProps): JSX.Element {
   const [statusColor, statusText] = getStatusInfo(connectionStatus);
   const pulseClass = connectionStatus === 'connected' ? 'animate-pulse' : '';
   const svcLabel = serviceCount === 1 ? 'service' : 'services';
+  const handleLogoClick = (): void => {
+    window.location.href = '/';
+  };
 
   return (
     <div className="flex items-center justify-between border-b border-[#30363d] bg-[#161b22] px-4 py-2">
@@ -72,8 +77,15 @@ export function TerminalHeader(props: TerminalHeaderProps): JSX.Element {
           exposedCount={exposedCount}
           serviceCount={serviceCount}
           isScanning={props.isScanning}
+          canExpose={props.canExpose}
         />
-        <span className="ml-2 font-bold">autoxpose</span>
+        <button
+          type="button"
+          onClick={handleLogoClick}
+          className="ml-2 font-bold text-[#c9d1d9] hover:text-white focus:outline-none"
+        >
+          autoxpose
+        </button>
         <span className="text-xs text-[#8b949e]">
           {serviceCount} {svcLabel} | {exposedCount} exposed
         </span>

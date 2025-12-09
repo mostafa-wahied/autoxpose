@@ -15,6 +15,7 @@ interface ContentAreaProps {
   loadingServiceId: string | null;
   baseDomain: string | null;
   canExpose: boolean;
+  canExposeReason?: string;
   settingsData: Awaited<ReturnType<typeof import('../../lib/api').api.settings.status>> | undefined;
   onScan: () => void;
 }
@@ -28,6 +29,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
     loadingServiceId,
     baseDomain,
     canExpose,
+    canExposeReason,
     settingsData,
     onScan,
   } = props;
@@ -44,6 +46,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         loadingServiceId={loadingServiceId}
         baseDomain={baseDomain}
         canExpose={canExpose}
+        canExposeReason={canExposeReason}
       />
       <ProgressSection
         streamState={state.streamState}

@@ -14,10 +14,20 @@ interface TerminalServiceCardProps {
   isLoading: boolean;
   isActive?: boolean;
   canExpose: boolean;
+  canExposeBlockedReason?: string;
 }
 
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
-  const { service, baseDomain, onExpose, onDelete, onSubdomainChange, isLoading, isActive } = props;
+  const {
+    service,
+    baseDomain,
+    onExpose,
+    onDelete,
+    onSubdomainChange,
+    isLoading,
+    isActive,
+    canExposeBlockedReason,
+  } = props;
   const [showDelete, setShowDelete] = useState(false);
   const isExposed = Boolean(service.enabled);
   const borderClass = isActive ? 'border-[#58a6ff]' : 'border-[#30363d]';
@@ -42,6 +52,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         showDelete={showDelete}
         isLoading={isLoading}
         canAct={canAct}
+        canExposeBlockedReason={canExposeBlockedReason}
         onExpose={onExpose}
         onDelete={onDelete}
       />
@@ -66,12 +77,22 @@ interface CardFooterProps {
   showDelete: boolean;
   isLoading: boolean;
   canAct: boolean;
+  canExposeBlockedReason?: string;
   onExpose: () => void;
   onDelete: () => void;
 }
 
 function CardFooter(props: CardFooterProps): JSX.Element {
-  const { serviceId, isExposed, showDelete, isLoading, canAct, onExpose, onDelete } = props;
+  const {
+    serviceId,
+    isExposed,
+    showDelete,
+    isLoading,
+    canAct,
+    canExposeBlockedReason,
+    onExpose,
+    onDelete,
+  } = props;
   return (
     <div className="flex items-center justify-between">
       <StatusBadge serviceId={serviceId} isExposed={isExposed} />
@@ -81,6 +102,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
           isExposed={isExposed}
           isLoading={isLoading}
           canAct={canAct}
+          canExposeBlockedReason={canExposeBlockedReason}
           onClick={onExpose}
         />
       </div>
@@ -169,12 +191,19 @@ interface ExposeButtonProps {
   isExposed: boolean;
   isLoading: boolean;
   canAct: boolean;
+  canExposeBlockedReason?: string;
   onClick: () => void;
 }
 
-function ExposeButton({ isExposed, isLoading, canAct, onClick }: ExposeButtonProps): JSX.Element {
+function ExposeButton({
+  isExposed,
+  isLoading,
+  canAct,
+  canExposeBlockedReason,
+  onClick,
+}: ExposeButtonProps): JSX.Element {
   const disabled = isLoading || !canAct;
-  const tip = getTip(isExposed, canAct);
+  const tip = getTip(isExposed, canAct, canExposeBlockedReason);
   const icon = isExposed ? '\u25A0' : '\u25B6';
   const label = isExposed ? 'Stop service' : 'Start service';
 
@@ -193,7 +222,7 @@ function ExposeButton({ isExposed, isLoading, canAct, onClick }: ExposeButtonPro
   );
 }
 
-function getTip(isExposed: boolean, canAct: boolean): string {
-  if (!canAct) return 'Set subdomain and configure DNS/Proxy first';
+function getTip(isExposed: boolean, canAct: boolean, canExposeBlockedReason?: string): string {
+  if (!canAct) return canExposeBlockedReason || 'Set subdomain and configure DNS/Proxy first';
   return isExposed ? 'Unexpose service' : 'Expose service';
 }

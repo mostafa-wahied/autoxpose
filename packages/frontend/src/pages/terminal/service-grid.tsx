@@ -10,6 +10,7 @@ interface ServiceGridProps {
   loadingServiceId: string | null;
   baseDomain: string | null;
   canExpose: boolean;
+  canExposeReason?: string;
 }
 
 export function ServiceGrid({
@@ -21,6 +22,7 @@ export function ServiceGrid({
   loadingServiceId,
   baseDomain,
   canExpose,
+  canExposeReason,
 }: ServiceGridProps): JSX.Element {
   if (services.length === 0) {
     return <EmptyServiceGrid />;
@@ -30,6 +32,11 @@ export function ServiceGrid({
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {services.map(service => {
         const serviceReady = canExpose && Boolean(service.subdomain);
+        const blockedReason = !canExpose
+          ? canExposeReason
+          : !service.subdomain
+            ? 'Set subdomain first'
+            : undefined;
         return (
           <TerminalServiceCard
             key={service.id}
@@ -41,6 +48,7 @@ export function ServiceGrid({
             onSubdomainChange={sub => onSubdomainChange(service, sub)}
             isLoading={loadingServiceId === service.id}
             canExpose={serviceReady}
+            canExposeBlockedReason={!serviceReady ? blockedReason : undefined}
           />
         );
       })}

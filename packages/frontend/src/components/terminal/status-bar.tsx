@@ -143,17 +143,13 @@ function NetworkNotice({
   serverIp: string | undefined;
   lanIp: string | undefined;
 }): JSX.Element | null {
-  const notices: string[] = [];
-  if (serverWarning) {
-    notices.push(
-      `Public IP not set (current: ${serverIp || 'unknown'}) - set SERVER_IP env before exposing`
-    );
-  }
-  if (lanWarning) {
-    notices.push(`LAN IP not set (current: ${lanIp || 'unknown'}) - set LAN_IP env for proxy`);
-  }
-  if (notices.length === 0) return null;
-  return <span className="text-[#f0883e]">{notices.join(' | ')}</span>;
+  if (!serverWarning && !lanWarning) return null;
+  const message = `Expose blocked: Public IP missing (current: ${serverIp || 'unknown'}). LAN IP missing (current: ${lanIp || 'unknown'}).`;
+  return (
+    <Tooltip content="Configure SERVER_IP and LAN_IP to enable expose and proxy.">
+      <span className="text-[#f0883e]">{message}</span>
+    </Tooltip>
+  );
 }
 
 interface ConfigureButtonProps {

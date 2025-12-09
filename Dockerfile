@@ -16,14 +16,18 @@ RUN pnpm --filter frontend build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 autoxpose
 
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY packages/backend/package.json ./packages/backend/package.json
+
+RUN pnpm install --filter backend --prod --frozen-lockfile
+
 COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
-COPY --from=builder /app/packages/backend/package.json ./packages/backend/package.json
 COPY --from=builder /app/packages/frontend/dist ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/backend/node_modules ./packages/backend/node_modules
 
 RUN mkdir -p /app/packages/backend/data && chown autoxpose:nodejs /app/packages/backend/data
 
