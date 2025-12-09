@@ -23,8 +23,10 @@ services:
     ports:
       - '4949:3000'
     environment:
-      - SERVER_IP=${SERVER_IP:-your-public-ip}
-      - LAN_IP=${LAN_IP:-your-lan-ip}
+      # - SERVER_IP=${SERVER_IP:-your-public-ip}
+      # - LAN_IP=${LAN_IP:-your-lan-ip}
+      - SERVER_IP=73.189.158.29
+      - LAN_IP=10.0.0.66
       - DOCKER_HOST=tcp://docker-proxy:2375
     volumes:
       - autoxpose-data:/app/packages/backend/data

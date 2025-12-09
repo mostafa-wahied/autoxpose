@@ -6,6 +6,7 @@ import { useTerminalMutations } from './use-mutations';
 
 type ScanMutation = ReturnType<typeof useTerminalMutations>['scanMutation'];
 type DeleteMutation = ReturnType<typeof useTerminalMutations>['deleteMutation'];
+type BatchAction = { action: 'expose' | 'unexpose'; queue: string[] } | null;
 
 export interface TerminalActions {
   handleExpose: (service: ServiceRecord) => void;
@@ -36,6 +37,7 @@ interface ConfirmParams {
   deleteMutation: DeleteMutation;
   expose: (id: string) => void;
   unexpose: (id: string) => void;
+  startBatch: (action: 'expose' | 'unexpose', ids: string[]) => void;
   setDeletingServiceId: (id: string | null) => void;
   setConfirmAction: (action: ConfirmAction) => void;
 }
@@ -46,11 +48,11 @@ function executeConfirm(p: ConfirmParams): void {
     p.setDeletingServiceId(p.confirmAction.service.id);
     p.deleteMutation.mutate(p.confirmAction.service.id);
   } else if (p.confirmAction.type === 'expose-all') {
-    const t = p.services.find(s => !s.enabled);
-    if (t) p.expose(t.id);
+    const targets = p.services.filter(s => !s.enabled).map(s => s.id);
+    p.startBatch('expose', targets);
   } else if (p.confirmAction.type === 'unexpose-all') {
-    const t = p.services.find(s => s.enabled);
-    if (t) p.unexpose(t.id);
+    const targets = p.services.filter(s => s.enabled).map(s => s.id);
+    p.startBatch('unexpose', targets);
   }
   p.setConfirmAction(null);
 }
@@ -147,12 +149,58 @@ function useMutationsAndState(needsSetup: boolean): {
   };
 }
 
+function useBatchQueue(params: {
+  clear: () => void;
+  expose: (id: string) => void;
+  unexpose: (id: string) => void;
+  streamState: ExposeStreamState;
+}): { startBatch: (action: 'expose' | 'unexpose', ids: string[]) => void } {
+  const [batch, setBatch] = useState<BatchAction>(null);
+
+  const startBatch = useCallback(
+    (action: 'expose' | 'unexpose', ids: string[]): void => {
+      const unique = ids.filter(Boolean);
+      if (unique.length === 0) return;
+      params.clear();
+      setBatch({ action, queue: unique });
+    },
+    [params]
+  );
+
+  useEffect(() => {
+    if (!batch) return;
+    if (params.streamState.isActive) return;
+    const [next, ...rest] = batch.queue;
+    if (!next) {
+      setBatch(null);
+      return;
+    }
+    if (batch.action === 'expose') {
+      params.expose(next);
+    } else {
+      params.unexpose(next);
+    }
+    setBatch(
+      rest.length > 0 ? { action: batch.action, queue: rest } : { action: batch.action, queue: [] }
+    );
+  }, [batch, params]);
+
+  return { startBatch };
+}
+
 export function useTerminalActions({ services, needsSetup = false }: Params): {
   actions: TerminalActions;
   state: TerminalState;
 } {
   const ctx = useMutationsAndState(needsSetup);
-  const { streamState, expose, unexpose, clear, mutations, confirmAction, setConfirmAction } = ctx;
+  const { streamState, expose, unexpose, mutations, confirmAction, setConfirmAction, clear } = ctx;
+
+  const { startBatch } = useBatchQueue({
+    clear,
+    expose,
+    unexpose,
+    streamState,
+  });
 
   const handlers = useHandlers(
     {
@@ -175,10 +223,11 @@ export function useTerminalActions({ services, needsSetup = false }: Params): {
         deleteMutation: mutations.deleteMutation,
         expose,
         unexpose,
+        startBatch,
         setDeletingServiceId: mutations.setDeletingServiceId,
         setConfirmAction,
       }),
-    [confirmAction, services, mutations, expose, unexpose, setConfirmAction]
+    [confirmAction, services, mutations, expose, startBatch, unexpose, setConfirmAction]
   );
 
   const actions = useMemo(
