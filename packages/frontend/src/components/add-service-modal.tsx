@@ -1,9 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { FormButtons } from './form-buttons';
-import { FormInput } from './form-input';
-import { FormSelect } from './form-select';
+import { FormButtons, FormInput, FormSelect } from './forms';
 import { Modal } from './modal';
 
 interface Props {

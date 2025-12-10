@@ -5,7 +5,6 @@ import type { StreamingExposeService } from './streaming-expose.service.js';
 type IdParams = { id: string };
 type Action = 'expose' | 'unexpose';
 
-/**Set SSE headers on the response */
 function setupSSE(reply: FastifyReply): void {
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -15,12 +14,10 @@ function setupSSE(reply: FastifyReply): void {
   });
 }
 
-/**Create SSE event sender */
 function createEventSender(reply: FastifyReply): (event: ProgressEvent) => void {
   return (event: ProgressEvent) => reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-/**Create error event for SSE stream */
 function createErrorEvent(id: string, action: Action, error: unknown): ProgressEvent {
   const message = error instanceof Error ? error.message : 'Unknown error';
   return {
@@ -33,9 +30,6 @@ function createErrorEvent(id: string, action: Action, error: unknown): ProgressE
   };
 }
 
-/**
- * SSE routes for real-time expose/unexpose progress streaming.
- */
 export function createStreamingExposeRoutes(
   streamingExpose: StreamingExposeService
 ): FastifyPluginAsync {

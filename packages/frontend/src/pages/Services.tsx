@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AddServiceModal } from '../components/add-service-modal';
-import { ServiceRow } from '../components/service-row';
-import { ServicesEmptyState } from '../components/services-empty';
-import { ServicesHeader } from '../components/services-header';
-import { ServicesTable } from '../components/services-table';
+import {
+  ServiceRow,
+  ServicesEmptyState,
+  ServicesHeader,
+  ServicesTable,
+} from '../components/services';
 import { api } from '../lib/api';
 
 export function Services(): JSX.Element {

@@ -121,7 +121,8 @@ export class CaddyProxyProvider implements ProxyProvider {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new ProviderError('caddy', `API error: ${response.status} - ${body}`);
+      const errorMsg = this.buildCaddyError(response.status, body);
+      throw new ProviderError('caddy', errorMsg);
     }
 
     if (response.status === 200 && response.headers.get('content-length') === '0') {
@@ -131,6 +132,19 @@ export class CaddyProxyProvider implements ProxyProvider {
     const text = await response.text();
     if (!text) return null as T;
     return JSON.parse(text) as T;
+  }
+
+  private buildCaddyError(status: number, body: string): string {
+    if (status === 404) return 'Service not found. Check your Caddy admin API URL.';
+    if (status === 401 || status === 403)
+      return 'Access denied. Check Caddy admin API permissions.';
+    if (status === 500) return 'Server error. Caddy may be misconfigured.';
+
+    let errorMsg = `Connection failed (HTTP ${status}).`;
+    if (body && !body.includes('<html>') && body.length < 100) {
+      errorMsg = `${errorMsg} ${body}`;
+    }
+    return errorMsg;
   }
 
   private parseHosts(config: CaddyConfig): ProxyHost[] {
