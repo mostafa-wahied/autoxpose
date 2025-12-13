@@ -81,77 +81,117 @@ function buildServiceBox(name: string, width: number, height = 1): string {
   return topLine + contentLines + bottomLine;
 }
 
+function generateTwoServices(services: ServiceItem[]): string {
+  const width1 = 16;
+  const width2 = 16;
+  const wrapped1 = wrapText(services[0].name, width1);
+  const wrapped2 = wrapText(services[1].name, width2);
+  const maxHeight = Math.max(wrapped1.length, wrapped2.length);
+  const lines1 = padLines(wrapped1, maxHeight);
+  const lines2 = padLines(wrapped2, maxHeight);
+
+  let diagram = '                          \u2502\n';
+  diagram +=
+    '            \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n';
+  diagram += '            \u2502            \u2502            \u2502\n';
+  diagram += `      \u2554${'═'.repeat(width1 + 2)}\u2557 \u2554${'═'.repeat(width2 + 2)}\u2557\n`;
+
+  for (let i = 0; i < maxHeight; i++) {
+    const c1 = centerText(lines1[i], width1);
+    const c2 = centerText(lines2[i], width2);
+    diagram += `      \u2551 ${c1} \u2551 \u2551 ${c2} \u2551\n`;
+  }
+
+  diagram += `      \u255a${'═'.repeat(width1 + 2)}\u255d \u255a${'═'.repeat(width2 + 2)}\u255d\n`;
+  diagram += '            \u2502            \u2502            \u2502\n';
+  diagram +=
+    '            \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n';
+  diagram += '                          \u2502\n';
+  return diagram;
+}
+
+function generateThreeServices(services: ServiceItem[]): string {
+  const width = 12;
+  const wrapped1 = wrapText(services[0].name, width);
+  const wrapped2 = wrapText(services[1].name, width);
+  const wrapped3 = wrapText(services[2].name, width);
+  const maxHeight = Math.max(wrapped1.length, wrapped2.length, wrapped3.length);
+  const lines1 = padLines(wrapped1, maxHeight);
+  const lines2 = padLines(wrapped2, maxHeight);
+  const lines3 = padLines(wrapped3, maxHeight);
+
+  let diagram = '                          \u2502\n';
+  diagram +=
+    '         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n';
+  diagram += '         \u2502                \u2502                \u2502\n';
+  diagram += ` \u2554${'═'.repeat(width + 2)}\u2557 \u2554${'═'.repeat(width + 2)}\u2557 \u2554${'═'.repeat(width + 2)}\u2557\n`;
+
+  for (let i = 0; i < maxHeight; i++) {
+    const c1 = centerText(lines1[i], width);
+    const c2 = centerText(lines2[i], width);
+    const c3 = centerText(lines3[i], width);
+    diagram += ` \u2551 ${c1} \u2551 \u2551 ${c2} \u2551 \u2551 ${c3} \u2551\n`;
+  }
+
+  diagram += ` \u255a${'═'.repeat(width + 2)}\u255d \u255a${'═'.repeat(width + 2)}\u255d \u255a${'═'.repeat(width + 2)}\u255d\n`;
+  diagram += '         \u2502                \u2502                \u2502\n';
+  diagram +=
+    '         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n';
+  diagram += '                          \u2502\n';
+  return diagram;
+}
+
 function generateServicesASCII(services: ServiceItem[]): string {
   const boxWidth = 38;
 
   if (services.length === 0) {
-    return buildServiceBox('No Services Exposed', boxWidth) + '                         \u2502\n';
+    return buildServiceBox('No Services Exposed', boxWidth) + '                          \u2502\n';
   }
 
   if (services.length === 1) {
-    return buildServiceBox(services[0].name, boxWidth) + '                         \u2502\n';
+    return buildServiceBox(services[0].name, boxWidth) + '                          \u2502\n';
   }
 
   if (services.length === 2) {
-    const width1 = 16;
-    const width2 = 16;
-    const wrapped1 = wrapText(services[0].name, width1);
-    const wrapped2 = wrapText(services[1].name, width2);
-    const maxHeight = Math.max(wrapped1.length, wrapped2.length);
-    const lines1 = padLines(wrapped1, maxHeight);
-    const lines2 = padLines(wrapped2, maxHeight);
-
-    let diagram =
-      '            \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n';
-    diagram += '            \u2502                  \u2502                  \u2502\n';
-    diagram += `      \u2554${'═'.repeat(width1 + 2)}\u2557 \u2554${'═'.repeat(width2 + 2)}\u2557\n`;
-
-    for (let i = 0; i < maxHeight; i++) {
-      const c1 = centerText(lines1[i], width1);
-      const c2 = centerText(lines2[i], width2);
-      diagram += `      \u2551 ${c1} \u2551 \u2551 ${c2} \u2551\n`;
-    }
-
-    diagram += `      \u2552${'═'.repeat(width1 + 2)}\u2555 \u2552${'═'.repeat(width2 + 2)}\u2555\n`;
-    diagram +=
-      '            \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n';
-    diagram += '                         \u2502\n';
-    return diagram;
+    return generateTwoServices(services);
   }
 
   if (services.length === 3) {
-    const width1 = 12;
-    const width2 = 10;
-    const width3 = 12;
-    const wrapped1 = wrapText(services[0].name, width1);
-    const wrapped2 = wrapText(services[1].name, width2);
-    const wrapped3 = wrapText(services[2].name, width3);
-    const maxHeight = Math.max(wrapped1.length, wrapped2.length, wrapped3.length);
-    const lines1 = padLines(wrapped1, maxHeight);
-    const lines2 = padLines(wrapped2, maxHeight);
-    const lines3 = padLines(wrapped3, maxHeight);
-
-    let diagram =
-      '            \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n';
-    diagram += '            \u2502            \u2502            \u2502\n';
-    diagram += `      \u2554${'═'.repeat(width1 + 2)}\u2557 \u2554${'═'.repeat(width2 + 2)}\u2557 \u2554${'═'.repeat(width3 + 2)}\u2557\n`;
-
-    for (let i = 0; i < maxHeight; i++) {
-      const c1 = centerText(lines1[i], width1);
-      const c2 = centerText(lines2[i], width2);
-      const c3 = centerText(lines3[i], width3);
-      diagram += `      \u2551 ${c1} \u2551 \u2551 ${c2} \u2551 \u2551 ${c3} \u2551\n`;
-    }
-
-    diagram += `      \u2552${'═'.repeat(width1 + 2)}\u2555 \u2552${'═'.repeat(width2 + 2)}\u2555 \u2552${'═'.repeat(width3 + 2)}\u2555\n`;
-    diagram +=
-      '            \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n';
-    diagram += '                         \u2502\n';
-    return diagram;
+    return generateThreeServices(services);
   }
 
-  const countText = `${services.length} Services`;
-  return buildServiceBox(countText, boxWidth) + '                         \u2502\n';
+  const width = 12;
+  let diagram = '                          \u2502\n';
+
+  for (let i = 0; i < services.length; i += 3) {
+    const row = services.slice(i, i + 3);
+    const wrappedServices = row.map(s => wrapText(s.name, width));
+    const maxHeight = Math.max(...wrappedServices.map(w => w.length));
+    const paddedLines = wrappedServices.map(w => padLines(w, maxHeight));
+
+    const boxes = paddedLines.map(lines => {
+      let box = ` \u2554${'═'.repeat(width + 2)}\u2557`;
+      for (const line of lines) {
+        const centered = centerText(line, width);
+        box += `\n \u2551 ${centered} \u2551`;
+      }
+      box += `\n \u255a${'═'.repeat(width + 2)}\u255d`;
+      return box.split('\n');
+    });
+
+    const boxHeight = boxes[0].length;
+    for (let lineIdx = 0; lineIdx < boxHeight; lineIdx++) {
+      const lineParts = boxes.map(b => b[lineIdx]).join(' ');
+      diagram += lineParts + '\n';
+    }
+
+    if (i + 3 < services.length) {
+      diagram += '\n';
+    }
+  }
+
+  diagram += '                          \u2502\n';
+  return diagram;
 }
 
 export function generateTopologyASCII(options: ASCIIOptions): string {
@@ -177,10 +217,10 @@ export function generateTopologyASCII(options: ASCIIOptions): string {
   const bottomBorder = `${headerIndent}\u2517${'━'.repeat(headerWidth)}\u251b\n`;
 
   let header = topBorder + title + bottomBorder;
-  header += '                         \u2502\n';
+  header += '                          \u2502\n';
 
   let diagram = buildFlowBox('Docker', boxWidth);
-  diagram += '                         \u2502\n';
+  diagram += '                          \u2502\n';
 
   diagram += generateServicesASCII(services);
 
@@ -189,9 +229,9 @@ export function generateTopologyASCII(options: ASCIIOptions): string {
   const internetLabel = `Internet ${internetStatus}`;
 
   diagram += buildFlowBox(dnsLabel, boxWidth);
-  diagram += '                         \u2502\n';
+  diagram += '                          \u2502\n';
   diagram += buildFlowBox(proxyLabel, boxWidth);
-  diagram += '                         \u2502\n';
+  diagram += '                          \u2502\n';
   diagram += buildFlowBox(internetLabel, boxWidth);
 
   return header + diagram + '\ngithub.com/mostafa-wahied/autoxpose';

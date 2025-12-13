@@ -1,5 +1,6 @@
 import { TERMINAL_COLORS } from '../theme';
 import { getProviderDisplayName, ProviderIcon } from '../provider-icons';
+import { Tooltip } from '../tooltip';
 
 interface TopologyNodeProps {
   emoji: string;
@@ -19,6 +20,7 @@ interface BaseNodeProps {
   labelColor?: string;
   statusText: string;
   statusColor: string;
+  statusTooltip?: string;
   provider?: string | null;
 }
 
@@ -113,13 +115,21 @@ function BaseNode({
   labelColor,
   statusText,
   statusColor,
+  statusTooltip,
   provider,
 }: BaseNodeProps): JSX.Element {
   const nodeClass = 'flex flex-col items-center gap-1 text-center';
   const labelClass = 'text-xs font-bold uppercase tracking-wider';
   const iconColor = labelColor || '#8b949e';
+  const textColor = '#c9d1d9';
 
   const shouldUseProviderIcon = provider && (emoji === 'dns' || emoji === 'proxy');
+
+  const statusElement = (
+    <div className="text-xs" style={{ color: statusColor }}>
+      {statusText}
+    </div>
+  );
 
   return (
     <div className={nodeClass}>
@@ -131,18 +141,21 @@ function BaseNode({
             getIconComponent(emoji, iconColor)
           )}
         </div>
-        <div className={labelClass} style={{ color: iconColor }}>
+        <div className={labelClass} style={{ color: textColor }}>
           {label}
         </div>
         {provider && (
-          <div className="mt-0.5 text-xs" style={{ color: iconColor }}>
+          <div className="mt-0.5 text-xs" style={{ color: '#8b949e' }}>
             {getProviderDisplayName(provider)}
           </div>
         )}
       </div>
-      <div className="text-xs" style={{ color: statusColor }}>
-        {statusText}
-      </div>
+      {statusText &&
+        (statusTooltip ? (
+          <Tooltip content={statusTooltip}>{statusElement}</Tooltip>
+        ) : (
+          statusElement
+        ))}
     </div>
   );
 }
@@ -163,7 +176,8 @@ export function TopologyNode({
         emoji={emoji}
         label={label}
         borderStyle="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2"
-        statusText="Services"
+        labelColor="#8b949e"
+        statusText=""
         statusColor="#8b949e"
         provider={provider}
       />
@@ -177,11 +191,13 @@ export function TopologyNode({
         label={label}
         borderStyle={`rounded-lg border px-3 py-2 ${
           bothConfigured
-            ? 'border-[#58a6ff] bg-[#0d1117]'
+            ? 'border-[#30363d] bg-[#0d1117]'
             : 'border-dashed border-[#30363d] bg-[#0d1117] opacity-50'
         }`}
+        labelColor={bothConfigured ? TERMINAL_COLORS.success : '#8b949e'}
         statusText={statusText || ''}
-        statusColor={bothConfigured ? TERMINAL_COLORS.success : TERMINAL_COLORS.textMuted}
+        statusColor={bothConfigured ? TERMINAL_COLORS.success : TERMINAL_COLORS.error}
+        statusTooltip={bothConfigured ? 'Setup Complete' : 'Setup Incomplete'}
         provider={provider}
       />
     );
@@ -192,10 +208,11 @@ export function TopologyNode({
       <BaseNode
         emoji={emoji}
         label={label}
-        borderStyle="rounded-lg border px-3 py-2 bg-[#0d1117]"
+        borderStyle="rounded-lg border border-[#30363d] px-3 py-2 bg-[#0d1117]"
         labelColor={TERMINAL_COLORS.success}
-        statusText="Configured ✓"
+        statusText="✓"
         statusColor={TERMINAL_COLORS.success}
+        statusTooltip="Configured"
         provider={provider}
       />
     );
@@ -206,8 +223,9 @@ export function TopologyNode({
       emoji={emoji}
       label={label}
       borderStyle="rounded-lg border border-dashed border-[#30363d] bg-[#0d1117] px-3 py-2 opacity-50"
-      statusText="Not configured ✗"
+      statusText="✗"
       statusColor="#f85149"
+      statusTooltip="Not configured"
       provider={provider}
     />
   );

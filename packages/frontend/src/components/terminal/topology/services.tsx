@@ -17,7 +17,7 @@ export function ServicesDisplay({ services }: ServicesDisplayProps): JSX.Element
 
   if (serviceCount === 0) {
     return (
-      <div className="rounded border border-[#30363d] bg-[#161b22] px-4 py-2 text-center text-sm text-[#8b949e]">
+      <div className="rounded-lg border border-[#30363d] bg-[#0d1117] px-4 py-2 text-center text-sm text-[#8b949e]">
         No Services Exposed
       </div>
     );
@@ -25,14 +25,14 @@ export function ServicesDisplay({ services }: ServicesDisplayProps): JSX.Element
 
   if (serviceCount <= 3) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-row justify-center gap-3">
         {services.map(service => (
           <div
             key={service.id}
-            className="rounded border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs"
+            className="flex-1 rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-center text-xs"
           >
-            <div className="font-mono text-[#58a6ff]">{service.name}</div>
-            <div className="text-[#8b949e]">{service.subdomain}</div>
+            <div className="truncate font-mono text-[#58a6ff]">{service.name}</div>
+            <div className="truncate text-[#8b949e]">{service.subdomain}</div>
           </div>
         ))}
       </div>
@@ -43,7 +43,7 @@ export function ServicesDisplay({ services }: ServicesDisplayProps): JSX.Element
     return (
       <button
         onClick={() => setServicesExpanded(true)}
-        className="rounded border border-[#30363d] bg-[#161b22] px-4 py-2 text-sm transition-colors hover:border-[#58a6ff]"
+        className="rounded-lg border border-[#30363d] bg-[#0d1117] px-4 py-2 text-sm transition-colors hover:border-[#3fb950]"
       >
         <div className="font-mono text-[#58a6ff]">{serviceCount} Services</div>
         <div className="text-xs text-[#8b949e]">▼ Click to expand</div>
@@ -51,7 +51,7 @@ export function ServicesDisplay({ services }: ServicesDisplayProps): JSX.Element
     );
   }
 
-  const displayServices = serviceCount <= 6 ? services : services.slice(0, 4);
+  const displayServices = serviceCount <= 6 ? services : services.slice(0, 6);
   const hasMore = serviceCount > 6;
 
   return (
@@ -62,17 +62,19 @@ export function ServicesDisplay({ services }: ServicesDisplayProps): JSX.Element
       >
         ▲ Collapse
       </button>
-      {displayServices.map(service => (
-        <div
-          key={service.id}
-          className="rounded border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs"
-        >
-          <div className="font-mono text-[#58a6ff]">{service.name}</div>
-          <div className="text-[#8b949e]">{service.subdomain}</div>
-        </div>
-      ))}
+      <div className="grid grid-cols-3 gap-3">
+        {displayServices.map(service => (
+          <div
+            key={service.id}
+            className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-center text-xs"
+          >
+            <div className="truncate font-mono text-[#58a6ff]">{service.name}</div>
+            <div className="truncate text-[#8b949e]">{service.subdomain}</div>
+          </div>
+        ))}
+      </div>
       {hasMore && (
-        <div className="text-center text-xs text-[#8b949e]">+{serviceCount - 4} more services</div>
+        <div className="text-center text-xs text-[#8b949e]">+{serviceCount - 6} more services</div>
       )}
     </div>
   );
