@@ -1,3 +1,4 @@
+import { cleanErrorMessage } from '../../core/errors/index.js';
 import { createLogger } from '../../core/logger/index.js';
 import type { DnsProviderConfig } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
@@ -26,7 +27,7 @@ export async function testDnsProvider(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logger.warn({ provider, err }, 'DNS provider test failed');
-    return { ok: false, error: message };
+    return { ok: false, error: cleanErrorMessage(message) };
   }
 }
 
@@ -42,7 +43,7 @@ export async function testProxyProvider(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logger.warn({ provider, err }, 'Proxy provider test failed');
-    return { ok: false, error: message };
+    return { ok: false, error: cleanErrorMessage(message) };
   }
 }
 

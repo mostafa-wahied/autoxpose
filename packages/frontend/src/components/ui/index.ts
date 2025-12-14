@@ -1,6 +1,4 @@
-export { FormButtons } from '../form-buttons';
-export { FormInput } from '../form-input';
-export { FormSelect } from '../form-select';
+export { FormButtons, FormInput, FormSelect } from '../forms';
 export { Modal } from '../modal';
 export { ProviderForm } from '../provider-form';
 export { ConfigDisplay, Spinner, StatusBadge } from '../ui';

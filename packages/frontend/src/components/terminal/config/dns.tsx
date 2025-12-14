@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { api, type SettingsStatus } from '../../lib/api';
-import { FormActions, FormInput, FormSelect } from './form-components';
-import { TestConnectionButton, type TestState } from './test-button';
-import { TERMINAL_COLORS } from './theme';
-import { Tooltip } from './tooltip';
+import { api, type SettingsStatus } from '../../../lib/api';
+import { FormActions, FormInput, FormSelect } from '../form-components';
+import { TestConnectionButton, type TestState } from '../test-button';
+import { TERMINAL_COLORS } from '../theme';
+import { Tooltip } from '../tooltip';
 
 export const DNS_PROVIDERS = [
   { value: 'cloudflare', label: 'Cloudflare' },
@@ -286,9 +286,14 @@ function DnsDisplay({ current }: { current: SettingsStatus['dns'] | null }): JSX
     setTestState({ status: 'testing' });
     try {
       const result = await api.settings.testDns();
-      setTestState(result.ok ? { status: 'success' } : { status: 'error', error: result.error });
-    } catch {
-      setTestState({ status: 'error', error: 'Connection test failed' });
+      setTestState(
+        result.ok
+          ? { status: 'success' }
+          : { status: 'error', error: result.error || 'Connection test failed' }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection test failed';
+      setTestState({ status: 'error', error: message });
     }
   };
 

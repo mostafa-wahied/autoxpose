@@ -181,6 +181,21 @@ export class NpmProxyProvider implements ProxyProvider {
     this.token = response.token;
   }
 
+  private buildErrorMessage(status: number, body: string): string {
+    if (status === 404) return 'Service not found. Check your URL and port number.';
+    if (status === 401) return 'Authentication failed. Check your username and password.';
+    if (status === 403) return 'Access denied. Check your account permissions.';
+
+    let errorMsg = `Connection failed (HTTP ${status}).`;
+
+    if (body && !body.includes('<html>')) {
+      errorMsg =
+        body.length > 100 ? `${errorMsg} ${body.substring(0, 100)}...` : `${errorMsg} ${body}`;
+    }
+
+    return errorMsg;
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit & { skipAuth?: boolean } = {}
@@ -198,7 +213,8 @@ export class NpmProxyProvider implements ProxyProvider {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new ProviderError('npm', `API error: ${response.status} - ${body}`);
+      const errorMsg = this.buildErrorMessage(response.status, body);
+      throw new ProviderError('npm', errorMsg);
     }
 
     return response.json() as Promise<T>;

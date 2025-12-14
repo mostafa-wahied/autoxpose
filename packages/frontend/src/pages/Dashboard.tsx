@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardHeader } from '../components/dashboard-header';
-import { ServiceCard } from '../components/service-card';
+import { ServiceCard } from '../components/services';
 import { api } from '../lib/api';
 
 export function Dashboard(): JSX.Element {

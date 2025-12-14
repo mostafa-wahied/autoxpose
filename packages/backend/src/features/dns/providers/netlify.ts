@@ -82,11 +82,12 @@ export class NetlifyDnsProvider implements DnsProvider {
   private getErrorMessage(status: number, path: string): string {
     const isZoneOp = path.includes('/dns_zones/');
     if (status === 404 && isZoneOp) {
-      return `DNS Zone '${this.zoneId}' not found. Check zone ID in Netlify DNS settings.`;
+      return `DNS Zone not found. Verify your Zone ID in Netlify settings.`;
     }
-    if (status === 401) return 'Invalid token. Check your Netlify personal access token.';
-    if (status === 403) return 'Token lacks permissions for DNS management.';
-    return `API error: ${status}`;
+    if (status === 401) return 'Invalid API token. Check your credentials.';
+    if (status === 403) return 'Insufficient permissions. Token needs DNS management access.';
+    if (status === 404) return 'Resource not found. Check your configuration.';
+    return `Connection failed (HTTP ${status}).`;
   }
 
   private buildHostname(subdomain: string): string {

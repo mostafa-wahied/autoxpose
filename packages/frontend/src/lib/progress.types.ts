@@ -1,8 +1,3 @@
-/**
- * Progress tracking types for SSE-based expose/unexpose operations.
- * Mirrors the backend types for type safety.
- */
-
 export type ProgressPhase = 'dns' | 'proxy';
 export type ProgressStatus = 'pending' | 'running' | 'success' | 'error' | 'warning';
 

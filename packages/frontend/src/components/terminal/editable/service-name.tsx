@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
-import { Tooltip } from './tooltip';
+import { Tooltip } from '../tooltip';
 
 interface EditableServiceNameProps {
   value: string;

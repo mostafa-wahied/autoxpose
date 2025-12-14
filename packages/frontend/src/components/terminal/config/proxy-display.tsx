@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { api, type SettingsStatus } from '../../lib/api';
-import { TestConnectionButton, type TestState } from './test-button';
+import { api, type SettingsStatus } from '../../../lib/api';
+import { TestConnectionButton, type TestState } from '../test-button';
 
 export const PROXY_PROVIDERS = [
   { value: 'npm', label: 'Nginx Proxy Manager' },
@@ -20,9 +20,14 @@ export function ProxyDisplay({ current }: ProxyDisplayProps): JSX.Element {
     setTestState({ status: 'testing' });
     try {
       const result = await api.settings.testProxy();
-      setTestState(result.ok ? { status: 'success' } : { status: 'error', error: result.error });
-    } catch {
-      setTestState({ status: 'error', error: 'Connection test failed' });
+      setTestState(
+        result.ok
+          ? { status: 'success' }
+          : { status: 'error', error: result.error || 'Connection test failed' }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection test failed';
+      setTestState({ status: 'error', error: message });
     }
   };
 

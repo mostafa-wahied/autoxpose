@@ -1,5 +1,5 @@
-import { useServiceMutations } from '../hooks/use-service-mutations';
-import type { ServiceRecord } from '../lib/api';
+import { useServiceMutations } from '../../hooks/use-service-mutations';
+import type { ServiceRecord } from '../../lib/api';
 
 type Props = { service: ServiceRecord };
 

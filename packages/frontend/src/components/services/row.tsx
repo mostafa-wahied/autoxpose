@@ -1,6 +1,6 @@
-import { useServiceMutations } from '../hooks/use-service-mutations';
-import type { ServiceRecord } from '../lib/api';
-import { StatusBadge } from './ui';
+import { useServiceMutations } from '../../hooks/use-service-mutations';
+import type { ServiceRecord } from '../../lib/api';
+import { StatusBadge } from '../ui';
 
 type Props = { service: ServiceRecord };
 

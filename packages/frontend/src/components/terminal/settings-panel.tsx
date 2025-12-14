@@ -1,6 +1,5 @@
 import { type SettingsStatus } from '../../lib/api';
-import { DnsConfigSection } from './dns-config';
-import { ProxyConfigSection } from './proxy-config';
+import { DnsConfigSection, ProxyConfigSection } from './config';
 
 interface SettingsPanelProps {
   settings: SettingsStatus | null | undefined;

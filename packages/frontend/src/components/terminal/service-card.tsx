@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type ServiceRecord } from '../../lib/api';
-import { EditableServiceName } from './editable-service-name';
-import { EditableSubdomain } from './editable-subdomain';
+import { EditableServiceName, EditableSubdomain } from './editable';
 import { InlineSpinner } from './progress';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';

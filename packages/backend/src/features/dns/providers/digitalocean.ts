@@ -70,11 +70,13 @@ export class DigitalOceanDnsProvider implements DnsProvider {
   private getErrorMessage(status: number, path: string): string {
     const isDomainOp = path.includes('/domains/');
     if (status === 404 && isDomainOp) {
-      return `Domain '${this.domain}' not found. Add it to DigitalOcean Networking > Domains first.`;
+      return 'Domain not found. Add it to DigitalOcean Networking > Domains first.';
     }
-    if (status === 401) return 'Invalid API token. Check your DigitalOcean token.';
-    if (status === 403) return 'Token lacks permissions. Enable read/write for Domains.';
-    return `API error: ${status}`;
+    if (status === 404) return 'Resource not found. Check your configuration.';
+    if (status === 401) return 'Invalid API token. Check your credentials.';
+    if (status === 403)
+      return 'Insufficient permissions. Token needs read/write access for Domains.';
+    return `Connection failed (HTTP ${status}).`;
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {

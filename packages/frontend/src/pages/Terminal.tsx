@@ -165,12 +165,19 @@ interface DashboardContentProps {
   settingsLoading: boolean;
 }
 
-function TerminalDashboardContent({
-  services,
-  settings,
-  settingsLoading,
-}: DashboardContentProps): JSX.Element {
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+function useDashboardState(
+  services: ServiceRecord[],
+  settings: Awaited<ReturnType<typeof api.settings.status>> | undefined,
+  settingsLoading: boolean
+): {
+  dnsOk: boolean;
+  proxyOk: boolean;
+  needsSetup: boolean;
+  canExpose: boolean;
+  canExposeReason: string;
+  exposedCount: number;
+  connectionStatus: ConnectionStatus;
+} {
   const dnsOk = settings?.dns?.configured ?? false;
   const proxyOk = settings?.proxy?.configured ?? false;
   const serverIpState = settings?.network?.serverIpState ?? 'missing';
@@ -180,18 +187,40 @@ function TerminalDashboardContent({
   const canExposeReason = serverIpBlocking
     ? 'Public IP not set. Set SERVER_IP before exposing.'
     : 'Set subdomain and configure DNS/Proxy first';
-  const { actions, state } = useTerminalActions({ services, needsSetup });
   const exposedCount = services.filter(s => s.enabled).length;
+  const connectionStatus = getConnectionStatus(settingsLoading, dnsOk, proxyOk);
+
+  return {
+    dnsOk,
+    proxyOk,
+    needsSetup,
+    canExpose,
+    canExposeReason,
+    exposedCount,
+    connectionStatus,
+  };
+}
+
+function TerminalDashboardContent({
+  services,
+  settings,
+  settingsLoading,
+}: DashboardContentProps): JSX.Element {
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const dashboardState = useDashboardState(services, settings, settingsLoading);
+  const { actions, state } = useTerminalActions({
+    services,
+    needsSetup: dashboardState.needsSetup,
+  });
   const activeService = services.find(s => s.id === state.streamState.serviceId);
   const loadingId = getLoadingId(state.streamState, state.deletingServiceId);
-  const connectionStatus = getConnectionStatus(settingsLoading, dnsOk, proxyOk);
   useTerminalShortcuts({
     onExposeAll: actions.handleExposeAll,
     onUnexposeAll: actions.handleUnexposeAll,
     onScan: actions.handleScan,
     settingsOpen: state.settingsOpen,
     setSettingsOpen: state.setSettingsOpen,
-    canExpose,
+    canExpose: dashboardState.canExpose,
     shortcutsOpen,
     setShortcutsOpen,
   });
@@ -200,14 +229,24 @@ function TerminalDashboardContent({
     <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
       <TerminalHeader
         serviceCount={services.length}
-        exposedCount={exposedCount}
-        connectionStatus={connectionStatus}
+        exposedCount={dashboardState.exposedCount}
+        connectionStatus={dashboardState.connectionStatus}
         serverName={settings?.platform?.name ?? 'Server'}
-        canExpose={canExpose}
+        canExpose={dashboardState.canExpose}
         onExposeAll={actions.handleExposeAll}
         onUnexposeAll={actions.handleUnexposeAll}
         onScan={actions.handleScan}
         isScanning={state.scanMutation.isPending}
+        dnsProvider={settings?.dns?.provider}
+        proxyProvider={settings?.proxy?.provider}
+        services={services.map(s => ({
+          id: s.id,
+          name: s.name,
+          subdomain: s.subdomain,
+          enabled: s.enabled ?? false,
+        }))}
+        dnsConfigured={dashboardState.dnsOk}
+        proxyConfigured={dashboardState.proxyOk}
       />
       <MainContent
         services={services}
@@ -217,13 +256,13 @@ function TerminalDashboardContent({
         loadingId={loadingId}
         settingsData={settings}
         baseDomain={settings?.dns?.domain ?? null}
-        canExpose={canExpose}
-        canExposeReason={canExpose ? undefined : canExposeReason}
+        canExpose={dashboardState.canExpose}
+        canExposeReason={dashboardState.canExpose ? undefined : dashboardState.canExposeReason}
       />
       <ConfirmDialogs
         action={state.confirmAction}
         serviceCount={services.length}
-        exposedCount={exposedCount}
+        exposedCount={dashboardState.exposedCount}
         onConfirm={actions.handleConfirm}
         onCancel={() => actions.setConfirmAction(null)}
       />

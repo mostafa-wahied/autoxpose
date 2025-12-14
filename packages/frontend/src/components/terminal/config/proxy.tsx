@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { api, type SettingsStatus } from '../../lib/api';
-import { FormActions, FormInput, FormSelect } from './form-components';
+import { api, type SettingsStatus } from '../../../lib/api';
+import { FormActions, FormInput, FormSelect } from '../form-components';
 import { PROXY_PROVIDERS, ProxyDisplay } from './proxy-display';
-import { TERMINAL_COLORS } from './theme';
-import { Tooltip } from './tooltip';
+import { TERMINAL_COLORS } from '../theme';
+import { Tooltip } from '../tooltip';
 
 interface ProxyConfigSectionProps {
   current: SettingsStatus['proxy'] | null;

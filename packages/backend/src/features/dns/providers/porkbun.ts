@@ -80,12 +80,18 @@ export class PorkbunDnsProvider implements DnsProvider {
   private getErrorMessage(apiMessage: string): string {
     const lower = apiMessage.toLowerCase();
     if (lower.includes('invalid domain') || lower.includes('not found')) {
-      return `Domain '${this.domain}' not found. Ensure it's registered with Porkbun.`;
+      return 'Domain not found. Ensure it is registered with Porkbun.';
     }
     if (lower.includes('invalid') && lower.includes('key')) {
-      return 'Invalid API key or secret. Check your Porkbun API credentials.';
+      return 'Invalid API credentials. Check your API key and secret.';
     }
-    return apiMessage || 'Unknown error';
+    if (lower.includes('authentication')) {
+      return 'Authentication failed. Check your credentials.';
+    }
+    const cleaned = apiMessage.trim();
+    return cleaned.length > 100
+      ? cleaned.substring(0, 97) + '...'
+      : cleaned || 'Connection test failed';
   }
 
   private mapRecord(raw: PorkbunRecord): DnsRecord {

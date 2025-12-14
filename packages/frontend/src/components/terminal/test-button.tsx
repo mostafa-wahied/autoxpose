@@ -24,7 +24,7 @@ export function TestConnectionButton({ status, error, onTest }: TestButtonProps)
   };
 
   return (
-    <div className="mt-3 flex items-center gap-2">
+    <div className="mt-3 space-y-2">
       <button
         onClick={onTest}
         disabled={status === 'testing'}
@@ -33,7 +33,11 @@ export function TestConnectionButton({ status, error, onTest }: TestButtonProps)
       >
         {getButtonContent()}
       </button>
-      {error && <span className="text-[10px] text-[#f85149]">{error}</span>}
+      {error && (
+        <div className="rounded border border-[#f85149]/30 bg-[#f85149]/10 px-2 py-1.5 text-xs text-[#f85149]">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

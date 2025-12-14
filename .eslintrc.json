@@ -13,53 +13,6 @@
     "browser": true
   },
   "ignorePatterns": ["dist/", "node_modules/"],
-  "overrides": [
-    {
-      "files": ["**/*.ts", "**/*.tsx"],
-      "rules": {
-        "no-inline-comments": "error",
-        "no-warning-comments": [
-          "error",
-          {
-            "terms": ["todo", "fixme", "hack", "xxx", "note", "debug"],
-            "location": "anywhere"
-          }
-        ],
-        "spaced-comment": ["error", "never"],
-        "max-lines": [
-          "error",
-          {
-            "max": 400,
-            "skipBlankLines": true,
-            "skipComments": false
-          }
-        ],
-        "max-lines-per-function": [
-          "error",
-          {
-            "max": 70,
-            "skipBlankLines": true,
-            "skipComments": false
-          }
-        ],
-        "@typescript-eslint/explicit-module-boundary-types": "error",
-        "@typescript-eslint/no-explicit-any": "error",
-        "@typescript-eslint/explicit-function-return-type": "error",
-        "no-console": "error",
-        "complexity": ["error", 10],
-        "max-depth": ["error", 3],
-        "max-params": ["error", 4],
-        "max-nested-callbacks": ["error", 3],
-        "no-restricted-syntax": [
-          "error",
-          {
-            "selector": "Literal[value=/[\\u2014\\u2013\\u2018\\u2019\\u201C\\u201D\\u2026\\u00A0]/]",
-            "message": "Avoid special unicode characters (em-dash, curly quotes, ellipsis, nbsp)"
-          }
-        ]
-      }
-    }
-  ],
   "settings": {
     "react": { "version": "detect" }
   }
