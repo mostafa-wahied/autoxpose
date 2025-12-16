@@ -2,6 +2,9 @@ import type { DnsRecord } from '../dns/dns.types.js';
 import type { ProxyHost } from '../proxy/proxy.types.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { ServiceRecord, ServicesRepository } from './services.repository.js';
+import { createLogger } from '../../core/logger/index.js';
+
+const logger = createLogger('sync-service');
 
 export type SyncStatus = {
   id: string;
@@ -108,9 +111,24 @@ export class SyncService {
     const dns = await this.settings.getDnsProvider();
     const proxy = await this.settings.getProxyProvider();
 
+    let dnsRecords: DnsRecord[] = [];
+    let proxyHosts: ProxyHost[] = [];
+
+    try {
+      dnsRecords = dns ? await dns.listRecords() : [];
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch DNS records');
+    }
+
+    try {
+      proxyHosts = proxy ? await proxy.listHosts() : [];
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch proxy hosts');
+    }
+
     return {
-      dnsRecords: dns ? await dns.listRecords() : [],
-      proxyHosts: proxy ? await proxy.listHosts() : [],
+      dnsRecords,
+      proxyHosts,
       baseDomain: dnsConfig?.config.domain || '',
     };
   }
@@ -138,6 +156,82 @@ export class SyncService {
       },
       isSynced,
     };
+  }
+
+  async detectExistingConfigurations(services: ServiceRecord[]): Promise<void> {
+    const data = await this.fetchProviderData();
+
+    for (const service of services) {
+      await this.detectServiceConfiguration(service, data);
+    }
+  }
+
+  private async detectServiceConfiguration(
+    service: ServiceRecord,
+    data: ProviderData
+  ): Promise<void> {
+    const fullDomain = this.buildFullDomain(service.subdomain, data.baseDomain);
+    const dnsRecord = data.dnsRecords.find(r => r.hostname === service.subdomain && r.type === 'A');
+    const proxyHost = data.proxyHosts.find(h => h.domain === fullDomain);
+
+    const dnsExists = Boolean(dnsRecord);
+    const proxyExists = Boolean(proxyHost);
+    const warnings = this.detectConfigWarnings(service, proxyHost || null);
+
+    const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
+    const exposedSubdomain = proxyHost
+      ? this.extractSubdomain(proxyHost.domain, data.baseDomain)
+      : null;
+
+    await this.servicesRepo.update(service.id, {
+      exposureSource,
+      dnsExists,
+      proxyExists,
+      configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
+      exposedSubdomain,
+      dnsRecordId: dnsRecord?.id ?? service.dnsRecordId,
+      proxyHostId: proxyHost?.id ?? service.proxyHostId,
+    });
+  }
+
+  private determineExposureSource(
+    service: ServiceRecord,
+    dnsExists: boolean,
+    proxyExists: boolean
+  ): string | null {
+    if (!service.enabled && (dnsExists || proxyExists)) {
+      return 'discovered';
+    }
+    if (service.enabled) {
+      return service.exposureSource || 'manual';
+    }
+    return null;
+  }
+
+  private detectConfigWarnings(service: ServiceRecord, proxyHost: ProxyHost | null): string[] {
+    const warnings: string[] = [];
+
+    if (!proxyHost) return warnings;
+
+    if (proxyHost.targetPort !== service.port) {
+      warnings.push('port_mismatch');
+    }
+
+    const proxyScheme = proxyHost.ssl ? 'https' : 'http';
+    if (proxyScheme !== service.scheme) {
+      warnings.push('scheme_mismatch');
+    }
+
+    if (proxyHost.targetHost !== service.sourceId) {
+      warnings.push('ip_mismatch');
+    }
+
+    return warnings;
+  }
+
+  private extractSubdomain(fullDomain: string, baseDomain: string): string {
+    if (!baseDomain) return fullDomain;
+    return fullDomain.replace(`.${baseDomain}`, '');
   }
 
   private async getBaseDomain(): Promise<string> {

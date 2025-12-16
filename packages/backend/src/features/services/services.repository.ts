@@ -14,6 +14,13 @@ export interface ServiceRecord {
   sourceId: string | null;
   dnsRecordId: string | null;
   proxyHostId: string | null;
+  exposureSource: string | null;
+  dnsExists: boolean | null;
+  proxyExists: boolean | null;
+  lastReachabilityCheck: Date | null;
+  reachabilityStatus: string | null;
+  configWarnings: string | null;
+  exposedSubdomain: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 }
@@ -35,6 +42,13 @@ export interface UpdateServiceInput {
   enabled?: boolean;
   dnsRecordId?: string | null;
   proxyHostId?: string | null;
+  exposureSource?: string | null;
+  dnsExists?: boolean | null;
+  proxyExists?: boolean | null;
+  lastReachabilityCheck?: Date | null;
+  reachabilityStatus?: string | null;
+  configWarnings?: string | null;
+  exposedSubdomain?: string | null;
 }
 
 export class ServicesRepository {
@@ -76,6 +90,13 @@ export class ServicesRepository {
       sourceId: input.sourceId ?? null,
       dnsRecordId: null,
       proxyHostId: null,
+      exposureSource: null,
+      dnsExists: null,
+      proxyExists: null,
+      lastReachabilityCheck: null,
+      reachabilityStatus: null,
+      configWarnings: null,
+      exposedSubdomain: null,
       createdAt: now,
       updatedAt: now,
     };

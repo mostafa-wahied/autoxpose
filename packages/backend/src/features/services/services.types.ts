@@ -9,6 +9,13 @@ export type Service = {
   sourceId: string | null;
   dnsRecordId: string | null;
   proxyHostId: string | null;
+  exposureSource: string | null;
+  dnsExists: boolean | null;
+  proxyExists: boolean | null;
+  lastReachabilityCheck: Date | null;
+  reachabilityStatus: string | null;
+  configWarnings: string | null;
+  exposedSubdomain: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

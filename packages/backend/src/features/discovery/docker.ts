@@ -315,6 +315,9 @@ export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const discovered = await ctx.discovery.discover();
       const result = await ctx.services.syncFromDiscovery(discovered);
 
+      const allServices = await ctx.services.getAllServices();
+      await ctx.sync.detectExistingConfigurations(allServices);
+
       for (const svc of result.autoExpose) {
         routesLogger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing service');
         ctx.expose.expose(svc.id).catch(err => {

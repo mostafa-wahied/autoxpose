@@ -11,6 +11,13 @@ export interface ServiceRecord {
   sourceId: string | null;
   dnsRecordId: string | null;
   proxyHostId: number | null;
+  exposureSource: string | null;
+  dnsExists: boolean | null;
+  proxyExists: boolean | null;
+  lastReachabilityCheck: string | null;
+  reachabilityStatus: string | null;
+  configWarnings: string | null;
+  exposedSubdomain: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

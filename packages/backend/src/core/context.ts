@@ -41,9 +41,10 @@ function createCoreServices(
   const services = new ServicesService(servicesRepo);
   const settingsRepo = new SettingsRepository(db);
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
-  const expose = new ExposeService(servicesRepo, settings, publicIp, lanIp);
-  const streamingExpose = new StreamingExposeService(servicesRepo, settings, publicIp, lanIp);
   const sync = new SyncService(servicesRepo, settings);
+  const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
+  const expose = new ExposeService(exposeContext);
+  const streamingExpose = new StreamingExposeService(servicesRepo, settings, publicIp, lanIp);
   return { servicesRepo, services, settings, expose, streamingExpose, sync };
 }
 

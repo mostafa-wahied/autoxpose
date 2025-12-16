@@ -55,6 +55,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         onChange={onSubdomainChange}
       />
       <CardFooter
+        service={service}
         serviceId={service.id}
         isExposed={isExposed}
         showDelete={showDelete}
@@ -112,6 +113,7 @@ function CardHeader({
 }
 
 interface CardFooterProps {
+  service: ServiceRecord;
   serviceId: string;
   isExposed: boolean;
   showDelete: boolean;
@@ -124,6 +126,7 @@ interface CardFooterProps {
 
 function CardFooter(props: CardFooterProps): JSX.Element {
   const {
+    service,
     serviceId,
     isExposed,
     showDelete,
@@ -135,7 +138,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
   } = props;
   return (
     <div className="flex items-center justify-between">
-      <StatusBadge serviceId={serviceId} isExposed={isExposed} />
+      <StatusBadge serviceId={serviceId} isExposed={isExposed} service={service} />
       <div className="flex items-center gap-2">
         <DeleteButton visible={showDelete} onClick={onDelete} />
         <ExposeButton
@@ -153,9 +156,10 @@ function CardFooter(props: CardFooterProps): JSX.Element {
 interface StatusBadgeProps {
   serviceId: string;
   isExposed: boolean;
+  service: ServiceRecord;
 }
 
-function StatusBadge({ serviceId, isExposed }: StatusBadgeProps): JSX.Element {
+function StatusBadge({ serviceId, isExposed, service }: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
 
   useEffect(() => {
@@ -170,6 +174,44 @@ function StatusBadge({ serviceId, isExposed }: StatusBadgeProps): JSX.Element {
       .catch(() => setLiveStatus('offline'));
   }, [serviceId, isExposed]);
 
+  const warnings = parseWarnings(service.configWarnings);
+  const showDnsWarning = isExposed && service.dnsExists === false;
+  const showProxyWarning = isExposed && service.proxyExists === false;
+
+  return (
+    <div className="flex items-center gap-2">
+      <StatusIndicator
+        isExposed={isExposed}
+        liveStatus={liveStatus}
+        dnsExists={service.dnsExists}
+        proxyExists={service.proxyExists}
+      />
+      {showDnsWarning && <WarningBadge type="DNS" message="DNS record missing" />}
+      {showProxyWarning && <WarningBadge type="Proxy" message="Proxy host missing" />}
+      {warnings.port_mismatch && <WarningBadge type="Port" message="Port mismatch detected" />}
+      {warnings.scheme_mismatch && (
+        <WarningBadge type="Scheme" message="Scheme mismatch detected" />
+      )}
+      {warnings.ip_mismatch && <WarningBadge type="IP" message="IP address mismatch detected" />}
+      {service.exposureSource === 'discovered' && (
+        <ExposureIcon type="discovered" message="Discovered existing configuration" />
+      )}
+      {service.exposureSource === 'auto' && (
+        <ExposureIcon type="auto" message="Auto-exposed on discovery" />
+      )}
+    </div>
+  );
+}
+
+function StatusIndicator({
+  isExposed,
+  liveStatus,
+}: {
+  isExposed: boolean;
+  liveStatus: string | null;
+  dnsExists: boolean | null;
+  proxyExists: boolean | null;
+}): JSX.Element {
   const getStatus = (): { tip: string; color: string; label: string } => {
     if (!isExposed)
       return {
@@ -199,6 +241,40 @@ function StatusBadge({ serviceId, isExposed }: StatusBadgeProps): JSX.Element {
       </span>
     </Tooltip>
   );
+}
+
+function WarningBadge({ type, message }: { type: string; message: string }): JSX.Element {
+  const isError = type === 'DNS' || type === 'Proxy';
+  const color = isError ? TERMINAL_COLORS.error : TERMINAL_COLORS.warning;
+  return (
+    <Tooltip content={message}>
+      <span
+        className="rounded px-2 py-0.5 text-xs font-medium"
+        style={{ background: `${color}20`, color }}
+      >
+        {type}
+      </span>
+    </Tooltip>
+  );
+}
+
+function ExposureIcon({ type, message }: { type: string; message: string }): JSX.Element {
+  const icon = type === 'discovered' ? '\ud83d\udd0d' : '\u26a1';
+  return (
+    <Tooltip content={message}>
+      <span className="text-sm">{icon}</span>
+    </Tooltip>
+  );
+}
+
+function parseWarnings(configWarnings: string | null): Record<string, boolean> {
+  if (!configWarnings) return {};
+  try {
+    const warnings = JSON.parse(configWarnings) as string[];
+    return warnings.reduce((acc, w) => ({ ...acc, [w]: true }), {} as Record<string, boolean>);
+  } catch {
+    return {};
+  }
 }
 
 function DeleteButton({
