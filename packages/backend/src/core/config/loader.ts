@@ -63,7 +63,7 @@ export function loadConfig(): AppConfig {
   const envConfig: Record<string, unknown> = {};
 
   if (process.env.SERVER_IP) {
-    envConfig.serverIp = process.env.SERVER_IP;
+    envConfig.serverIp = process.env.SERVER_IP.trim();
   }
 
   if (process.env.LAN_IP) {

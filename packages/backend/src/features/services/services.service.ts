@@ -84,7 +84,8 @@ export class ServicesService {
       if (!existing) continue;
       const needsUpdate = this.serviceNeedsUpdate(existing, disc);
       if (!needsUpdate) continue;
-      const subdomainToUse = disc.subdomain || existing.subdomain;
+      const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
+      const subdomainToUse = hasExplicitSubdomain ? disc.subdomain : existing.subdomain;
       const upd = await this.repository.update(existing.id, {
         name: disc.name,
         subdomain: subdomainToUse,
@@ -97,7 +98,8 @@ export class ServicesService {
   }
 
   private serviceNeedsUpdate(existing: ServiceRecord, disc: DiscoveredService): boolean {
-    const subdomainChanged = disc.subdomain && existing.subdomain !== disc.subdomain;
+    const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
+    const subdomainChanged = hasExplicitSubdomain && existing.subdomain !== disc.subdomain;
     return existing.name !== disc.name || subdomainChanged || existing.port !== disc.port;
   }
 

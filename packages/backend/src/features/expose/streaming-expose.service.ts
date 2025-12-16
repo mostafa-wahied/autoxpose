@@ -12,6 +12,10 @@ import {
   type ProgressCallback,
 } from './expose-handlers.js';
 import { createInitialSteps } from './progress.types.js';
+import { testBackendScheme } from './scheme-detection.js';
+import { createLogger } from '../../core/logger/index.js';
+
+const logger = createLogger('streaming-expose');
 
 export type { ProgressCallback } from './expose-handlers.js';
 
@@ -29,6 +33,8 @@ export class StreamingExposeService {
       emitError(this.createContext(serviceId, 'expose', onProgress), 'Service not found');
       return;
     }
+
+    await this.updateServiceScheme(service);
 
     const ctx = this.createContext(serviceId, 'expose', onProgress);
     emit(ctx);
@@ -72,6 +78,20 @@ export class StreamingExposeService {
     emitComplete(ctx, fullDomain, { dns: dnsResult.recordId, proxy: proxyResult?.id }, sslStatus);
   }
 
+  private async updateServiceScheme(
+    service: NonNullable<Awaited<ReturnType<ServicesRepository['findById']>>>
+  ): Promise<void> {
+    const scheme = await this.determineScheme(service);
+    if (scheme !== service.scheme) {
+      await this.servicesRepo.update(service.id, { scheme });
+      logger.info(
+        { serviceId: service.id, detectedScheme: scheme },
+        'Updated scheme from health check'
+      );
+      service.scheme = scheme;
+    }
+  }
+
   async unexposeWithProgress(serviceId: string, onProgress: ProgressCallback): Promise<void> {
     const service = await this.servicesRepo.findById(serviceId);
     if (!service) {
@@ -102,6 +122,28 @@ export class StreamingExposeService {
   private async getBaseDomain(): Promise<string | null> {
     const cfg = await this.settings.getDnsConfig();
     return cfg?.config.domain ?? null;
+  }
+
+  private async determineScheme(
+    service: Awaited<ReturnType<ServicesRepository['findById']>>
+  ): Promise<string> {
+    const detected = await testBackendScheme(
+      this.lanIp,
+      service!.port,
+      service!.scheme ?? undefined
+    );
+    if (detected) {
+      logger.info(
+        { serviceId: service!.id, port: service!.port, currentScheme: service!.scheme, detected },
+        'Health check detected scheme'
+      );
+      return detected;
+    }
+    logger.info(
+      { serviceId: service!.id, port: service!.port, fallback: service!.scheme },
+      'Health check failed, using current scheme'
+    );
+    return service!.scheme || 'http';
   }
 
   private buildFullDomain(subdomain: string, baseDomain: string | null): string {

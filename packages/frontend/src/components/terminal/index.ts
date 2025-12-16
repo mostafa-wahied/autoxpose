@@ -6,5 +6,6 @@ export { TerminalServiceCard } from './service-card';
 export { TerminalSidebar } from './sidebar';
 export { SettingsStatusBar } from './status-bar';
 export { TERMINAL_COLORS } from './theme';
+export { TopologyPanel } from './topology-panel';
 export { Tooltip } from './tooltip';
 export { TrafficLightButton } from './traffic-light';

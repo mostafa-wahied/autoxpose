@@ -102,7 +102,13 @@ export const api = {
       }),
     update: (
       id: string,
-      data: Partial<{ name: string; subdomain: string; port: number; enabled: boolean }>
+      data: Partial<{
+        name: string;
+        subdomain: string;
+        port: number;
+        scheme: string;
+        enabled: boolean;
+      }>
     ): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}`, {
         method: 'PATCH',

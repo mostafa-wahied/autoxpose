@@ -247,6 +247,7 @@ function TerminalDashboardContent({
         }))}
         dnsConfigured={dashboardState.dnsOk}
         proxyConfigured={dashboardState.proxyOk}
+        onHelp={() => setShortcutsOpen(true)}
       />
       <MainContent
         services={services}
@@ -258,6 +259,7 @@ function TerminalDashboardContent({
         baseDomain={settings?.dns?.domain ?? null}
         canExpose={dashboardState.canExpose}
         canExposeReason={dashboardState.canExpose ? undefined : dashboardState.canExposeReason}
+        setShortcutsOpen={setShortcutsOpen}
       />
       <ConfirmDialogs
         action={state.confirmAction}
@@ -281,6 +283,7 @@ interface MainContentProps {
   baseDomain: string | null;
   canExpose: boolean;
   canExposeReason?: string;
+  setShortcutsOpen: (open: boolean) => void;
 }
 
 function MainContent({
@@ -293,10 +296,15 @@ function MainContent({
   baseDomain,
   canExpose,
   canExposeReason,
+  setShortcutsOpen,
 }: MainContentProps): JSX.Element {
   return (
     <div className="flex flex-1 overflow-hidden">
-      <TerminalSidebar services={services} activeServiceId={state.streamState.serviceId} />
+      <TerminalSidebar
+        services={services}
+        activeServiceId={state.streamState.serviceId}
+        onHelp={() => setShortcutsOpen(true)}
+      />
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-auto p-6">
           <ContentArea

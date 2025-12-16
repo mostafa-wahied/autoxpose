@@ -26,7 +26,7 @@ type EventStream = NodeJS.ReadableStream & { destroy(): void };
 const logger = createLogger('docker-discovery');
 const routesLogger = createLogger('discovery-routes');
 
-const HTTPS_PRIVATE_PORTS = [443, 8443, 9443];
+const HTTPS_PRIVATE_PORTS = [443, 8443, 9443, 10443];
 
 export class DockerDiscoveryProvider implements DiscoveryProvider {
   readonly name = 'docker';
