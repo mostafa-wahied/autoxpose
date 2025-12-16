@@ -57,7 +57,7 @@ export function Tooltip({
 
 function ShortcutHint({ text }: { text: string }): JSX.Element {
   return (
-    <div style={{ color: TERMINAL_COLORS.textMuted, fontSize: '10px', marginTop: '4px' }}>
+    <div style={{ color: TERMINAL_COLORS.textMuted, fontSize: '11px', marginTop: '4px' }}>
       {text}
     </div>
   );

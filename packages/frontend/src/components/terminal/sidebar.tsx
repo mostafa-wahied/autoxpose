@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { type ServiceRecord } from '../../lib/api';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
@@ -6,13 +7,25 @@ interface TerminalSidebarProps {
   services: ServiceRecord[];
   activeServiceId?: string | null;
   onServiceClick?: (service: ServiceRecord) => void;
+  onHelp: () => void;
 }
 
 export function TerminalSidebar({
   services,
   activeServiceId,
   onServiceClick,
+  onHelp,
 }: TerminalSidebarProps): JSX.Element {
+  const [hasSeenHelp, setHasSeenHelp] = useState(() => {
+    return localStorage.getItem('autoxpose-help-seen') === 'true';
+  });
+
+  const handleHelpClick = (): void => {
+    localStorage.setItem('autoxpose-help-seen', 'true');
+    setHasSeenHelp(true);
+    onHelp();
+  };
+
   return (
     <div className="flex w-56 flex-col border-r border-[#30363d] bg-[#0d1117]">
       <div className="flex-1 overflow-auto p-4">
@@ -29,6 +42,19 @@ export function TerminalSidebar({
             />
           ))}
           {services.length === 0 && <EmptyState />}
+        </div>
+      </div>
+      <div className="border-t border-[#30363d] p-4">
+        <div className="flex justify-center">
+          <Tooltip content="Keyboard shortcuts">
+            <button
+              onClick={handleHelpClick}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border border-[#30363d] text-xs text-[#8b949e] transition-all hover:border-[#58a6ff] hover:text-[#58a6ff] ${!hasSeenHelp ? 'animate-pulse' : ''}`}
+              aria-label="Show keyboard shortcuts"
+            >
+              ?
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>

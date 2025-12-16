@@ -1,5 +1,9 @@
+import { testBackendScheme } from './scheme-detection.js';
 import type { ServiceRecord, ServicesRepository } from '../services/services.repository.js';
 import type { SettingsService } from '../settings/settings.service.js';
+import { createLogger } from '../../core/logger/index.js';
+
+const logger = createLogger('expose-service');
 
 type ExposeResult = { service: ServiceRecord; dnsRecordId?: string; proxyHostId?: string };
 
@@ -15,6 +19,12 @@ export class ExposeService {
     const service = await this.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
+    const scheme = await this.determineScheme(service);
+    if (scheme !== service.scheme) {
+      await this.servicesRepo.update(serviceId, { scheme });
+      logger.info({ serviceId, detectedScheme: scheme }, 'Updated scheme from health check');
+    }
+
     const baseDomain = await this.getBaseDomain();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
 
@@ -24,7 +34,7 @@ export class ExposeService {
 
     const proxyHostId = service.proxyHostId
       ? service.proxyHostId
-      : await this.createProxyHost(service, fullDomain);
+      : await this.createProxyHost({ ...service, scheme }, fullDomain);
 
     const nothingConfigured = !dnsRecordId && !proxyHostId;
     if (nothingConfigured) {
@@ -39,6 +49,22 @@ export class ExposeService {
 
     const updated = await this.servicesRepo.findById(serviceId);
     return { service: updated!, dnsRecordId, proxyHostId };
+  }
+
+  private async determineScheme(service: ServiceRecord): Promise<string> {
+    const detected = await testBackendScheme(this.lanIp, service.port, service.scheme ?? undefined);
+    if (detected) {
+      logger.info(
+        { serviceId: service.id, port: service.port, currentScheme: service.scheme, detected },
+        'Health check detected scheme'
+      );
+      return detected;
+    }
+    logger.info(
+      { serviceId: service.id, port: service.port, fallback: service.scheme },
+      'Health check failed, using current scheme'
+    );
+    return service.scheme || 'http';
   }
 
   async unexpose(serviceId: string): Promise<ServiceRecord> {

@@ -12,6 +12,7 @@ interface ServiceGridProps {
   baseDomain: string | null;
   canExpose: boolean;
   canExposeReason?: string;
+  onScan: () => void;
 }
 
 export function ServiceGrid({
@@ -25,9 +26,10 @@ export function ServiceGrid({
   baseDomain,
   canExpose,
   canExposeReason,
+  onScan,
 }: ServiceGridProps): JSX.Element {
   if (services.length === 0) {
-    return <EmptyServiceGrid />;
+    return <EmptyServiceGrid onScan={onScan} />;
   }
 
   return (
@@ -59,7 +61,11 @@ export function ServiceGrid({
   );
 }
 
-function EmptyServiceGrid(): JSX.Element {
+interface EmptyServiceGridProps {
+  onScan: () => void;
+}
+
+function EmptyServiceGrid({ onScan }: EmptyServiceGridProps): JSX.Element {
   return (
     <div className="rounded border border-dashed border-[#30363d] p-8 text-center">
       <div className="mb-4 text-4xl text-[#484f58]">{'\u2699'}</div>
@@ -68,9 +74,12 @@ function EmptyServiceGrid(): JSX.Element {
         Add <code className="rounded bg-[#21262d] px-1 text-[#f0883e]">autoxpose.enable=true</code>{' '}
         to your container labels
       </p>
-      <p className="mt-4 text-xs text-[#58a6ff]">
-        {'\u25CF'} Click the yellow button above to scan for containers
-      </p>
+      <button
+        onClick={onScan}
+        className="mt-6 rounded bg-yellow-500 px-6 py-2 text-sm font-semibold text-black transition-all hover:bg-yellow-400 hover:scale-105"
+      >
+        ↻ Scan for Containers
+      </button>
     </div>
   );
 }

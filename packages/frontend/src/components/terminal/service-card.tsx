@@ -45,6 +45,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         name={service.name}
         containerName={service.sourceId || service.name}
         port={service.port}
+        scheme={service.scheme || 'http'}
         onNameChange={onNameChange}
       />
       <EditableSubdomain
@@ -71,21 +72,41 @@ interface CardHeaderProps {
   name: string;
   containerName: string;
   port: number;
+  scheme: string;
   onNameChange: (name: string) => void;
 }
 
-function CardHeader({ name, containerName, port, onNameChange }: CardHeaderProps): JSX.Element {
+function CardHeader({
+  name,
+  containerName,
+  port,
+  scheme,
+  onNameChange,
+}: CardHeaderProps): JSX.Element {
   return (
-    <div className="mb-2 flex items-center justify-between">
-      <EditableServiceName
-        value={name}
-        containerName={containerName}
-        port={port}
-        onChange={onNameChange}
-      />
-      <Tooltip content="Internal port">
-        <span className="text-xs text-[#8b949e]">:{port}</span>
-      </Tooltip>
+    <div className="mb-2">
+      <div className="flex items-center justify-between">
+        <EditableServiceName
+          value={name}
+          containerName={containerName}
+          port={port}
+          onChange={onNameChange}
+        />
+        <Tooltip content="Internal port">
+          <span className="text-xs text-[#8b949e]">:{port}</span>
+        </Tooltip>
+      </div>
+      <div className="mt-1">
+        <span
+          className="rounded px-2 py-0.5 text-xs font-medium"
+          style={{
+            background: scheme === 'https' ? '#3fb95020' : '#8b949e20',
+            color: scheme === 'https' ? '#3fb950' : '#8b949e',
+          }}
+        >
+          {(scheme || 'http').toUpperCase()}
+        </span>
+      </div>
     </div>
   );
 }

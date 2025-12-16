@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { usePlatform } from '../../hooks/use-platform';
 
 type KeyboardShortcutsModalProps = {
   isOpen: boolean;
@@ -9,18 +10,16 @@ export function KeyboardShortcutsModal({
   isOpen,
   onClose,
 }: KeyboardShortcutsModalProps): JSX.Element | null {
-  const isMac = useMemo(() => navigator.platform.toLowerCase().includes('mac'), []);
+  const { modKey, altKey } = usePlatform();
 
   const shortcuts = useMemo(() => {
-    const mod = isMac ? '⌘' : 'Ctrl';
-    const alt = isMac ? '⌥' : 'Alt';
     return {
-      settings: `${mod} + ,`,
-      exposeAll: `${mod} + ${alt} + E`,
-      unexposeAll: `${mod} + ${alt} + U`,
-      scan: `${mod} + ${alt} + S`,
+      settings: `${modKey} + ,`,
+      exposeAll: `${modKey} + ${altKey} + E`,
+      unexposeAll: `${modKey} + ${altKey} + U`,
+      scan: `${modKey} + ${altKey} + S`,
     };
-  }, [isMac]);
+  }, [modKey, altKey]);
 
   useEffect(() => {
     if (!isOpen) return;

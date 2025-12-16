@@ -8,21 +8,45 @@ export type ProbeResult = {
   responsive: boolean;
 };
 
+const HTTPS_PORTS = [443, 8443, 9443, 10443];
+
 export async function probeBackend(
   host: string,
   port: number,
   timeoutMs: number = 3000
 ): Promise<ProbeResult> {
-  const httpsResult = await tryConnect(host, port, 'https', timeoutMs);
-  if (httpsResult.responsive) {
-    logger.debug({ host, port, scheme: 'https' }, 'Backend responds to HTTPS');
-    return httpsResult;
-  }
+  const portSuggestsHttps = HTTPS_PORTS.includes(port);
 
-  const httpResult = await tryConnect(host, port, 'http', timeoutMs);
-  if (httpResult.responsive) {
-    logger.debug({ host, port, scheme: 'http' }, 'Backend responds to HTTP');
-    return httpResult;
+  if (portSuggestsHttps) {
+    const httpsResult = await tryConnect(host, port, 'https', timeoutMs);
+    if (httpsResult.responsive) {
+      logger.debug({ host, port, scheme: 'https' }, 'Backend responds to HTTPS');
+      return httpsResult;
+    }
+
+    const httpResult = await tryConnect(host, port, 'http', timeoutMs);
+    if (httpResult.responsive) {
+      logger.debug({ host, port, scheme: 'http' }, 'Backend responds to HTTP on HTTPS port');
+      return httpResult;
+    }
+  } else {
+    const [httpResult, httpsResult] = await Promise.all([
+      tryConnect(host, port, 'http', timeoutMs),
+      tryConnect(host, port, 'https', timeoutMs),
+    ]);
+
+    if (httpsResult.responsive) {
+      logger.debug(
+        { host, port, scheme: 'https', httpAlsoWorks: httpResult.responsive },
+        'Backend responds to HTTPS (preferred)'
+      );
+      return httpsResult;
+    }
+
+    if (httpResult.responsive) {
+      logger.debug({ host, port, scheme: 'http' }, 'Backend responds to HTTP');
+      return httpResult;
+    }
   }
 
   logger.debug({ host, port }, 'Backend not responsive, defaulting to http');

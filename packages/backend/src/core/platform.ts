@@ -116,7 +116,9 @@ export function determineIpState(
 
 export function isValidIpFormat(value: string): boolean {
   const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-  return ipv4.test(value);
+  if (ipv4.test(value)) return true;
+  const hostname = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i;
+  return hostname.test(value);
 }
 
 export function isBridgeIp(value: string): boolean {
