@@ -152,6 +152,14 @@ export const api = {
       request<{ success: boolean; error?: string }>(`/services/${id}/retry-ssl`, {
         method: 'POST',
       }),
+    sync: (id: string): Promise<{ service: ServiceRecord; synced: boolean }> =>
+      request<{ service: ServiceRecord; synced: boolean }>(`/services/sync/${id}`, {
+        method: 'POST',
+      }),
+    fixConfig: (id: string): Promise<{ fixed: string[]; errors: string[] }> =>
+      request<{ fixed: string[]; errors: string[] }>(`/services/${id}/fix-config`, {
+        method: 'POST',
+      }),
   },
   discovery: {
     containers: (): Promise<{ containers: DiscoveredContainer[] }> =>

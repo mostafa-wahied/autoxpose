@@ -25,9 +25,16 @@ export type CreateProxyHostInput = {
   skipDnsWait?: boolean;
 };
 
+export type UpdateProxyHostInput = {
+  targetHost?: string;
+  targetPort?: number;
+  targetScheme?: 'http' | 'https';
+};
+
 export interface ProxyProvider {
   readonly name: string;
   createHost(input: CreateProxyHostInput): Promise<ProxyHost>;
+  updateHost(hostId: string, input: UpdateProxyHostInput): Promise<ProxyHost>;
   deleteHost(hostId: string): Promise<void>;
   listHosts(): Promise<ProxyHost[]>;
   findByDomain(domain: string): Promise<ProxyHost | null>;

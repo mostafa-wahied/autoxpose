@@ -1,4 +1,5 @@
 import type { DiscoveredService } from '../discovery/docker.js';
+import type { SettingsService } from '../settings/settings.service.js';
 import type {
   CreateServiceInput,
   ServiceRecord,
@@ -13,7 +14,10 @@ type SyncResult = {
 };
 
 export class ServicesService {
-  constructor(private repository: ServicesRepository) {}
+  constructor(
+    private repository: ServicesRepository,
+    private settings?: SettingsService
+  ) {}
 
   async getAllServices(): Promise<ServiceRecord[]> {
     return this.repository.findAll();
@@ -36,6 +40,52 @@ export class ServicesService {
 
   async deleteService(id: string): Promise<boolean> {
     return this.repository.delete(id);
+  }
+
+  async fixConfig(id: string): Promise<{ fixed: string[]; errors: string[] }> {
+    if (!this.settings) {
+      throw new Error('Settings service required for fixConfig');
+    }
+
+    const service = await this.repository.findById(id);
+    if (!service || !service.configWarnings) {
+      return { fixed: [], errors: [] };
+    }
+
+    const proxy = await this.settings.getProxyProvider();
+    if (!proxy || !service.proxyHostId) {
+      return { fixed: [], errors: ['No proxy configuration to fix'] };
+    }
+
+    const result = await this.applyFixes(service, proxy);
+
+    if (result.fixed.length > 0) {
+      await this.repository.update(id, { configWarnings: null });
+    }
+
+    return result;
+  }
+
+  private async applyFixes(
+    service: ServiceRecord,
+    proxy: Awaited<ReturnType<SettingsService['getProxyProvider']>>
+  ): Promise<{ fixed: string[]; errors: string[] }> {
+    const warnings = JSON.parse(service.configWarnings!) as string[];
+    const fixed: string[] = [];
+    const errors: string[] = [];
+
+    for (const warning of warnings) {
+      if (warning === 'port_mismatch' && proxy) {
+        try {
+          await proxy.updateHost(service.proxyHostId!, { targetPort: service.port });
+          fixed.push('port_mismatch');
+        } catch (err) {
+          errors.push(`Failed to fix port: ${err instanceof Error ? err.message : 'Unknown'}`);
+        }
+      }
+    }
+
+    return { fixed, errors };
   }
 
   async syncFromDiscovery(discovered: DiscoveredService[]): Promise<SyncResult> {

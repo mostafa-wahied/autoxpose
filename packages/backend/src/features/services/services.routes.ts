@@ -126,6 +126,13 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return handleCheckBulk(ctx, request.body.serviceIds);
     });
 
+    server.post<{ Params: IdParams }>('/:id/fix-config', async (request, reply) => {
+      const service = await ctx.services.getServiceById(request.params.id);
+      if (!service) return notFound(reply);
+      const result = await ctx.services.fixConfig(request.params.id);
+      return result;
+    });
+
     await server.register(createSslRoutes(ctx));
     await server.register(createSyncRoutes(ctx), { prefix: '/sync' });
   };

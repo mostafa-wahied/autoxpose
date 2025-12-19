@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { type ServiceRecord } from '../../lib/api';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, type ServiceRecord } from '../../lib/api';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -21,6 +22,14 @@ export function StatusBadge({
   bulkStatus,
 }: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
+  const queryClient = useQueryClient();
+
+  const syncMutation = useMutation({
+    mutationFn: (id: string) => api.services.sync(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+    },
+  });
 
   useEffect(() => {
     if (!isExposed) {
@@ -30,16 +39,29 @@ export function StatusBadge({
     }
 
     if (bulkStatus) {
-      setLiveStatus(bulkStatus.online ? 'online' : 'offline');
+      const isOnline = bulkStatus.online;
+      setLiveStatus(isOnline ? 'online' : 'offline');
       onProtocolChange(
         bulkStatus.protocol === 'https' || bulkStatus.protocol === 'http'
           ? bulkStatus.protocol
           : null
       );
+
+      if (!isOnline && !service.configWarnings && !syncMutation.isPending) {
+        syncMutation.mutate(serviceId);
+      }
     } else {
       setLiveStatus('checking');
     }
-  }, [serviceId, isExposed, onProtocolChange, scanTrigger, bulkStatus]);
+  }, [
+    serviceId,
+    isExposed,
+    onProtocolChange,
+    scanTrigger,
+    bulkStatus,
+    service.configWarnings,
+    syncMutation,
+  ]);
 
   return (
     <div className="flex items-center gap-2">
@@ -67,7 +89,54 @@ function ServiceWarnings({
   const warnings = parseWarnings(service.configWarnings);
   const showUnreachableReasons = isExposed && liveStatus === 'offline';
 
-  const warningBadges = [
+  const badges = buildWarningBadges(warnings, showUnreachableReasons, service);
+  const icons = buildExposureIcons(service);
+
+  return (
+    <>
+      {badges.map((w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />)}
+      <FixConfigButton service={service} warnings={warnings} />
+      {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
+    </>
+  );
+}
+
+function FixConfigButton({
+  service,
+  warnings,
+}: {
+  service: ServiceRecord;
+  warnings: ReturnType<typeof parseWarnings>;
+}): JSX.Element | null {
+  const queryClient = useQueryClient();
+  const fixMutation = useMutation({
+    mutationFn: (id: string) => api.services.fixConfig(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+    },
+  });
+
+  const hasFixable = warnings.port_mismatch || warnings.ip_mismatch;
+  if (!hasFixable) return null;
+
+  return (
+    <button
+      onClick={() => fixMutation.mutate(service.id)}
+      disabled={fixMutation.isPending}
+      className="px-2 py-0.5 text-xs bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded hover:bg-yellow-900/50 disabled:opacity-50"
+      title="Fix configuration mismatch automatically"
+    >
+      {fixMutation.isPending ? 'Fixing...' : 'Fix'}
+    </button>
+  );
+}
+
+function buildWarningBadges(
+  warnings: ReturnType<typeof parseWarnings>,
+  showUnreachableReasons: boolean,
+  service: ServiceRecord
+): Array<{ show: boolean; type: string; msg: string }> {
+  return [
     {
       show: showUnreachableReasons && service.dnsExists === false,
       type: 'DNS',
@@ -92,8 +161,12 @@ function ServiceWarnings({
     { show: warnings.scheme_mismatch, type: 'Scheme', msg: 'Scheme mismatch detected' },
     { show: warnings.ip_mismatch, type: 'IP', msg: 'IP address mismatch detected' },
   ];
+}
 
-  const icons = [
+function buildExposureIcons(
+  service: ServiceRecord
+): Array<{ show: boolean; type: string; msg: string }> {
+  return [
     {
       show: service.exposureSource === 'discovered',
       type: 'discovered',
@@ -101,15 +174,6 @@ function ServiceWarnings({
     },
     { show: service.exposureSource === 'auto', type: 'auto', msg: 'Auto-exposed on discovery' },
   ];
-
-  return (
-    <>
-      {warningBadges.map(
-        (w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />
-      )}
-      {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
-    </>
-  );
 }
 
 function StatusIndicator({

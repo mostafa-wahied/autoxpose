@@ -6,6 +6,7 @@ import type {
   ProxyHost,
   ProxyProvider,
   ProxyProviderConfig,
+  UpdateProxyHostInput,
 } from '../proxy.types.js';
 
 const logger = createLogger('npm-provider');
@@ -151,6 +152,62 @@ export class NpmProxyProvider implements ProxyProvider {
   async deleteHost(hostId: string): Promise<void> {
     await this.authenticate();
     await this.request(`/nginx/proxy-hosts/${hostId}`, { method: 'DELETE' });
+  }
+
+  async updateHost(hostId: string, input: UpdateProxyHostInput): Promise<ProxyHost> {
+    await this.authenticate();
+    const existing = await this.request<Record<string, unknown>>(`/nginx/proxy-hosts/${hostId}`);
+    const updateBody = this.buildUpdateBody(existing, input);
+    const response = await this.request<Record<string, unknown>>(`/nginx/proxy-hosts/${hostId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateBody),
+    });
+    return this.mapHost(response);
+  }
+
+  private buildUpdateBody(
+    existing: Record<string, unknown>,
+    input: UpdateProxyHostInput
+  ): Record<string, unknown> {
+    return {
+      ...this.buildForwardingConfig(existing, input),
+      ...this.buildSecurityConfig(existing),
+      ...this.buildMetadata(existing),
+    };
+  }
+
+  private buildForwardingConfig(
+    existing: Record<string, unknown>,
+    input: UpdateProxyHostInput
+  ): Record<string, unknown> {
+    return {
+      domain_names: existing.domain_names,
+      forward_host: input.targetHost ?? existing.forward_host,
+      forward_port: input.targetPort ?? existing.forward_port,
+      forward_scheme: input.targetScheme ?? existing.forward_scheme,
+    };
+  }
+
+  private buildSecurityConfig(existing: Record<string, unknown>): Record<string, unknown> {
+    return {
+      allow_websocket_upgrade: existing.allow_websocket_upgrade ?? true,
+      block_exploits: existing.block_exploits ?? true,
+      access_list_id: existing.access_list_id || 0,
+      certificate_id: existing.certificate_id || 0,
+      ssl_forced: existing.ssl_forced ?? false,
+      http2_support: existing.http2_support ?? false,
+      hsts_enabled: existing.hsts_enabled ?? false,
+      hsts_subdomains: existing.hsts_subdomains ?? false,
+    };
+  }
+
+  private buildMetadata(existing: Record<string, unknown>): Record<string, unknown> {
+    return {
+      meta: existing.meta || {},
+      advanced_config: existing.advanced_config || '',
+      locations: existing.locations || [],
+      caching_enabled: existing.caching_enabled ?? false,
+    };
   }
 
   async listHosts(): Promise<ProxyHost[]> {

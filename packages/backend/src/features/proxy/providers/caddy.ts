@@ -5,6 +5,7 @@ import type {
   ProxyHost,
   ProxyProvider,
   ProxyProviderConfig,
+  UpdateProxyHostInput,
 } from '../proxy.types.js';
 
 const logger = createLogger('caddy-provider');
@@ -83,6 +84,33 @@ export class CaddyProxyProvider implements ProxyProvider {
   async deleteHost(hostId: string): Promise<void> {
     await this.request(`/id/${hostId}`, { method: 'DELETE' });
     logger.info({ hostId }, 'Deleted Caddy route');
+  }
+
+  async updateHost(hostId: string, input: UpdateProxyHostInput): Promise<ProxyHost> {
+    const existing = await this.findById(hostId);
+    if (!existing) {
+      throw new ProviderError('caddy', `Host not found: ${hostId}`);
+    }
+
+    const targetHost = input.targetHost ?? existing.targetHost;
+    const targetPort = input.targetPort ?? existing.targetPort;
+
+    const route = this.buildRoute(existing.domain, targetHost, targetPort);
+    await this.request(`/id/${hostId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(route),
+    });
+
+    return {
+      ...existing,
+      targetHost,
+      targetPort,
+    };
+  }
+
+  private async findById(hostId: string): Promise<ProxyHost | null> {
+    const hosts = await this.listHosts();
+    return hosts.find(h => h.id === hostId) ?? null;
   }
 
   async listHosts(): Promise<ProxyHost[]> {

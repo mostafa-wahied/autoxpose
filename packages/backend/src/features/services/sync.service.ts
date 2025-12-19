@@ -47,10 +47,13 @@ export class SyncService {
     const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
     const isExposed = Boolean(dnsRecord) || Boolean(proxyHost);
 
+    const warnings = this.detectConfigMismatches(service, proxyHost ?? undefined);
+
     await this.servicesRepo.update(service.id, {
       enabled: isExposed,
       dnsRecordId: dnsRecord?.id ?? null,
       proxyHostId: proxyHost?.id ?? null,
+      configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
     });
 
     return (await this.servicesRepo.findById(service.id))!;

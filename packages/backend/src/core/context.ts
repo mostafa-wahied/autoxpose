@@ -52,9 +52,9 @@ function createCoreServices(
   lanProvided: boolean
 ): CoreServices {
   const servicesRepo = new ServicesRepository(db);
-  const services = new ServicesService(servicesRepo);
   const settingsRepo = new SettingsRepository(db);
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
+  const services = new ServicesService(servicesRepo, settings);
   const sync = new SyncService(servicesRepo, settings);
   const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
   const expose = new ExposeService(exposeContext);
