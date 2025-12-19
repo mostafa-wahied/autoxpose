@@ -50,6 +50,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         canExpose={canExpose}
         canExposeReason={canExposeReason}
         onScan={onScan}
+        retrySslPending={state.retrySslMutation.isPending}
       />
       <ProgressSection
         streamState={state.streamState}

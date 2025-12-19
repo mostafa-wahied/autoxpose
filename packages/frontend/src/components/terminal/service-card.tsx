@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { api, type ServiceRecord } from '../../lib/api';
+import { useState } from 'react';
+import { type ServiceRecord } from '../../lib/api';
 import { EditableServiceName, EditableSubdomain } from './editable';
 import { InlineSpinner } from './progress';
+import { StatusBadge } from './service-card-status';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 interface TerminalServiceCardProps {
@@ -16,6 +17,7 @@ interface TerminalServiceCardProps {
   isActive?: boolean;
   canExpose: boolean;
   canExposeBlockedReason?: string;
+  isRetrySslPending?: boolean;
 }
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
@@ -29,6 +31,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     isLoading,
     isActive,
     canExposeBlockedReason,
+    isRetrySslPending = false,
   } = props;
   const [showDelete, setShowDelete] = useState(false);
   const [protocol, setProtocol] = useState<'https' | 'http' | null>(null);
@@ -68,6 +71,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         onDelete={onDelete}
         onRetrySsl={onRetrySsl}
         onProtocolChange={setProtocol}
+        isRetrySslPending={isRetrySslPending}
       />
     </div>
   );
@@ -125,6 +129,7 @@ interface CardFooterProps {
   onDelete: () => void;
   onRetrySsl: () => void;
   onProtocolChange: (protocol: 'https' | 'http' | null) => void;
+  isRetrySslPending: boolean;
 }
 function CardFooter(props: CardFooterProps): JSX.Element {
   const {
@@ -139,6 +144,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     onDelete,
     onRetrySsl,
     onProtocolChange,
+    isRetrySslPending,
   } = props;
   return (
     <div className="flex items-center justify-between">
@@ -153,9 +159,11 @@ function CardFooter(props: CardFooterProps): JSX.Element {
           <Tooltip content="Retry SSL certificate setup">
             <button
               onClick={onRetrySsl}
-              className="rounded border border-[#f0883e] px-2 py-1 text-xs transition-colors hover:bg-[#f0883e20]"
+              disabled={isRetrySslPending}
+              className="rounded border border-[#f0883e] px-2 py-1 text-xs transition-colors hover:bg-[#f0883e20] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               style={{ color: TERMINAL_COLORS.warning }}
             >
+              {isRetrySslPending && <InlineSpinner />}
               Retry SSL
             </button>
           </Tooltip>
@@ -171,165 +179,6 @@ function CardFooter(props: CardFooterProps): JSX.Element {
       </div>
     </div>
   );
-}
-interface StatusBadgeProps {
-  serviceId: string;
-  isExposed: boolean;
-  service: ServiceRecord;
-  onProtocolChange: (protocol: 'https' | 'http' | null) => void;
-}
-function StatusBadge({
-  serviceId,
-  isExposed,
-  service,
-  onProtocolChange,
-}: StatusBadgeProps): JSX.Element {
-  const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
-
-  useEffect(() => {
-    if (!isExposed) {
-      setLiveStatus(null);
-      onProtocolChange(null);
-      return;
-    }
-    setLiveStatus('checking');
-    api.services
-      .checkOnline(serviceId)
-      .then(res => {
-        setLiveStatus(res.online ? 'online' : 'offline');
-        onProtocolChange(res.protocol || null);
-      })
-      .catch(() => {
-        setLiveStatus('offline');
-        onProtocolChange(null);
-      });
-  }, [serviceId, isExposed, onProtocolChange]);
-
-  return (
-    <div className="flex items-center gap-2">
-      <StatusIndicator
-        isExposed={isExposed}
-        liveStatus={liveStatus}
-        dnsExists={service.dnsExists}
-        proxyExists={service.proxyExists}
-        sslPending={service.sslPending}
-      />
-      <ServiceWarnings service={service} isExposed={isExposed} />
-    </div>
-  );
-}
-function ServiceWarnings({
-  service,
-  isExposed,
-}: {
-  service: ServiceRecord;
-  isExposed: boolean;
-}): JSX.Element {
-  const warnings = parseWarnings(service.configWarnings);
-
-  const warningBadges = [
-    { show: isExposed && service.dnsExists === false, type: 'DNS', msg: 'DNS record missing' },
-    { show: isExposed && service.proxyExists === false, type: 'Proxy', msg: 'Proxy host missing' },
-    { show: warnings.port_mismatch, type: 'Port', msg: 'Port mismatch detected' },
-    { show: warnings.scheme_mismatch, type: 'Scheme', msg: 'Scheme mismatch detected' },
-    { show: warnings.ip_mismatch, type: 'IP', msg: 'IP address mismatch detected' },
-  ];
-
-  const icons = [
-    {
-      show: service.exposureSource === 'discovered',
-      type: 'discovered',
-      msg: 'Discovered existing configuration',
-    },
-    { show: service.exposureSource === 'auto', type: 'auto', msg: 'Auto-exposed on discovery' },
-  ];
-
-  return (
-    <>
-      {warningBadges.map(
-        (w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />
-      )}
-      {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
-    </>
-  );
-}
-function StatusIndicator({
-  isExposed,
-  liveStatus,
-  sslPending,
-}: {
-  isExposed: boolean;
-  liveStatus: string | null;
-  dnsExists: boolean | null;
-  proxyExists: boolean | null;
-  sslPending: boolean | null;
-}): JSX.Element {
-  const getStatus = (): { tip: string; color: string; label: string } => {
-    if (!isExposed)
-      return {
-        tip: 'Service not exposed',
-        color: TERMINAL_COLORS.textMuted,
-        label: '\u25CB OFFLINE',
-      };
-    if (liveStatus === 'checking')
-      return { tip: 'Checking...', color: TERMINAL_COLORS.warning, label: '\u25CF CHECKING' };
-    if (liveStatus === 'online' && sslPending)
-      return {
-        tip: 'Service reachable via HTTP only. SSL setup pending or failed.',
-        color: TERMINAL_COLORS.warning,
-        label: '\u25CF HTTP ONLY',
-      };
-    if (liveStatus === 'online')
-      return { tip: 'Domain reachable', color: TERMINAL_COLORS.success, label: '\u25CF ONLINE' };
-    return {
-      tip: 'Domain not reachable',
-      color: TERMINAL_COLORS.error,
-      label: '\u25CF UNREACHABLE',
-    };
-  };
-
-  const { tip, color, label } = getStatus();
-  return (
-    <Tooltip content={tip}>
-      <span
-        className="rounded px-2 py-0.5 text-xs font-medium"
-        style={{ background: `${color}20`, color }}
-      >
-        {label}
-      </span>
-    </Tooltip>
-  );
-}
-function WarningBadge({ type, message }: { type: string; message: string }): JSX.Element {
-  const isError = type === 'DNS' || type === 'Proxy';
-  const color = isError ? TERMINAL_COLORS.error : TERMINAL_COLORS.warning;
-  return (
-    <Tooltip content={message}>
-      <span
-        className="rounded px-2 py-0.5 text-xs font-medium"
-        style={{ background: `${color}20`, color }}
-      >
-        {type}
-      </span>
-    </Tooltip>
-  );
-}
-function ExposureIcon({ type, message }: { type: string; message: string }): JSX.Element {
-  const icon = type === 'discovered' ? '\u2315' : '\u26A1';
-  return (
-    <Tooltip content={message}>
-      <span className="text-sm">{icon}</span>
-    </Tooltip>
-  );
-}
-function parseWarnings(configWarnings: string | null): Record<string, boolean> {
-  if (!configWarnings) return {};
-  try {
-    const warnings = JSON.parse(configWarnings) as string[];
-    return warnings.reduce((acc, w) => ({ ...acc, [w]: true }), {} as Record<string, boolean>);
-  } catch {
-    return {};
-  }
 }
 
 function DeleteButton({

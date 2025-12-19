@@ -14,6 +14,7 @@ interface ServiceGridProps {
   canExpose: boolean;
   canExposeReason?: string;
   onScan: () => void;
+  retrySslPending: boolean;
 }
 
 export function ServiceGrid({
@@ -29,6 +30,7 @@ export function ServiceGrid({
   canExpose,
   canExposeReason,
   onScan,
+  retrySslPending,
 }: ServiceGridProps): JSX.Element {
   if (services.length === 0) {
     return <EmptyServiceGrid onScan={onScan} />;
@@ -57,6 +59,7 @@ export function ServiceGrid({
             isLoading={loadingServiceId === service.id}
             canExpose={serviceReady}
             canExposeBlockedReason={!serviceReady ? blockedReason : undefined}
+            isRetrySslPending={retrySslPending}
           />
         );
       })}
