@@ -29,6 +29,19 @@ export const createSslRoutes = (ctx: AppContext): FastifyPluginAsync => {
       if (!host) return badRequest(reply, 'No proxy host found for this service');
 
       const result = await proxy.retrySsl(host.id, fqdn);
+
+      if (result.success) {
+        await ctx.servicesRepo.update(service.id, {
+          sslPending: false,
+          sslError: null,
+        });
+      } else {
+        await ctx.servicesRepo.update(service.id, {
+          sslPending: true,
+          sslError: result.error || 'SSL setup failed',
+        });
+      }
+
       return { success: result.success, error: result.error };
     });
   };
