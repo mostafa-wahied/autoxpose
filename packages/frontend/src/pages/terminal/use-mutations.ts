@@ -1,8 +1,16 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { api, type ServiceRecord } from '../../lib/api';
+import { useAutoExposePolling } from './use-auto-expose-polling';
 
-type ScanResult = { discovered: number; created: number; updated: number; removed: number };
+type ScanResult = {
+  discovered: number;
+  created: number;
+  updated: number;
+  removed: number;
+  autoExposed?: number;
+  autoExposingServices?: Array<{ id: string; name: string; subdomain: string }>;
+};
 type DeleteResult = { success: boolean };
 type UpdateResult = { service: ServiceRecord };
 type UpdateInput = { id: string; subdomain?: string; name?: string };
@@ -20,12 +28,36 @@ interface MutationsReturn {
 export function useTerminalMutations(): MutationsReturn {
   const queryClient = useQueryClient();
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
+  const [autoExposingIds, setAutoExposingIds] = useState<Set<string>>(new Set());
+  const scanResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scanMutation = useMutation({
     mutationFn: api.discovery.scan,
-    onSuccess: (): void => {
+    onSuccess: (data: ScanResult): void => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      if (data.autoExposingServices && data.autoExposingServices.length > 0) {
+        setAutoExposingIds(new Set(data.autoExposingServices.map(s => s.id)));
+      }
+
+      if (scanResetTimeoutRef.current) {
+        clearTimeout(scanResetTimeoutRef.current);
+      }
+
+      scanResetTimeoutRef.current = setTimeout(() => {
+        scanMutation.reset();
+      }, 30000);
     },
+  });
+
+  const handlePollingComplete = useCallback(() => {
+    setAutoExposingIds(new Set());
+  }, []);
+
+  useAutoExposePolling({
+    autoExposingIds,
+    scanMutation,
+    scanResetTimeoutRef,
+    onComplete: handlePollingComplete,
   });
 
   const deleteMutation = useMutation({

@@ -3,13 +3,25 @@ import { CommandPrompt } from '../../components/terminal';
 interface ScanNoticeData {
   created: number;
   updated: number;
+  autoExposed?: number;
+  autoExposingServices?: Array<{ id: string; name: string; subdomain: string }>;
 }
 
 export function ScanSuccessNotice({ data }: { data: ScanNoticeData }): JSX.Element {
+  const hasAutoExpose = data.autoExposed && data.autoExposed > 0;
+  const serviceNames = data.autoExposingServices?.map(s => s.name).join(', ') || '';
+
   return (
     <div className="rounded border border-[#238636] bg-[#23863620] px-4 py-2 text-sm">
-      <span className="text-[#3fb950]">{'\u2713'}</span> Scan complete: {data.created} created,{' '}
-      {data.updated} updated
+      <div>
+        <span className="text-[#3fb950]">{'✓'}</span> Scan complete: {data.created} created,{' '}
+        {data.updated} updated
+      </div>
+      {hasAutoExpose && (
+        <div className="mt-1 text-[#8b949e]">
+          <span className="text-[#f0883e]">{'⚡'}</span> Auto-exposing {serviceNames}...
+        </div>
+      )}
     </div>
   );
 }

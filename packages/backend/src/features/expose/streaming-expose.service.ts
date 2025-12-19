@@ -27,7 +27,11 @@ export class StreamingExposeService {
     private lanIp: string
   ) {}
 
-  async exposeWithProgress(serviceId: string, onProgress: ProgressCallback): Promise<void> {
+  async exposeWithProgress(
+    serviceId: string,
+    onProgress: ProgressCallback,
+    isAutoExpose = false
+  ): Promise<void> {
     const service = await this.servicesRepo.findById(serviceId);
     if (!service) {
       emitError(this.createContext(serviceId, 'expose', onProgress), 'Service not found');
@@ -68,6 +72,7 @@ export class StreamingExposeService {
       dnsResult,
       proxyResult,
       ctx,
+      isAutoExpose,
     });
   }
 
@@ -90,8 +95,9 @@ export class StreamingExposeService {
     dnsResult: { recordId?: string | null };
     proxyResult: { id: string; sslPending?: boolean; sslError?: string } | undefined;
     ctx: ExposeContext;
+    isAutoExpose: boolean;
   }): Promise<void> {
-    const { serviceId, fullDomain, dnsResult, proxyResult, ctx } = options;
+    const { serviceId, fullDomain, dnsResult, proxyResult, ctx, isAutoExpose } = options;
 
     await this.servicesRepo.update(serviceId, {
       enabled: true,
@@ -99,6 +105,7 @@ export class StreamingExposeService {
       proxyHostId: proxyResult?.id || null,
       sslPending: proxyResult?.sslPending ?? null,
       sslError: proxyResult?.sslError ?? null,
+      exposureSource: isAutoExpose ? 'auto' : 'manual',
     });
 
     const sslStatus = proxyResult

@@ -354,18 +354,11 @@ export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
 
       for (const svc of servicesToAutoExpose) {
         routesLogger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing service');
-        ctx.streamingExpose.exposeWithProgress(svc.id, createNoopProgressCallback()).catch(err => {
-          routesLogger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
-        });
-      }
-
-      const enabledServices = allServices.filter(s => s.enabled && s.subdomain);
-      const dnsConfig = await ctx.settings.getDnsConfig();
-      if (dnsConfig?.config.domain) {
-        for (const svc of enabledServices) {
-          const fqdn = `${svc.subdomain}.${dnsConfig.config.domain}`;
-          fetch(`https://${fqdn}`, { method: 'HEAD' }).catch(() => {});
-        }
+        ctx.streamingExpose
+          .exposeWithProgress(svc.id, createNoopProgressCallback(), true)
+          .catch(err => {
+            routesLogger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
+          });
       }
 
       return {
@@ -374,6 +367,11 @@ export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
         updated: result.updated.length,
         removed: result.removed.length,
         autoExposed: servicesToAutoExpose.length,
+        autoExposingServices: servicesToAutoExpose.map(s => ({
+          id: s.id,
+          name: s.name,
+          subdomain: s.subdomain,
+        })),
       };
     });
   };
