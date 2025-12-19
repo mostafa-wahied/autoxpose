@@ -34,8 +34,21 @@ export function createDnsRoutes(settings: SettingsService): FastifyPluginAsync {
     });
 
     server.delete('/records/:id', async request => {
-      const { id } = request.params as { id: string };
-      return { deleted: id };
+      try {
+        const { id } = request.params as { id: string };
+        logger.debug({ recordId: id }, 'Deleting DNS record');
+        const provider = await settings.getDnsProvider();
+        if (!provider) {
+          logger.warn('No DNS provider configured');
+          throw new Error('No DNS provider configured');
+        }
+        await provider.deleteRecord(id);
+        logger.info({ recordId: id }, 'DNS record deleted');
+        return { deleted: id };
+      } catch (error) {
+        logger.error({ error }, 'Failed to delete DNS record');
+        throw error;
+      }
     });
   };
 }

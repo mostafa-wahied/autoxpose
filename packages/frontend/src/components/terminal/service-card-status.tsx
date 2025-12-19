@@ -96,6 +96,7 @@ function ServiceWarnings({
     <>
       {badges.map((w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />)}
       <FixConfigButton service={service} warnings={warnings} />
+      <PartialExposureButtons service={service} showUnreachableReasons={showUnreachableReasons} />
       {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
     </>
   );
@@ -131,19 +132,89 @@ function FixConfigButton({
   );
 }
 
+function PartialExposureButtons({
+  service,
+}: {
+  service: ServiceRecord;
+  showUnreachableReasons: boolean;
+}): JSX.Element | null {
+  const queryClient = useQueryClient();
+
+  const dnsOnlyMutation = useMutation({
+    mutationFn: (id: string) => api.services.exposeDnsOnly(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['services'] }),
+  });
+
+  const proxyOnlyMutation = useMutation({
+    mutationFn: (id: string) => api.services.exposeProxyOnly(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['services'] }),
+  });
+
+  const hasMismatch = service.dnsExists !== service.proxyExists;
+  const showDnsButton = hasMismatch && service.proxyExists && !service.dnsExists;
+  const showProxyButton = hasMismatch && service.dnsExists && !service.proxyExists;
+
+  if (!showDnsButton && !showProxyButton) return null;
+
+  return (
+    <>
+      {showDnsButton && (
+        <PartialButton
+          onClick={() => dnsOnlyMutation.mutate(service.id)}
+          isPending={dnsOnlyMutation.isPending}
+          label="Create DNS"
+          title="Create DNS record for this service"
+        />
+      )}
+      {showProxyButton && (
+        <PartialButton
+          onClick={() => proxyOnlyMutation.mutate(service.id)}
+          isPending={proxyOnlyMutation.isPending}
+          label="Create Proxy"
+          title="Create proxy host for this service"
+        />
+      )}
+    </>
+  );
+}
+
+function PartialButton({
+  onClick,
+  isPending,
+  label,
+  title,
+}: {
+  onClick: () => void;
+  isPending: boolean;
+  label: string;
+  title: string;
+}): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      disabled={isPending}
+      className="px-2 py-0.5 text-xs bg-red-900/30 text-red-400 border border-red-700/50 rounded hover:bg-red-900/50 disabled:opacity-50"
+      title={title}
+    >
+      {isPending ? 'Creating...' : label}
+    </button>
+  );
+}
+
 function buildWarningBadges(
   warnings: ReturnType<typeof parseWarnings>,
   showUnreachableReasons: boolean,
   service: ServiceRecord
 ): Array<{ show: boolean; type: string; msg: string }> {
+  const hasMismatch = service.dnsExists !== service.proxyExists;
   return [
     {
-      show: showUnreachableReasons && service.dnsExists === false,
+      show: hasMismatch && service.dnsExists === false && service.proxyExists === true,
       type: 'DNS',
       msg: 'DNS record missing',
     },
     {
-      show: showUnreachableReasons && service.proxyExists === false,
+      show: hasMismatch && service.proxyExists === false && service.dnsExists === true,
       type: 'Proxy',
       msg: 'Proxy host missing',
     },

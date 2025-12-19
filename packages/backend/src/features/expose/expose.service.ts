@@ -150,6 +150,59 @@ export class ExposeService {
     return updated!;
   }
 
+  async exposeDnsOnly(serviceId: string): Promise<ExposeResult> {
+    const service = await this.context.servicesRepo.findById(serviceId);
+    if (!service) throw new Error('Service not found');
+    if (service.dnsRecordId) throw new Error('DNS record already exists');
+
+    const dnsRecordId = await this.createDnsRecord(service);
+    if (!dnsRecordId) throw new Error('No DNS provider configured');
+
+    await this.context.servicesRepo.update(serviceId, {
+      dnsRecordId,
+      dnsExists: true,
+    });
+
+    const updated = await this.context.servicesRepo.findById(serviceId);
+    if (this.context.sync && updated) {
+      await this.context.sync.detectExistingConfigurations([updated]);
+    }
+
+    return { service: updated!, dnsRecordId };
+  }
+
+  async exposeProxyOnly(serviceId: string): Promise<ExposeResult> {
+    const service = await this.context.servicesRepo.findById(serviceId);
+    if (!service) throw new Error('Service not found');
+    if (service.proxyHostId) throw new Error('Proxy host already exists');
+
+    await this.updateSchemeIfNeeded(serviceId, service);
+    const updatedService = await this.context.servicesRepo.findById(serviceId);
+    if (!updatedService) throw new Error('Service not found after scheme update');
+
+    const baseDomain = await this.getBaseDomain();
+    const fullDomain = this.buildFullDomain(updatedService.subdomain, baseDomain);
+    const proxyResult = await this.createProxyHost(updatedService, fullDomain);
+    if (!proxyResult) throw new Error('No proxy provider configured');
+
+    await this.context.servicesRepo.update(serviceId, {
+      proxyHostId: proxyResult.id,
+      proxyExists: true,
+      sslPending: proxyResult.sslPending ?? null,
+      sslError: proxyResult.sslError ?? null,
+    });
+
+    const updated = await this.context.servicesRepo.findById(serviceId);
+    if (this.context.sync && updated) {
+      await this.context.sync.detectExistingConfigurations([updated]);
+    }
+
+    return {
+      service: updated!,
+      proxyHostId: proxyResult.id,
+    };
+  }
+
   private async getBaseDomain(): Promise<string | null> {
     const cfg = await this.context.settings.getDnsConfig();
     return cfg?.config.domain ?? null;

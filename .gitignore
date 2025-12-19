@@ -21,6 +21,7 @@ coverage/
 *.tsbuildinfo
 
 .dev/
+dev/
 docker-compose.dev.yaml
 docker-compose.services.yaml
 .github/copilot-instructions.md

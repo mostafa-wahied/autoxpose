@@ -160,6 +160,14 @@ export const api = {
       request<{ fixed: string[]; errors: string[] }>(`/services/${id}/fix-config`, {
         method: 'POST',
       }),
+    exposeDnsOnly: (id: string): Promise<{ service: ServiceRecord; dnsRecordId?: string }> =>
+      request<{ service: ServiceRecord; dnsRecordId?: string }>(`/services/${id}/dns-only`, {
+        method: 'POST',
+      }),
+    exposeProxyOnly: (id: string): Promise<{ service: ServiceRecord; proxyHostId?: string }> =>
+      request<{ service: ServiceRecord; proxyHostId?: string }>(`/services/${id}/proxy-only`, {
+        method: 'POST',
+      }),
   },
   discovery: {
     containers: (): Promise<{ containers: DiscoveredContainer[] }> =>

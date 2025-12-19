@@ -16,5 +16,17 @@ export function createExposeRoutes(expose: ExposeService): FastifyPluginAsync {
       const result = await expose.unexpose(id);
       return reply.code(200).send({ service: result });
     });
+
+    server.post<{ Params: IdParams }>('/:id/dns-only', async (request, reply) => {
+      const { id } = request.params;
+      const result = await expose.exposeDnsOnly(id);
+      return reply.code(200).send(result);
+    });
+
+    server.post<{ Params: IdParams }>('/:id/proxy-only', async (request, reply) => {
+      const { id } = request.params;
+      const result = await expose.exposeProxyOnly(id);
+      return reply.code(200).send(result);
+    });
   };
 }
