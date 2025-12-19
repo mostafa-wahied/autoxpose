@@ -18,6 +18,7 @@ interface TerminalServiceCardProps {
   canExpose: boolean;
   canExposeBlockedReason?: string;
   isRetrySslPending?: boolean;
+  scanTrigger?: number;
 }
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
@@ -32,6 +33,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     isActive,
     canExposeBlockedReason,
     isRetrySslPending = false,
+    scanTrigger,
   } = props;
   const [showDelete, setShowDelete] = useState(false);
   const [protocol, setProtocol] = useState<'https' | 'http' | null>(null);
@@ -72,6 +74,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         onRetrySsl={onRetrySsl}
         onProtocolChange={setProtocol}
         isRetrySslPending={isRetrySslPending}
+        scanTrigger={scanTrigger}
       />
     </div>
   );
@@ -130,6 +133,7 @@ interface CardFooterProps {
   onRetrySsl: () => void;
   onProtocolChange: (protocol: 'https' | 'http' | null) => void;
   isRetrySslPending: boolean;
+  scanTrigger?: number;
 }
 function CardFooter(props: CardFooterProps): JSX.Element {
   const {
@@ -145,6 +149,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     onRetrySsl,
     onProtocolChange,
     isRetrySslPending,
+    scanTrigger,
   } = props;
   return (
     <div className="flex items-center justify-between">
@@ -153,6 +158,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
         isExposed={isExposed}
         service={service}
         onProtocolChange={onProtocolChange}
+        scanTrigger={scanTrigger}
       />
       <div className="flex items-center gap-2">
         {isExposed && service.sslPending && (

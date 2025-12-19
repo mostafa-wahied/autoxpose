@@ -8,6 +8,7 @@ interface StatusBadgeProps {
   isExposed: boolean;
   service: ServiceRecord;
   onProtocolChange: (protocol: 'https' | 'http' | null) => void;
+  scanTrigger?: number;
 }
 
 export function StatusBadge({
@@ -15,6 +16,7 @@ export function StatusBadge({
   isExposed,
   service,
   onProtocolChange,
+  scanTrigger,
 }: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
 
@@ -35,7 +37,7 @@ export function StatusBadge({
         setLiveStatus('offline');
         onProtocolChange(null);
       });
-  }, [serviceId, isExposed, onProtocolChange]);
+  }, [serviceId, isExposed, onProtocolChange, scanTrigger]);
 
   return (
     <div className="flex items-center gap-2">
@@ -172,7 +174,7 @@ function WarningBadge({ type, message }: { type: string; message: string }): JSX
 }
 
 function ExposureIcon({ type, message }: { type: string; message: string }): JSX.Element {
-  const icon = type === 'discovered' ? '\u2315' : '\u26A1';
+  const icon = type === 'discovered' ? '\u2315' : '\u26A1\uFE0E';
   return (
     <Tooltip content={message}>
       <span className="text-sm">{icon}</span>

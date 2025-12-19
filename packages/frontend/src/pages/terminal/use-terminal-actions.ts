@@ -31,6 +31,7 @@ export interface TerminalState {
   deletingServiceId: string | null;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  scanTrigger: number;
 }
 
 interface ConfirmParams {
@@ -256,6 +257,7 @@ export function useTerminalActions({ services, needsSetup = false }: Params): {
       deletingServiceId: mutations.deletingServiceId,
       settingsOpen: ctx.settingsOpen,
       setSettingsOpen: ctx.setSettingsOpen,
+      scanTrigger: mutations.scanTrigger,
     }),
     [streamState, mutations, confirmAction, ctx.settingsOpen, ctx.setSettingsOpen]
   );

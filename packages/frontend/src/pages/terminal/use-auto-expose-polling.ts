@@ -45,7 +45,12 @@ export function useAutoExposePolling(config: PollingConfig): void {
 
     pollIntervalRef.current = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+
       if (checkCompletion()) {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
         handleComplete();
       }
     }, 2000);

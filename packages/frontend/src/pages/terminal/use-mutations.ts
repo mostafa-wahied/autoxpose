@@ -23,18 +23,21 @@ interface MutationsReturn {
   retrySslMutation: UseMutationResult<RetrySslResult, Error, string>;
   deletingServiceId: string | null;
   setDeletingServiceId: (id: string | null) => void;
+  scanTrigger: number;
 }
 
 export function useTerminalMutations(): MutationsReturn {
   const queryClient = useQueryClient();
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
   const [autoExposingIds, setAutoExposingIds] = useState<Set<string>>(new Set());
+  const [scanTrigger, setScanTrigger] = useState(0);
   const scanResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scanMutation = useMutation({
     mutationFn: api.discovery.scan,
     onSuccess: (data: ScanResult): void => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      setScanTrigger(prev => prev + 1);
       if (data.autoExposingServices && data.autoExposingServices.length > 0) {
         setAutoExposingIds(new Set(data.autoExposingServices.map(s => s.id)));
       }
@@ -94,5 +97,6 @@ export function useTerminalMutations(): MutationsReturn {
     retrySslMutation,
     deletingServiceId,
     setDeletingServiceId,
+    scanTrigger,
   };
 }
