@@ -1,6 +1,7 @@
 import type { DiscoveredService } from '../features/discovery/docker.js';
 import { DockerDiscoveryProvider } from '../features/discovery/docker.js';
 import { ExposeService, StreamingExposeService } from '../features/expose/index.js';
+import type { ProgressCallback } from '../features/expose/expose-handlers.js';
 import { ServicesRepository } from '../features/services/services.repository.js';
 import { ServicesService } from '../features/services/services.service.js';
 import { SyncService } from '../features/services/sync.service.js';
@@ -9,6 +10,19 @@ import type { AppDatabase } from './database/index.js';
 import { createLogger } from './logger/index.js';
 
 const logger = createLogger('context');
+
+function createNoopProgressCallback(): ProgressCallback {
+  return event => {
+    logger.debug(
+      {
+        serviceId: event.serviceId,
+        action: event.action,
+        type: event.type,
+      },
+      'Auto-expose progress'
+    );
+  };
+}
 
 export interface AppContext {
   services: ServicesService;
@@ -71,6 +85,7 @@ export function createAppContext(
     const deps: DockerEventDeps = {
       services: core.services,
       expose: core.expose,
+      streamingExpose: core.streamingExpose,
       settings: core.settings,
     };
     discovery.watch((svc: DiscoveredService, event: string) => handleDockerEvent(svc, event, deps));
@@ -83,6 +98,7 @@ export function createAppContext(
 interface DockerEventDeps {
   services: ServicesService;
   expose: ExposeService;
+  streamingExpose: StreamingExposeService;
   settings: SettingsService;
 }
 
@@ -103,9 +119,11 @@ async function handleDockerEvent(
       }
       const svc = result.created[0];
       logger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing on container start');
-      deps.expose.expose(svc.id).catch(err => {
-        logger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
-      });
+      deps.streamingExpose
+        .exposeWithProgress(svc.id, createNoopProgressCallback())
+        .catch((err: unknown) => {
+          logger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
+        });
     }
   }
 }

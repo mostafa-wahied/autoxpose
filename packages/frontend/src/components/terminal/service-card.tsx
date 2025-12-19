@@ -4,7 +4,6 @@ import { EditableServiceName, EditableSubdomain } from './editable';
 import { InlineSpinner } from './progress';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
-
 interface TerminalServiceCardProps {
   service: ServiceRecord;
   baseDomain: string | null;
@@ -12,12 +11,12 @@ interface TerminalServiceCardProps {
   onDelete: () => void;
   onSubdomainChange: (subdomain: string) => void;
   onNameChange: (name: string) => void;
+  onRetrySsl: () => void;
   isLoading: boolean;
   isActive?: boolean;
   canExpose: boolean;
   canExposeBlockedReason?: string;
 }
-
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
     service,
@@ -26,11 +25,13 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     onDelete,
     onSubdomainChange,
     onNameChange,
+    onRetrySsl,
     isLoading,
     isActive,
     canExposeBlockedReason,
   } = props;
   const [showDelete, setShowDelete] = useState(false);
+  const [protocol, setProtocol] = useState<'https' | 'http' | null>(null);
   const isExposed = Boolean(service.enabled);
   const borderClass = isActive ? 'border-[#58a6ff]' : 'border-[#30363d]';
   const canAct = props.canExpose || isExposed;
@@ -52,6 +53,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         value={service.subdomain}
         baseDomain={baseDomain}
         isExposed={isExposed}
+        protocol={protocol}
         onChange={onSubdomainChange}
       />
       <CardFooter
@@ -64,11 +66,12 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         canExposeBlockedReason={canExposeBlockedReason}
         onExpose={onExpose}
         onDelete={onDelete}
+        onRetrySsl={onRetrySsl}
+        onProtocolChange={setProtocol}
       />
     </div>
   );
 }
-
 interface CardHeaderProps {
   name: string;
   containerName: string;
@@ -76,7 +79,6 @@ interface CardHeaderProps {
   scheme: string;
   onNameChange: (name: string) => void;
 }
-
 function CardHeader({
   name,
   containerName,
@@ -111,7 +113,6 @@ function CardHeader({
     </div>
   );
 }
-
 interface CardFooterProps {
   service: ServiceRecord;
   serviceId: string;
@@ -122,8 +123,9 @@ interface CardFooterProps {
   canExposeBlockedReason?: string;
   onExpose: () => void;
   onDelete: () => void;
+  onRetrySsl: () => void;
+  onProtocolChange: (protocol: 'https' | 'http' | null) => void;
 }
-
 function CardFooter(props: CardFooterProps): JSX.Element {
   const {
     service,
@@ -135,11 +137,29 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     canExposeBlockedReason,
     onExpose,
     onDelete,
+    onRetrySsl,
+    onProtocolChange,
   } = props;
   return (
     <div className="flex items-center justify-between">
-      <StatusBadge serviceId={serviceId} isExposed={isExposed} service={service} />
+      <StatusBadge
+        serviceId={serviceId}
+        isExposed={isExposed}
+        service={service}
+        onProtocolChange={onProtocolChange}
+      />
       <div className="flex items-center gap-2">
+        {isExposed && service.sslPending && (
+          <Tooltip content="Retry SSL certificate setup">
+            <button
+              onClick={onRetrySsl}
+              className="rounded border border-[#f0883e] px-2 py-1 text-xs transition-colors hover:bg-[#f0883e20]"
+              style={{ color: TERMINAL_COLORS.warning }}
+            >
+              Retry SSL
+            </button>
+          </Tooltip>
+        )}
         <DeleteButton visible={showDelete} onClick={onDelete} />
         <ExposeButton
           isExposed={isExposed}
@@ -152,31 +172,38 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     </div>
   );
 }
-
 interface StatusBadgeProps {
   serviceId: string;
   isExposed: boolean;
   service: ServiceRecord;
+  onProtocolChange: (protocol: 'https' | 'http' | null) => void;
 }
-
-function StatusBadge({ serviceId, isExposed, service }: StatusBadgeProps): JSX.Element {
+function StatusBadge({
+  serviceId,
+  isExposed,
+  service,
+  onProtocolChange,
+}: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
 
   useEffect(() => {
     if (!isExposed) {
       setLiveStatus(null);
+      onProtocolChange(null);
       return;
     }
     setLiveStatus('checking');
     api.services
       .checkOnline(serviceId)
-      .then(res => setLiveStatus(res.online ? 'online' : 'offline'))
-      .catch(() => setLiveStatus('offline'));
-  }, [serviceId, isExposed]);
-
-  const warnings = parseWarnings(service.configWarnings);
-  const showDnsWarning = isExposed && service.dnsExists === false;
-  const showProxyWarning = isExposed && service.proxyExists === false;
+      .then(res => {
+        setLiveStatus(res.online ? 'online' : 'offline');
+        onProtocolChange(res.protocol || null);
+      })
+      .catch(() => {
+        setLiveStatus('offline');
+        onProtocolChange(null);
+      });
+  }, [serviceId, isExposed, onProtocolChange]);
 
   return (
     <div className="flex items-center gap-2">
@@ -185,32 +212,57 @@ function StatusBadge({ serviceId, isExposed, service }: StatusBadgeProps): JSX.E
         liveStatus={liveStatus}
         dnsExists={service.dnsExists}
         proxyExists={service.proxyExists}
+        sslPending={service.sslPending}
       />
-      {showDnsWarning && <WarningBadge type="DNS" message="DNS record missing" />}
-      {showProxyWarning && <WarningBadge type="Proxy" message="Proxy host missing" />}
-      {warnings.port_mismatch && <WarningBadge type="Port" message="Port mismatch detected" />}
-      {warnings.scheme_mismatch && (
-        <WarningBadge type="Scheme" message="Scheme mismatch detected" />
-      )}
-      {warnings.ip_mismatch && <WarningBadge type="IP" message="IP address mismatch detected" />}
-      {service.exposureSource === 'discovered' && (
-        <ExposureIcon type="discovered" message="Discovered existing configuration" />
-      )}
-      {service.exposureSource === 'auto' && (
-        <ExposureIcon type="auto" message="Auto-exposed on discovery" />
-      )}
+      <ServiceWarnings service={service} isExposed={isExposed} />
     </div>
   );
 }
+function ServiceWarnings({
+  service,
+  isExposed,
+}: {
+  service: ServiceRecord;
+  isExposed: boolean;
+}): JSX.Element {
+  const warnings = parseWarnings(service.configWarnings);
 
+  const warningBadges = [
+    { show: isExposed && service.dnsExists === false, type: 'DNS', msg: 'DNS record missing' },
+    { show: isExposed && service.proxyExists === false, type: 'Proxy', msg: 'Proxy host missing' },
+    { show: warnings.port_mismatch, type: 'Port', msg: 'Port mismatch detected' },
+    { show: warnings.scheme_mismatch, type: 'Scheme', msg: 'Scheme mismatch detected' },
+    { show: warnings.ip_mismatch, type: 'IP', msg: 'IP address mismatch detected' },
+  ];
+
+  const icons = [
+    {
+      show: service.exposureSource === 'discovered',
+      type: 'discovered',
+      msg: 'Discovered existing configuration',
+    },
+    { show: service.exposureSource === 'auto', type: 'auto', msg: 'Auto-exposed on discovery' },
+  ];
+
+  return (
+    <>
+      {warningBadges.map(
+        (w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />
+      )}
+      {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
+    </>
+  );
+}
 function StatusIndicator({
   isExposed,
   liveStatus,
+  sslPending,
 }: {
   isExposed: boolean;
   liveStatus: string | null;
   dnsExists: boolean | null;
   proxyExists: boolean | null;
+  sslPending: boolean | null;
 }): JSX.Element {
   const getStatus = (): { tip: string; color: string; label: string } => {
     if (!isExposed)
@@ -221,6 +273,12 @@ function StatusIndicator({
       };
     if (liveStatus === 'checking')
       return { tip: 'Checking...', color: TERMINAL_COLORS.warning, label: '\u25CF CHECKING' };
+    if (liveStatus === 'online' && sslPending)
+      return {
+        tip: 'Service reachable via HTTP only. SSL setup pending or failed.',
+        color: TERMINAL_COLORS.warning,
+        label: '\u25CF HTTP ONLY',
+      };
     if (liveStatus === 'online')
       return { tip: 'Domain reachable', color: TERMINAL_COLORS.success, label: '\u25CF ONLINE' };
     return {
@@ -242,7 +300,6 @@ function StatusIndicator({
     </Tooltip>
   );
 }
-
 function WarningBadge({ type, message }: { type: string; message: string }): JSX.Element {
   const isError = type === 'DNS' || type === 'Proxy';
   const color = isError ? TERMINAL_COLORS.error : TERMINAL_COLORS.warning;
@@ -257,16 +314,14 @@ function WarningBadge({ type, message }: { type: string; message: string }): JSX
     </Tooltip>
   );
 }
-
 function ExposureIcon({ type, message }: { type: string; message: string }): JSX.Element {
-  const icon = type === 'discovered' ? '\ud83d\udd0d' : '\u26a1';
+  const icon = type === 'discovered' ? '\u2315' : '\u26A1';
   return (
     <Tooltip content={message}>
       <span className="text-sm">{icon}</span>
     </Tooltip>
   );
 }
-
 function parseWarnings(configWarnings: string | null): Record<string, boolean> {
   if (!configWarnings) return {};
   try {

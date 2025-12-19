@@ -16,6 +16,9 @@ export type Service = {
   reachabilityStatus: string | null;
   configWarnings: string | null;
   exposedSubdomain: string | null;
+  sslPending: boolean | null;
+  sslError: string | null;
+  sslForced: boolean;
   createdAt: Date;
   updatedAt: Date;
 };

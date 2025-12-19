@@ -79,6 +79,7 @@ export function createSettingsRoutes(settings: SettingsService): FastifyPluginAs
     registerProxyRoutes(server, settings);
     registerStatusRoute(server, settings);
     registerTestRoutes(server, settings);
+    registerExportImportRoutes(server, settings);
   };
 }
 
@@ -153,5 +154,30 @@ function registerTestRoutes(
     const cfg = await settings.getProxyConfig();
     if (!cfg) return { ok: false, error: 'Proxy not configured' };
     return testProxyProvider(cfg.provider, cfg.config as Parameters<typeof testProxyProvider>[1]);
+  });
+}
+
+function registerExportImportRoutes(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.get('/export', async () => {
+    const dnsCfg = await settings.getDnsConfig();
+    const proxyCfg = await settings.getProxyConfig();
+    return {
+      dns: dnsCfg || null,
+      proxy: proxyCfg || null,
+    };
+  });
+
+  server.post<{ Body: { dns: ParsedConfig; proxy: ParsedConfig } }>('/import', async request => {
+    const { dns, proxy } = request.body;
+    if (dns?.provider && dns.config) {
+      await settings.saveDnsConfig(dns.provider, dns.config);
+    }
+    if (proxy?.provider && proxy.config) {
+      await settings.saveProxyConfig(proxy.provider, proxy.config);
+    }
+    return { success: true };
   });
 }

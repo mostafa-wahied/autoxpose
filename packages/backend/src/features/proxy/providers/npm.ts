@@ -82,7 +82,7 @@ export class NpmProxyProvider implements ProxyProvider {
     }
   }
 
-  private async waitForDns(domain: string, maxAttempts = 12): Promise<boolean> {
+  private async waitForDns(domain: string, maxAttempts = 6): Promise<boolean> {
     for (let i = 1; i <= maxAttempts; i++) {
       try {
         logger.info({ domain, attempt: i, maxAttempts }, 'Checking DNS...');
@@ -90,7 +90,7 @@ export class NpmProxyProvider implements ProxyProvider {
         logger.info({ domain }, 'DNS resolves locally');
         return true;
       } catch {
-        if (i < maxAttempts) await new Promise(r => setTimeout(r, 10000));
+        if (i < maxAttempts) await new Promise(r => setTimeout(r, 5000));
       }
     }
     return false;
@@ -222,12 +222,18 @@ export class NpmProxyProvider implements ProxyProvider {
 
   private mapHost(raw: Record<string, unknown>): ProxyHost {
     const domains = raw.domain_names as string[];
+    const certId = Number(raw.certificate_id);
+    const sslForced = Boolean(raw.ssl_forced);
+    const hasHttpOnly = certId === 0 && sslForced === false;
+
     return {
       id: String(raw.id),
       domain: domains[0] || '',
       targetHost: String(raw.forward_host),
       targetPort: Number(raw.forward_port),
-      ssl: Boolean(raw.ssl_forced),
+      ssl: sslForced,
+      sslPending: hasHttpOnly ? true : undefined,
+      sslError: hasHttpOnly ? 'SSL certificate not configured (HTTP Only)' : undefined,
       enabled: Boolean(raw.enabled),
     };
   }

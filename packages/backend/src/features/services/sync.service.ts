@@ -76,19 +76,24 @@ export class SyncService {
     proxy: Awaited<ReturnType<SettingsService['getProxyProvider']>>,
     baseDomain: string
   ): Promise<boolean> {
-    const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
-    const dnsRecord = dns ? await dns.findByHostname(service.subdomain) : null;
-    const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
-    const needsSync = this.checkNeedsSync(service, dnsRecord, proxyHost);
+    try {
+      const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+      const dnsRecord = dns ? await dns.findByHostname(service.subdomain) : null;
+      const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
+      const needsSync = this.checkNeedsSync(service, dnsRecord, proxyHost);
 
-    if (!needsSync) return false;
+      if (!needsSync) return false;
 
-    await this.servicesRepo.update(service.id, {
-      enabled: Boolean(dnsRecord) || Boolean(proxyHost),
-      dnsRecordId: dnsRecord?.id ?? null,
-      proxyHostId: proxyHost?.id ?? null,
-    });
-    return true;
+      await this.servicesRepo.update(service.id, {
+        enabled: Boolean(dnsRecord) || Boolean(proxyHost),
+        dnsRecordId: dnsRecord?.id ?? null,
+        proxyHostId: proxyHost?.id ?? null,
+      });
+      return true;
+    } catch (error) {
+      logger.error({ error, serviceId: service.id }, 'Failed to sync service');
+      return false;
+    }
   }
 
   private checkNeedsSync(
@@ -134,9 +139,8 @@ export class SyncService {
   }
 
   private buildStatus(svc: ServiceRecord, data: ProviderData): SyncStatus {
-    const fullDomain = data.baseDomain ? `${svc.subdomain}.${data.baseDomain}` : svc.subdomain;
-    const dnsMatch = data.dnsRecords.find(r => r.hostname === svc.subdomain && r.type === 'A');
-    const proxyMatch = data.proxyHosts.find(h => h.domain === fullDomain);
+    const dnsMatch = this.findMatchingDnsRecord(svc, data.dnsRecords, data.baseDomain);
+    const proxyMatch = this.findMatchingProxyHost(svc, data.proxyHosts, data.baseDomain);
 
     const dbEnabled = Boolean(svc.enabled);
     const hasDns = Boolean(dnsMatch);
@@ -166,32 +170,128 @@ export class SyncService {
     }
   }
 
+  private fuzzyMatchSubdomain(subdomain: string, containerName: string): boolean {
+    const sub = subdomain.toLowerCase();
+    const name = containerName.toLowerCase();
+    if (name === sub) return true;
+    if (name.includes(sub)) return true;
+    const parts = name.split(/[-_]/);
+    return parts.some(part => part === sub);
+  }
+
+  private findMatchingDnsRecord(
+    service: ServiceRecord,
+    records: DnsRecord[],
+    baseDomain: string
+  ): DnsRecord | undefined {
+    const exactDomain = this.buildFullDomain(service.subdomain, baseDomain);
+    const exactMatch = records.find(r => r.hostname === exactDomain && r.type === 'A');
+    if (exactMatch) return exactMatch;
+
+    return records.find(r => {
+      if (r.type !== 'A') return false;
+      const recordSub = this.extractSubdomain(r.hostname, baseDomain);
+      return recordSub && this.fuzzyMatchSubdomain(recordSub, service.name);
+    });
+  }
+
+  private findMatchingProxyHost(
+    service: ServiceRecord,
+    hosts: ProxyHost[],
+    baseDomain: string
+  ): ProxyHost | undefined {
+    const exactDomain = this.buildFullDomain(service.subdomain, baseDomain);
+    const exactMatch = hosts.find(h => h.domain === exactDomain);
+    if (exactMatch) return exactMatch;
+
+    const fuzzyMatch = hosts.find(h => {
+      const hostSub = this.extractSubdomain(h.domain, baseDomain);
+      return hostSub && this.fuzzyMatchSubdomain(hostSub, service.name);
+    });
+    if (fuzzyMatch) return fuzzyMatch;
+
+    return hosts.find(h => h.targetPort === service.port);
+  }
+
   private async detectServiceConfiguration(
     service: ServiceRecord,
     data: ProviderData
   ): Promise<void> {
-    const fullDomain = this.buildFullDomain(service.subdomain, data.baseDomain);
-    const dnsRecord = data.dnsRecords.find(r => r.hostname === service.subdomain && r.type === 'A');
-    const proxyHost = data.proxyHosts.find(h => h.domain === fullDomain);
+    let dnsRecord = this.findMatchingDnsRecord(service, data.dnsRecords, data.baseDomain);
+    const proxyHost = this.findMatchingProxyHost(service, data.proxyHosts, data.baseDomain);
 
-    const dnsExists = Boolean(dnsRecord);
-    const proxyExists = Boolean(proxyHost);
-    const warnings = this.detectConfigWarnings(service, proxyHost || null);
+    this.logDetectionResults(service, dnsRecord, proxyHost, data);
 
-    const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
     const exposedSubdomain = proxyHost
       ? this.extractSubdomain(proxyHost.domain, data.baseDomain)
       : null;
 
-    await this.servicesRepo.update(service.id, {
+    if (proxyHost && exposedSubdomain && exposedSubdomain !== service.subdomain) {
+      const fullDomain = this.buildFullDomain(exposedSubdomain, data.baseDomain);
+      dnsRecord = data.dnsRecords.find(r => r.hostname === fullDomain && r.type === 'A');
+    }
+
+    const updateData = this.buildServiceUpdate(service, dnsRecord, proxyHost, exposedSubdomain);
+    await this.servicesRepo.update(service.id, updateData);
+  }
+
+  private buildServiceUpdate(
+    service: ServiceRecord,
+    dnsRecord: DnsRecord | undefined,
+    proxyHost: ProxyHost | undefined,
+    exposedSubdomain: string | null
+  ): {
+    exposureSource: string | null;
+    dnsExists: boolean;
+    proxyExists: boolean;
+    configWarnings: null;
+    exposedSubdomain: string | null;
+    dnsRecordId: string | null;
+    proxyHostId: string | null;
+    enabled: boolean;
+    sslPending: boolean | null;
+    sslError: string | null;
+    subdomain?: string;
+  } {
+    const dnsExists = Boolean(dnsRecord);
+    const proxyExists = Boolean(proxyHost);
+    const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
+    const shouldBeEnabled = dnsExists && proxyExists;
+    const subdomainNeedsUpdate = exposedSubdomain && exposedSubdomain !== service.subdomain;
+
+    return {
       exposureSource,
       dnsExists,
       proxyExists,
-      configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
+      configWarnings: null,
       exposedSubdomain,
       dnsRecordId: dnsRecord?.id ?? service.dnsRecordId,
       proxyHostId: proxyHost?.id ?? service.proxyHostId,
-    });
+      enabled: shouldBeEnabled,
+      sslPending: proxyHost?.sslPending ?? null,
+      sslError: proxyHost?.sslError ?? null,
+      ...(subdomainNeedsUpdate && { subdomain: exposedSubdomain }),
+    };
+  }
+
+  private logDetectionResults(
+    service: ServiceRecord,
+    dnsRecord: DnsRecord | undefined,
+    proxyHost: ProxyHost | undefined,
+    data: ProviderData
+  ): void {
+    logger.debug(
+      {
+        serviceId: service.id,
+        serviceName: service.name,
+        subdomain: service.subdomain,
+        foundDnsRecord: dnsRecord?.id ?? null,
+        foundProxyHost: proxyHost?.id ?? null,
+        totalDnsRecords: data.dnsRecords.length,
+        totalProxyHosts: data.proxyHosts.length,
+      },
+      'Sync detection results'
+    );
   }
 
   private determineExposureSource(
@@ -206,27 +306,6 @@ export class SyncService {
       return service.exposureSource || 'manual';
     }
     return null;
-  }
-
-  private detectConfigWarnings(service: ServiceRecord, proxyHost: ProxyHost | null): string[] {
-    const warnings: string[] = [];
-
-    if (!proxyHost) return warnings;
-
-    if (proxyHost.targetPort !== service.port) {
-      warnings.push('port_mismatch');
-    }
-
-    const proxyScheme = proxyHost.ssl ? 'https' : 'http';
-    if (proxyScheme !== service.scheme) {
-      warnings.push('scheme_mismatch');
-    }
-
-    if (proxyHost.targetHost !== service.sourceId) {
-      warnings.push('ip_mismatch');
-    }
-
-    return warnings;
   }
 
   private extractSubdomain(fullDomain: string, baseDomain: string): string {

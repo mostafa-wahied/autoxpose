@@ -80,8 +80,8 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const dns = await ctx.settings.getDnsConfig();
       if (!dns?.config.domain) return { online: false };
       const fqdn = `${service.subdomain}.${dns.config.domain}`;
-      const result = await checkDomainReachable(fqdn);
-      return { online: result.ok, domain: fqdn };
+      const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
+      return { online: result.ok, domain: fqdn, protocol: result.protocol };
     });
 
     await server.register(createSslRoutes(ctx));

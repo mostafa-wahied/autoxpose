@@ -23,21 +23,21 @@ export class ExposeService {
     this.context = context;
   }
 
-  async expose(serviceId: string): Promise<ExposeResult> {
+  async expose(serviceId: string, isAutoExpose = false): Promise<ExposeResult> {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
     await this.updateSchemeIfNeeded(serviceId, service);
 
-    const { dnsRecordId, proxyHostId } = await this.createProviderResources(service);
+    const { dnsRecordId, proxyHostId, sslPending, sslError } =
+      await this.createProviderResources(service);
     if (!dnsRecordId && !proxyHostId) throw new Error('No providers configured');
 
-    await this.context.servicesRepo.update(serviceId, {
-      enabled: true,
-      dnsRecordId: dnsRecordId ?? null,
-      proxyHostId: proxyHostId ?? null,
-      exposureSource: 'manual',
-    });
+    await this.updateServiceWithProviderResources(
+      serviceId,
+      { dnsRecordId, proxyHostId, sslPending, sslError },
+      isAutoExpose
+    );
 
     const updated = await this.context.servicesRepo.findById(serviceId);
     if (this.context.sync && updated) {
@@ -45,6 +45,26 @@ export class ExposeService {
     }
 
     return { service: updated!, dnsRecordId, proxyHostId };
+  }
+
+  private async updateServiceWithProviderResources(
+    serviceId: string,
+    resources: {
+      dnsRecordId?: string;
+      proxyHostId?: string;
+      sslPending?: boolean;
+      sslError?: string;
+    },
+    isAutoExpose: boolean
+  ): Promise<void> {
+    await this.context.servicesRepo.update(serviceId, {
+      enabled: true,
+      dnsRecordId: resources.dnsRecordId ?? null,
+      proxyHostId: resources.proxyHostId ?? null,
+      exposureSource: isAutoExpose ? 'auto' : 'manual',
+      sslPending: resources.sslPending ?? null,
+      sslError: resources.sslError ?? null,
+    });
   }
 
   private async updateSchemeIfNeeded(serviceId: string, service: ServiceRecord): Promise<void> {
@@ -55,16 +75,27 @@ export class ExposeService {
     }
   }
 
-  private async createProviderResources(
-    service: ServiceRecord
-  ): Promise<{ dnsRecordId?: string; proxyHostId?: string }> {
+  private async createProviderResources(service: ServiceRecord): Promise<{
+    dnsRecordId?: string;
+    proxyHostId?: string;
+    sslPending?: boolean;
+    sslError?: string;
+  }> {
     const baseDomain = await this.getBaseDomain();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
 
     const dnsRecordId = service.dnsRecordId ?? (await this.createDnsRecord(service));
-    const proxyHostId = service.proxyHostId ?? (await this.createProxyHost(service, fullDomain));
+    const proxyResult =
+      service.proxyHostId !== null
+        ? { id: service.proxyHostId }
+        : await this.createProxyHost(service, fullDomain);
 
-    return { dnsRecordId, proxyHostId };
+    return {
+      dnsRecordId,
+      proxyHostId: proxyResult?.id,
+      sslPending: proxyResult?.sslPending,
+      sslError: proxyResult?.sslError,
+    };
   }
 
   private async determineScheme(service: ServiceRecord): Promise<string> {
@@ -91,8 +122,17 @@ export class ExposeService {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
-    await this.removeDnsRecord(service);
-    await this.removeProxyHost(service);
+    try {
+      await this.removeDnsRecord(service);
+    } catch (error) {
+      logger.error({ serviceId, error }, 'Failed to delete DNS record');
+    }
+
+    try {
+      await this.removeProxyHost(service);
+    } catch (error) {
+      logger.error({ serviceId, error }, 'Failed to delete proxy host');
+    }
 
     await this.context.servicesRepo.update(serviceId, {
       enabled: false,
@@ -133,7 +173,7 @@ export class ExposeService {
   private async createProxyHost(
     svc: ServiceRecord,
     fullDomain: string
-  ): Promise<string | undefined> {
+  ): Promise<{ id: string; sslPending?: boolean; sslError?: string } | undefined> {
     const proxy = await this.context.settings.getProxyProvider();
     if (!proxy) return undefined;
 
@@ -144,7 +184,7 @@ export class ExposeService {
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
     });
-    return host.id;
+    return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   }
 
   private async removeDnsRecord(svc: ServiceRecord): Promise<void> {

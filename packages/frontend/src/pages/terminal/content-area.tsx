@@ -44,6 +44,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         onDelete={actions.handleDelete}
         onSubdomainChange={actions.handleSubdomainChange}
         onNameChange={actions.handleNameChange}
+        onRetrySsl={actions.handleRetrySslForService}
         loadingServiceId={loadingServiceId}
         baseDomain={baseDomain}
         canExpose={canExpose}

@@ -21,6 +21,9 @@ export interface ServiceRecord {
   reachabilityStatus: string | null;
   configWarnings: string | null;
   exposedSubdomain: string | null;
+  sslPending: boolean | null;
+  sslError: string | null;
+  sslForced: boolean | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 }
@@ -49,6 +52,9 @@ export interface UpdateServiceInput {
   reachabilityStatus?: string | null;
   configWarnings?: string | null;
   exposedSubdomain?: string | null;
+  sslPending?: boolean | null;
+  sslError?: string | null;
+  sslForced?: boolean;
 }
 
 export class ServicesRepository {
@@ -97,6 +103,9 @@ export class ServicesRepository {
       reachabilityStatus: null,
       configWarnings: null,
       exposedSubdomain: null,
+      sslPending: null,
+      sslError: null,
+      sslForced: false,
       createdAt: now,
       updatedAt: now,
     };

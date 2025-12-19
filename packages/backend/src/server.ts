@@ -7,9 +7,10 @@ import { fileURLToPath } from 'url';
 import type { AppConfig } from './core/config/schema.js';
 import type { AppContext } from './core/context.js';
 import { createDiscoveryRoutes } from './features/discovery/docker.js';
-import { dnsRoutes } from './features/dns/dns.routes.js';
+import { devRoutes } from './features/dev/dev.routes.js';
+import { createDnsRoutes } from './features/dns/dns.routes.js';
 import { createExposeRoutes, createStreamingExposeRoutes } from './features/expose/index.js';
-import { proxyRoutes } from './features/proxy/proxy.routes.js';
+import { createProxyRoutes } from './features/proxy/proxy.routes.js';
 import { createServicesRoutes } from './features/services/services.routes.js';
 import { createSettingsRoutes } from './features/settings/index.js';
 
@@ -29,8 +30,9 @@ export async function createServer(_config: AppConfig, ctx: AppContext): Promise
 
   server.get('/health', async () => ({ status: 'ok' }));
 
-  await server.register(dnsRoutes, { prefix: '/api/dns' });
-  await server.register(proxyRoutes, { prefix: '/api/proxy' });
+  await server.register(devRoutes, { prefix: '/api/dev' });
+  await server.register(createDnsRoutes(ctx.settings), { prefix: '/api/dns' });
+  await server.register(createProxyRoutes(ctx.settings), { prefix: '/api/proxy' });
   await server.register(createServicesRoutes(ctx), { prefix: '/api/services' });
   await server.register(createDiscoveryRoutes(ctx), { prefix: '/api/discovery' });
   await server.register(createSettingsRoutes(ctx.settings), { prefix: '/api/settings' });

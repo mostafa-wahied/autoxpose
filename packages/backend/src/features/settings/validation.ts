@@ -10,7 +10,7 @@ import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProviderConfig } from '../proxy/proxy.types.js';
 
 const logger = createLogger('validation');
-const DOMAIN_CHECK_TIMEOUT = 5000;
+const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
 type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
@@ -47,19 +47,41 @@ export async function testProxyProvider(
   }
 }
 
-export async function checkDomainReachable(domain: string): Promise<TestResult> {
-  const url = `https://${domain}`;
+export async function checkDomainReachable(
+  domain: string,
+  sslPending?: boolean
+): Promise<TestResult & { protocol?: 'https' | 'http' }> {
+  if (!sslPending) {
+    const httpsUrl = `https://${domain}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DOMAIN_CHECK_TIMEOUT);
+
+    try {
+      const response = await fetch(httpsUrl, { method: 'HEAD', signal: controller.signal });
+      clearTimeout(timeout);
+      if (response.ok || response.status < 500) {
+        return { ok: true, protocol: 'https' };
+      }
+    } catch {
+      clearTimeout(timeout);
+    }
+  }
+
+  const httpUrl = `http://${domain}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DOMAIN_CHECK_TIMEOUT);
 
   try {
-    const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    const response = await fetch(httpUrl, { method: 'HEAD', signal: controller.signal });
     clearTimeout(timeout);
-    return { ok: response.ok || response.status < 500 };
+    if (response.ok || response.status < 500) {
+      return { ok: true, protocol: 'http' };
+    }
   } catch {
     clearTimeout(timeout);
-    return { ok: false, error: 'Domain not reachable' };
   }
+
+  return { ok: false, error: 'Domain not reachable' };
 }
 
 type DnsProviderType =

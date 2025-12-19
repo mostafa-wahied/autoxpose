@@ -87,14 +87,16 @@ docker run -d \
    - Add Proxy provider (Nginx Proxy Manager or Caddy)
 
 4. **Label your containers:**
+
    ```yaml
    labels:
-     - autoxpose.enable=true  # or 'auto' for automatic exposure
+     - autoxpose.enable=true # or 'auto' for automatic exposure
    ```
-   
+
    Container name becomes subdomain by default. To customize:
+
    ```yaml
-     - autoxpose.subdomain=custom-name
+   - autoxpose.subdomain=custom-name
    ```
 
 For provider configuration and adding labels by platform, see [Setup Guides](#setup-guides) below.
@@ -318,10 +320,10 @@ services:
 
 ### Understanding Auto-Expose Modes
 
-| Mode | Behavior |
-|------|----------|
+| Mode   | Behavior                                                                    |
+| ------ | --------------------------------------------------------------------------- |
 | `true` | Service discovered and shown in UI - you manually click "Expose" when ready |
-| `auto` | Service discovered and automatically exposed - no UI interaction needed |
+| `auto` | Service discovered and automatically exposed - no UI interaction needed     |
 
 ## Contributing
 

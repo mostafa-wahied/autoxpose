@@ -1,6 +1,6 @@
 import { loadConfig } from './core/config/loader.js';
 import { createAppContext } from './core/context.js';
-import { getDatabase } from './core/database/index.js';
+import { getDatabase, resetDatabase } from './core/database/index.js';
 import { createLogger } from './core/logger/index.js';
 import { createServer } from './server.js';
 
@@ -21,6 +21,11 @@ async function main(): Promise<void> {
   }
 
   const db = getDatabase(config.database.path);
+
+  if (process.env.RESET_DB === 'true') {
+    logger.warn('RESET_DB=true detected, resetting database...');
+    resetDatabase();
+  }
   const ctx = createAppContext(db, config.docker, {
     publicIp: config.serverIp,
     lanIp: config.lanIp,

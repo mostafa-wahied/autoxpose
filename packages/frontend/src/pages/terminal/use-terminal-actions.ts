@@ -19,6 +19,7 @@ export interface TerminalActions {
   handleConfirm: () => void;
   handleUnexpose: (service: ServiceRecord) => void;
   handleRetrySsl: () => void;
+  handleRetrySslForService: (service: ServiceRecord) => void;
   setConfirmAction: (action: ConfirmAction) => void;
 }
 
@@ -109,6 +110,10 @@ function useHandlers(
   const handleRetrySsl = useCallback((): void => {
     if (h.activeServiceId) h.retrySslMutation.mutate(h.activeServiceId);
   }, [h.activeServiceId, h.retrySslMutation]);
+  const handleRetrySslForService = useCallback(
+    (s: ServiceRecord): void => h.retrySslMutation.mutate(s.id),
+    [h.retrySslMutation]
+  );
   return {
     handleExpose,
     handleDelete,
@@ -119,6 +124,7 @@ function useHandlers(
     handleScan,
     handleUnexpose,
     handleRetrySsl,
+    handleRetrySslForService,
   };
 }
 

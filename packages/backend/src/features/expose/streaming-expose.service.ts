@@ -60,22 +60,56 @@ export class StreamingExposeService {
     });
     if (proxyResult === null) return;
 
+    if (!this.validateExposeResults(ctx, dnsResult, proxyResult)) return;
+
+    await this.handleExposeComplete({
+      serviceId,
+      fullDomain,
+      dnsResult,
+      proxyResult,
+      ctx,
+    });
+  }
+
+  private validateExposeResults(
+    ctx: ExposeContext,
+    dnsResult: { recordId?: string | null },
+    proxyResult?: { id: string }
+  ): boolean {
     const nothingConfigured = dnsResult.recordId === undefined && proxyResult === undefined;
     if (nothingConfigured) {
       emitError(ctx, 'No providers configured. Set up DNS and Proxy in settings first.');
-      return;
+      return false;
     }
+    return true;
+  }
+
+  private async handleExposeComplete(options: {
+    serviceId: string;
+    fullDomain: string;
+    dnsResult: { recordId?: string | null };
+    proxyResult: { id: string; sslPending?: boolean; sslError?: string } | undefined;
+    ctx: ExposeContext;
+  }): Promise<void> {
+    const { serviceId, fullDomain, dnsResult, proxyResult, ctx } = options;
 
     await this.servicesRepo.update(serviceId, {
       enabled: true,
       dnsRecordId: dnsResult.recordId || null,
       proxyHostId: proxyResult?.id || null,
+      sslPending: proxyResult?.sslPending ?? null,
+      sslError: proxyResult?.sslError ?? null,
     });
 
     const sslStatus = proxyResult
       ? { pending: proxyResult.sslPending, error: proxyResult.sslError }
       : undefined;
-    emitComplete(ctx, fullDomain, { dns: dnsResult.recordId, proxy: proxyResult?.id }, sslStatus);
+    emitComplete(
+      ctx,
+      fullDomain,
+      { dns: dnsResult.recordId ?? undefined, proxy: proxyResult?.id },
+      sslStatus
+    );
   }
 
   private async updateServiceScheme(

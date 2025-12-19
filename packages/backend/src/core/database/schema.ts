@@ -18,6 +18,9 @@ export const services = sqliteTable('services', {
   reachabilityStatus: text('reachability_status'),
   configWarnings: text('config_warnings'),
   exposedSubdomain: text('exposed_subdomain'),
+  sslPending: integer('ssl_pending', { mode: 'boolean' }),
+  sslError: text('ssl_error'),
+  sslForced: integer('ssl_forced', { mode: 'boolean' }).default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });

@@ -1,7 +1,24 @@
 import type { FastifyPluginAsync } from 'fastify';
 import Docker from 'dockerode';
 import type { AppContext } from '../../core/context.js';
+import type { ProgressCallback } from '../expose/expose-handlers.js';
 import { createLogger } from '../../core/logger/index.js';
+
+const logger = createLogger('docker-provider');
+const routesLogger = createLogger('discovery-routes');
+
+function createNoopProgressCallback(): ProgressCallback {
+  return event => {
+    routesLogger.debug(
+      {
+        serviceId: event.serviceId,
+        action: event.action,
+        type: event.type,
+      },
+      'Auto-expose progress'
+    );
+  };
+}
 
 export type DiscoveredService = {
   id: string;
@@ -23,9 +40,6 @@ export interface DiscoveryProvider {
 
 type EventStream = NodeJS.ReadableStream & { destroy(): void };
 
-const logger = createLogger('docker-discovery');
-const routesLogger = createLogger('discovery-routes');
-
 const HTTPS_PRIVATE_PORTS = [443, 8443, 9443, 10443];
 
 export class DockerDiscoveryProvider implements DiscoveryProvider {
@@ -40,11 +54,16 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
   }
 
   async discover(): Promise<DiscoveredService[]> {
-    const containers = await this.docker.listContainers({ all: false });
-    logger.info({ count: containers.length }, 'Listed containers');
-    return containers
-      .map((c: Docker.ContainerInfo) => this.mapContainerInfo(c))
-      .filter((s: DiscoveredService | null): s is DiscoveredService => s !== null);
+    try {
+      const containers = await this.docker.listContainers({ all: false });
+      logger.info({ count: containers.length }, 'Listed containers');
+      return containers
+        .map((c: Docker.ContainerInfo) => this.mapContainerInfo(c))
+        .filter((s: DiscoveredService | null): s is DiscoveredService => s !== null);
+    } catch (err) {
+      logger.error({ err }, 'Failed to list Docker containers');
+      return [];
+    }
   }
 
   watch(callback: (service: DiscoveredService, event: string) => void): void {
@@ -95,9 +114,19 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
   }
 
   private async inspectContainer(containerId: string): Promise<DiscoveredService | null> {
-    const container = this.docker.getContainer(containerId);
-    const info = await container.inspect();
-    return this.mapInspectedContainer(info);
+    try {
+      const container = this.docker.getContainer(containerId);
+      const info = await container.inspect();
+      return this.mapInspectedContainer(info);
+    } catch (err) {
+      const error = err as { statusCode?: number; reason?: string };
+      if (error.statusCode === 404) {
+        logger.debug({ containerId }, 'Container not found, ignoring');
+        return null;
+      }
+      logger.error({ err, containerId }, 'Failed to inspect container');
+      return null;
+    }
   }
 
   private isEnabled(enableValue: string | undefined): boolean {
@@ -318,11 +347,25 @@ export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const allServices = await ctx.services.getAllServices();
       await ctx.sync.detectExistingConfigurations(allServices);
 
-      for (const svc of result.autoExpose) {
+      const autoExposeSourceIds = new Set(discovered.filter(d => d.autoExpose).map(d => d.id));
+      const servicesToAutoExpose = allServices.filter(
+        s => s.sourceId && autoExposeSourceIds.has(s.sourceId) && !s.enabled
+      );
+
+      for (const svc of servicesToAutoExpose) {
         routesLogger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing service');
-        ctx.expose.expose(svc.id).catch(err => {
+        ctx.streamingExpose.exposeWithProgress(svc.id, createNoopProgressCallback()).catch(err => {
           routesLogger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
         });
+      }
+
+      const enabledServices = allServices.filter(s => s.enabled && s.subdomain);
+      const dnsConfig = await ctx.settings.getDnsConfig();
+      if (dnsConfig?.config.domain) {
+        for (const svc of enabledServices) {
+          const fqdn = `${svc.subdomain}.${dnsConfig.config.domain}`;
+          fetch(`https://${fqdn}`, { method: 'HEAD' }).catch(() => {});
+        }
       }
 
       return {
@@ -330,7 +373,7 @@ export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
         created: result.created.length,
         updated: result.updated.length,
         removed: result.removed.length,
-        autoExposed: result.autoExpose.length,
+        autoExposed: servicesToAutoExpose.length,
       };
     });
   };

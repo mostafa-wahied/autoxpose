@@ -1,5 +1,40 @@
-import { type SettingsStatus } from '../../lib/api';
+import { useState } from 'react';
+import { type SettingsStatus, api } from '../../lib/api';
+import { ConfirmDialog } from './confirm-dialog';
 import { DnsConfigSection, ProxyConfigSection } from './config';
+
+function downloadFile(content: string, filename: string): void {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function doExport(): Promise<void> {
+  const data = await api.settings.export();
+  const timestamp = new Date().toISOString().split('T')[0];
+  downloadFile(JSON.stringify(data, null, 2), `autoxpose-backup-${timestamp}.json`);
+}
+
+async function handleImport(): Promise<void> {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e: Event): Promise<void> => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const data = JSON.parse(text);
+    await api.settings.import(data);
+    window.location.reload();
+  };
+  input.click();
+}
 
 interface SettingsPanelProps {
   settings: SettingsStatus | null | undefined;
@@ -26,15 +61,52 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
 }
 
 function PanelHeader({ onClose }: { onClose: () => void }): JSX.Element {
+  const [showWarning, setShowWarning] = useState(false);
+
+  const handleExport = (): void => {
+    setShowWarning(true);
+  };
+
+  const confirmExport = (): void => {
+    setShowWarning(false);
+    void doExport();
+  };
+
   return (
-    <div className="mb-4 flex items-center justify-between">
-      <h3 className="text-sm font-bold text-[#c9d1d9]">Configuration</h3>
-      <button
-        onClick={onClose}
-        className="text-xs text-[#8b949e] transition-colors hover:text-[#c9d1d9]"
-      >
-        Close
-      </button>
-    </div>
+    <>
+      <ConfirmDialog
+        isOpen={showWarning}
+        title="Export Settings"
+        message="This file contains sensitive API keys and credentials. Store it securely and delete after importing. Do not share this file or commit it to version control."
+        confirmText="Export Anyway"
+        cancelText="Cancel"
+        variant="warning"
+        onConfirm={confirmExport}
+        onCancel={() => setShowWarning(false)}
+      />
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-[#c9d1d9]">Configuration</h3>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
+          >
+            Export
+          </button>
+          <button
+            onClick={() => void handleImport()}
+            className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
+          >
+            Import
+          </button>
+          <button
+            onClick={onClose}
+            className="text-xs text-[#8b949e] transition-colors hover:text-[#c9d1d9]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

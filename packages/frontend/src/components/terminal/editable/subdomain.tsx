@@ -5,6 +5,7 @@ interface EditableSubdomainProps {
   value: string;
   baseDomain: string | null;
   isExposed: boolean;
+  protocol?: 'https' | 'http' | null;
   onChange: (value: string) => void;
 }
 
@@ -50,11 +51,18 @@ function EditInput(p: EditInputProps): JSX.Element {
   );
 }
 
-function ExposedLink({ domain }: { domain: string }): JSX.Element {
+function ExposedLink({
+  domain,
+  protocol,
+}: {
+  domain: string;
+  protocol: 'https' | 'http' | null;
+}): JSX.Element {
+  const linkProtocol = protocol || 'https';
   return (
     <div className="mb-3 flex items-center text-xs">
       <a
-        href={`https://${domain}`}
+        href={`${linkProtocol}://${domain}`}
         target="_blank"
         rel="noopener noreferrer"
         className="truncate text-[#58a6ff] hover:underline"
@@ -87,7 +95,7 @@ function DisplayState({ domain, hasBaseDomain, onEdit }: DisplayProps): JSX.Elem
 }
 
 export function EditableSubdomain(props: EditableSubdomainProps): JSX.Element {
-  const { value, baseDomain, isExposed, onChange } = props;
+  const { value, baseDomain, isExposed, protocol, onChange } = props;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +142,7 @@ export function EditableSubdomain(props: EditableSubdomainProps): JSX.Element {
   if (!value) return <EmptyState onEdit={startEdit} />;
 
   const fullDomain = baseDomain ? `${value}.${baseDomain}` : value;
-  if (isExposed) return <ExposedLink domain={fullDomain} />;
+  if (isExposed) return <ExposedLink domain={fullDomain} protocol={protocol || null} />;
 
   return (
     <DisplayState domain={fullDomain} hasBaseDomain={Boolean(baseDomain)} onEdit={startEdit} />

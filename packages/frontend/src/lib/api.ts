@@ -18,6 +18,9 @@ export interface ServiceRecord {
   reachabilityStatus: string | null;
   configWarnings: string | null;
   exposedSubdomain: string | null;
+  sslPending: boolean | null;
+  sslError: string | null;
+  sslForced: boolean | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -127,8 +130,13 @@ export const api = {
       request<{ service: ServiceRecord }>(`/services/${id}/expose`, { method: 'POST' }),
     unexpose: (id: string): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}/unexpose`, { method: 'POST' }),
-    checkOnline: (id: string): Promise<{ online: boolean; domain?: string }> =>
-      request<{ online: boolean; domain?: string }>(`/services/${id}/online`, { method: 'POST' }),
+    checkOnline: (
+      id: string
+    ): Promise<{ online: boolean; domain?: string; protocol?: 'https' | 'http' }> =>
+      request<{ online: boolean; domain?: string; protocol?: 'https' | 'http' }>(
+        `/services/${id}/online`,
+        { method: 'POST' }
+      ),
     retrySsl: (id: string): Promise<{ success: boolean; error?: string }> =>
       request<{ success: boolean; error?: string }>(`/services/${id}/retry-ssl`, {
         method: 'POST',
@@ -168,5 +176,17 @@ export const api = {
       request<{ ok: boolean; error?: string }>('/settings/dns/test', { method: 'POST' }),
     testProxy: (): Promise<{ ok: boolean; error?: string }> =>
       request<{ ok: boolean; error?: string }>('/settings/proxy/test', { method: 'POST' }),
+    export: (): Promise<{
+      dns: { provider: string; config: Record<string, string> } | null;
+      proxy: { provider: string; config: Record<string, string> } | null;
+    }> => request('/settings/export'),
+    import: (data: {
+      dns: { provider: string; config: Record<string, string> } | null;
+      proxy: { provider: string; config: Record<string, string> } | null;
+    }): Promise<{ success: boolean }> =>
+      request<{ success: boolean }>('/settings/import', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 };
