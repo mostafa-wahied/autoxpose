@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { TerminalServiceCard } from '../../components/terminal';
+import { useBulkStatusCheck } from '../../hooks/use-bulk-status-check';
 import { type ServiceRecord } from '../../lib/api';
 
 interface ServiceGridProps {
@@ -34,6 +36,12 @@ export function ServiceGrid({
   retrySslPending,
   scanTrigger,
 }: ServiceGridProps): JSX.Element {
+  const { statusMap, checkServices } = useBulkStatusCheck(scanTrigger);
+
+  useEffect(() => {
+    checkServices(services);
+  }, [services, checkServices]);
+
   if (services.length === 0) {
     return <EmptyServiceGrid onScan={onScan} />;
   }
@@ -63,6 +71,7 @@ export function ServiceGrid({
             canExposeBlockedReason={!serviceReady ? blockedReason : undefined}
             isRetrySslPending={retrySslPending}
             scanTrigger={scanTrigger}
+            bulkStatus={statusMap[service.id]}
           />
         );
       })}

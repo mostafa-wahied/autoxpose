@@ -137,6 +137,17 @@ export const api = {
         `/services/${id}/online`,
         { method: 'POST' }
       ),
+    checkBulk: (
+      serviceIds: string[]
+    ): Promise<{
+      results: Record<string, { online: boolean; protocol: string | null }>;
+    }> =>
+      request<{
+        results: Record<string, { online: boolean; protocol: string | null }>;
+      }>('/services/check-bulk', {
+        method: 'POST',
+        body: JSON.stringify({ serviceIds }),
+      }),
     retrySsl: (id: string): Promise<{ success: boolean; error?: string }> =>
       request<{ success: boolean; error?: string }>(`/services/${id}/retry-ssl`, {
         method: 'POST',

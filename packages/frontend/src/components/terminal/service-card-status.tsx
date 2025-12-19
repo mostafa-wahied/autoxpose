@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type ServiceRecord } from '../../lib/api';
+import { type ServiceRecord } from '../../lib/api';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -9,6 +9,7 @@ interface StatusBadgeProps {
   service: ServiceRecord;
   onProtocolChange: (protocol: 'https' | 'http' | null) => void;
   scanTrigger?: number;
+  bulkStatus?: { online: boolean; protocol: string | null };
 }
 
 export function StatusBadge({
@@ -17,6 +18,7 @@ export function StatusBadge({
   service,
   onProtocolChange,
   scanTrigger,
+  bulkStatus,
 }: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
 
@@ -26,18 +28,18 @@ export function StatusBadge({
       onProtocolChange(null);
       return;
     }
-    setLiveStatus('checking');
-    api.services
-      .checkOnline(serviceId)
-      .then(res => {
-        setLiveStatus(res.online ? 'online' : 'offline');
-        onProtocolChange(res.protocol || null);
-      })
-      .catch(() => {
-        setLiveStatus('offline');
-        onProtocolChange(null);
-      });
-  }, [serviceId, isExposed, onProtocolChange, scanTrigger]);
+
+    if (bulkStatus) {
+      setLiveStatus(bulkStatus.online ? 'online' : 'offline');
+      onProtocolChange(
+        bulkStatus.protocol === 'https' || bulkStatus.protocol === 'http'
+          ? bulkStatus.protocol
+          : null
+      );
+    } else {
+      setLiveStatus('checking');
+    }
+  }, [serviceId, isExposed, onProtocolChange, scanTrigger, bulkStatus]);
 
   return (
     <div className="flex items-center gap-2">

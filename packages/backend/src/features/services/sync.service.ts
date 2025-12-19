@@ -244,7 +244,7 @@ export class SyncService {
     exposureSource: string | null;
     dnsExists: boolean;
     proxyExists: boolean;
-    configWarnings: null;
+    configWarnings: string | null;
     exposedSubdomain: string | null;
     dnsRecordId: string | null;
     proxyHostId: string | null;
@@ -258,12 +258,13 @@ export class SyncService {
     const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
     const shouldBeEnabled = dnsExists && proxyExists;
     const subdomainNeedsUpdate = exposedSubdomain && exposedSubdomain !== service.subdomain;
+    const warnings = this.detectConfigMismatches(service, proxyHost);
 
     return {
       exposureSource,
       dnsExists,
       proxyExists,
-      configWarnings: null,
+      configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
       exposedSubdomain,
       dnsRecordId: dnsRecord?.id ?? service.dnsRecordId,
       proxyHostId: proxyHost?.id ?? service.proxyHostId,
@@ -272,6 +273,20 @@ export class SyncService {
       sslError: proxyHost?.sslError ?? null,
       ...(subdomainNeedsUpdate && { subdomain: exposedSubdomain }),
     };
+  }
+
+  private detectConfigMismatches(
+    service: ServiceRecord,
+    proxyHost: ProxyHost | undefined
+  ): string[] {
+    const warnings: string[] = [];
+    if (!proxyHost) return warnings;
+
+    if (proxyHost.targetPort !== service.port) {
+      warnings.push('port_mismatch');
+    }
+
+    return warnings;
   }
 
   private logDetectionResults(

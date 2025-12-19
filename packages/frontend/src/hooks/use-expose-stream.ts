@@ -1,6 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
+import { api } from '../lib/api';
 import type { ProgressEvent, ProgressStep } from '../lib/progress.types';
+
+const SMART_POLL_DELAYS = [10000, 30000, 60000, 300000];
 
 export interface ExposeStreamState {
   isActive: boolean;
@@ -77,18 +80,31 @@ function handleError(setState: SetState): void {
   }));
 }
 
-function createStreamCallbacks(
-  eventSource: EventSource,
-  setState: SetState,
-  queryClient: ReturnType<typeof useQueryClient>,
-  eventSourceRef: React.MutableRefObject<EventSource | null>
-): { onMessage: (e: MessageEvent) => void; onError: () => void } {
+interface StreamCallbackParams {
+  eventSource: EventSource;
+  setState: SetState;
+  queryClient: ReturnType<typeof useQueryClient>;
+  eventSourceRef: React.MutableRefObject<EventSource | null>;
+  serviceId: string | null;
+  action: 'expose' | 'unexpose' | null;
+}
+
+function createStreamCallbacks(params: StreamCallbackParams): {
+  onMessage: (e: MessageEvent) => void;
+  onError: () => void;
+} {
+  const { eventSource, setState, queryClient, eventSourceRef, serviceId, action } = params;
+
   const onComplete = (): void => {
     eventSource.close();
     eventSourceRef.current = null;
     setTimeout(() => {
       setState(prev => ({ ...prev, isActive: false }));
       queryClient.invalidateQueries({ queryKey: ['services'] });
+
+      if (action === 'expose' && serviceId) {
+        scheduleSmartPolls(serviceId, queryClient);
+      }
     }, 500);
   };
 
@@ -100,6 +116,24 @@ function createStreamCallbacks(
       eventSourceRef.current = null;
     },
   };
+}
+
+function scheduleSmartPolls(
+  serviceId: string,
+  queryClient: ReturnType<typeof useQueryClient>
+): void {
+  SMART_POLL_DELAYS.forEach(delay => {
+    setTimeout(() => {
+      api.services
+        .checkOnline(serviceId)
+        .then(result => {
+          if (result.online) {
+            queryClient.invalidateQueries({ queryKey: ['services'] });
+          }
+        })
+        .catch(() => {});
+    }, delay);
+  });
 }
 
 export function useExposeStream(): UseExposeStreamReturn {
@@ -132,7 +166,14 @@ export function useExposeStream(): UseExposeStreamReturn {
       const eventSource = new EventSource(url);
       eventSourceRef.current = eventSource;
 
-      const cbs = createStreamCallbacks(eventSource, setState, queryClient, eventSourceRef);
+      const cbs = createStreamCallbacks({
+        eventSource,
+        setState,
+        queryClient,
+        eventSourceRef,
+        serviceId,
+        action,
+      });
       eventSource.onmessage = cbs.onMessage;
       eventSource.onerror = cbs.onError;
     },

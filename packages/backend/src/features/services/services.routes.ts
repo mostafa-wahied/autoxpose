@@ -25,9 +25,47 @@ interface ProbeBody {
   host: string;
   port: number;
 }
+interface CheckBulkBody {
+  serviceIds: string[];
+}
 
 const notFound = (reply: FastifyReply): FastifyReply =>
   reply.status(404).send({ error: 'Service not found' });
+
+const handleCheckBulk = async (
+  ctx: AppContext,
+  serviceIds: string[]
+): Promise<{ results: Record<string, { online: boolean; protocol: string | null }> }> => {
+  const dns = await ctx.settings.getDnsConfig();
+  if (!dns?.config.domain) {
+    return { results: {} };
+  }
+
+  const services = await Promise.all(serviceIds.map(id => ctx.services.getServiceById(id)));
+
+  const checks = services.map(async service => {
+    if (!service || !service.enabled || !service.subdomain) {
+      return { id: service?.id ?? '', online: false, protocol: null };
+    }
+    const fqdn = `${service.subdomain}.${dns.config.domain}`;
+    const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
+    return { id: service.id, online: result.ok, protocol: result.protocol ?? null };
+  });
+
+  const results = await Promise.allSettled(checks);
+  const statusMap: Record<string, { online: boolean; protocol: string | null }> = {};
+
+  results.forEach(result => {
+    if (result.status === 'fulfilled' && result.value.id) {
+      statusMap[result.value.id] = {
+        online: result.value.online,
+        protocol: result.value.protocol,
+      };
+    }
+  });
+
+  return { results: statusMap };
+};
 
 export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
   return async server => {
@@ -82,6 +120,10 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       const fqdn = `${service.subdomain}.${dns.config.domain}`;
       const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
       return { online: result.ok, domain: fqdn, protocol: result.protocol };
+    });
+
+    server.post<{ Body: CheckBulkBody }>('/check-bulk', async request => {
+      return handleCheckBulk(ctx, request.body.serviceIds);
     });
 
     await server.register(createSslRoutes(ctx));
