@@ -75,7 +75,10 @@ export class ExposeService {
     }
   }
 
-  private async createProviderResources(service: ServiceRecord): Promise<{
+  private async createProviderResources(
+    service: ServiceRecord,
+    forceCreate = false
+  ): Promise<{
     dnsRecordId?: string;
     proxyHostId?: string;
     sslPending?: boolean;
@@ -84,9 +87,12 @@ export class ExposeService {
     const baseDomain = await this.getBaseDomain();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
 
-    const dnsRecordId = service.dnsRecordId ?? (await this.createDnsRecord(service));
+    const dnsRecordId =
+      !forceCreate && service.dnsRecordId
+        ? service.dnsRecordId
+        : await this.createDnsRecord(service);
     const proxyResult =
-      service.proxyHostId !== null
+      !forceCreate && service.proxyHostId !== null
         ? { id: service.proxyHostId }
         : await this.createProxyHost(service, fullDomain);
 
@@ -252,8 +258,102 @@ export class ExposeService {
     if (proxy) await proxy.deleteHost(svc.proxyHostId);
   }
 
+  async migrateSubdomain(serviceId: string): Promise<{
+    service: ServiceRecord;
+    oldSubdomain: string;
+    newSubdomain: string;
+  }> {
+    const service = await this.context.servicesRepo.findById(serviceId);
+    if (!service) throw new Error('Service not found');
+
+    const oldSubdomain = service.exposedSubdomain as string;
+    const newSubdomain = service.subdomain;
+    const oldDnsRecordId = service.dnsRecordId;
+    const oldProxyHostId = service.proxyHostId;
+
+    logger.info({ serviceId, oldSubdomain, newSubdomain }, 'Starting subdomain migration');
+
+    const freshService = { ...service, dnsRecordId: null, proxyHostId: null };
+    const { dnsRecordId, proxyHostId, sslPending, sslError } = await this.createProviderResources(
+      freshService,
+      true
+    );
+
+    if (!dnsRecordId && !proxyHostId) {
+      throw new Error('Failed to create new resources');
+    }
+
+    try {
+      await this.context.servicesRepo.update(serviceId, {
+        dnsRecordId: dnsRecordId ?? null,
+        proxyHostId: proxyHostId ?? null,
+        exposedSubdomain: newSubdomain,
+        configWarnings: null,
+        sslPending: sslPending ?? null,
+        sslError: sslError ?? null,
+      });
+    } catch (err) {
+      await this.rollbackMigration(dnsRecordId, proxyHostId);
+      throw err;
+    }
+
+    if (proxyHostId) await this.tryImmediateSsl(serviceId, proxyHostId, newSubdomain);
+
+    await this.deleteOldResources(oldDnsRecordId, oldProxyHostId);
+
+    const updated = await this.context.servicesRepo.findById(serviceId);
+    logger.info({ serviceId, oldSubdomain, newSubdomain }, 'Subdomain migration completed');
+
+    return { service: updated!, oldSubdomain, newSubdomain };
+  }
+
+  private async rollbackMigration(
+    dnsRecordId: string | undefined,
+    proxyHostId: string | undefined
+  ): Promise<void> {
+    logger.warn({ dnsRecordId, proxyHostId }, 'Rolling back migration');
+    if (dnsRecordId) {
+      const dns = await this.context.settings.getDnsProvider();
+      if (dns) await dns.deleteRecord(dnsRecordId).catch(() => {});
+    }
+    if (proxyHostId) {
+      const proxy = await this.context.settings.getProxyProvider();
+      if (proxy) await proxy.deleteHost(proxyHostId).catch(() => {});
+    }
+  }
+
+  private async deleteOldResources(
+    dnsRecordId: string | null,
+    proxyHostId: string | null
+  ): Promise<void> {
+    if (dnsRecordId) {
+      const dns = await this.context.settings.getDnsProvider();
+      if (dns) await dns.deleteRecord(dnsRecordId);
+    }
+    if (proxyHostId) {
+      const proxy = await this.context.settings.getProxyProvider();
+      if (proxy) await proxy.deleteHost(proxyHostId);
+    }
+  }
+
   private extractSubdomain(subdomain: string): string {
     const parts = subdomain.split('.');
     return parts.length > 2 ? parts[0] : subdomain;
+  }
+
+  private async tryImmediateSsl(
+    serviceId: string,
+    proxyHostId: string,
+    subdomain: string
+  ): Promise<void> {
+    const baseDomain = await this.getBaseDomain();
+    const fullDomain = this.buildFullDomain(subdomain, baseDomain);
+    const proxy = await this.context.settings.getProxyProvider();
+    if (!proxy) return;
+    const result = await proxy.retrySsl(proxyHostId, fullDomain);
+    await this.context.servicesRepo.update(serviceId, {
+      sslPending: result.success ? false : true,
+      sslError: result.success ? null : result.error || 'SSL setup failed',
+    });
   }
 }

@@ -88,6 +88,31 @@ export class ServicesService {
     return { fixed, errors };
   }
 
+  async upsertService(discovered: DiscoveredService): Promise<ServiceRecord> {
+    const existing = await this.repository.findBySourceId(discovered.id);
+    if (existing) {
+      const needsUpdate = this.serviceNeedsUpdate(existing, discovered);
+      if (!needsUpdate) return existing;
+      const hasExplicitSubdomain = discovered.labels[`autoxpose.subdomain`] !== undefined;
+      const subdomainToUse = hasExplicitSubdomain ? discovered.subdomain : existing.subdomain;
+      const updated = await this.repository.update(existing.id, {
+        name: discovered.name,
+        subdomain: subdomainToUse,
+        port: discovered.port,
+        scheme: discovered.scheme,
+      });
+      return updated!;
+    }
+    return this.repository.create({
+      name: discovered.name,
+      subdomain: discovered.subdomain,
+      port: discovered.port,
+      scheme: discovered.scheme,
+      source: discovered.source,
+      sourceId: discovered.id,
+    });
+  }
+
   async syncFromDiscovery(discovered: DiscoveredService[]): Promise<SyncResult> {
     const existing = await this.repository.findAll();
     const existingBySourceId = new Map(existing.filter(s => s.sourceId).map(s => [s.sourceId!, s]));

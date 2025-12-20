@@ -66,7 +66,10 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     }
   }
 
-  watch(callback: (service: DiscoveredService, event: string) => void): void {
+  watch(
+    callback: (service: DiscoveredService, event: string) => void,
+    onContainerRemoved?: (containerId: string) => void
+  ): void {
     this.docker.getEvents(
       { filters: { type: ['container'] } },
       (err: Error | null, stream?: NodeJS.ReadableStream) => {
@@ -90,10 +93,12 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
                 Action: string;
                 Actor: { ID: string };
               };
-              if (event.Action === 'start' || event.Action === 'stop') {
+              if (event.Action === 'start') {
                 this.inspectContainer(event.Actor.ID).then(service => {
                   if (service) {
                     callback(service, event.Action);
+                  } else if (onContainerRemoved) {
+                    onContainerRemoved(event.Actor.ID);
                   }
                 });
               }

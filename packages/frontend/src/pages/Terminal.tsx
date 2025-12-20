@@ -12,6 +12,24 @@ import { useTerminalActions } from './terminal/use-terminal-actions';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 
+function dedupeServices(items: ServiceRecord[]): ServiceRecord[] {
+  const map = new Map<string, ServiceRecord>();
+  for (const item of items) {
+    const key = item.sourceId || item.name;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, item);
+      continue;
+    }
+    const a = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+    const b = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+    if (b >= a) {
+      map.set(key, item);
+    }
+  }
+  return Array.from(map.values());
+}
+
 function getConnectionStatus(
   isLoading: boolean,
   dnsOk: boolean,
@@ -145,8 +163,43 @@ function useTerminalShortcuts(params: {
   ]);
 }
 
+function useSmartRefetchInterval(services: ServiceRecord[] | undefined): number | false {
+  if (!services || services.length === 0) return false;
+
+  const hasExposed = services.some(s => s.enabled);
+  if (!hasExposed) return false;
+
+  const hasRecentExpose = services.some(s => {
+    if (!s.enabled || !s.updatedAt) return false;
+    const timeSinceUpdate = Date.now() - new Date(s.updatedAt).getTime();
+    return timeSinceUpdate < 300000;
+  });
+
+  const hasWarnings = services.some(s => s.configWarnings && s.configWarnings !== '[]');
+  const hasSslPending = services.some(s => s.sslPending);
+
+  if (hasRecentExpose) return 5000;
+  if (hasWarnings || hasSslPending) return 10000;
+  return 30000;
+}
+
 function TerminalDashboard(): JSX.Element {
-  const servicesQuery = useQuery({ queryKey: ['services'], queryFn: api.services.list });
+  const servicesQuery = useQuery({
+    queryKey: ['services'],
+    queryFn: api.services.list,
+  });
+
+  const refetchInterval = useSmartRefetchInterval(servicesQuery.data?.services);
+
+  useEffect(() => {
+    if (refetchInterval !== false) {
+      const interval = setInterval((): void => {
+        servicesQuery.refetch();
+      }, refetchInterval);
+      return (): void => clearInterval(interval);
+    }
+  }, [refetchInterval, servicesQuery]);
+
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings.status });
   if (servicesQuery.isLoading) return <LoadingView />;
   if (servicesQuery.error) return <ErrorView />;
@@ -207,13 +260,13 @@ function TerminalDashboardContent({
   settingsLoading,
 }: DashboardContentProps): JSX.Element {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const dashboardState = useDashboardState(services, settings, settingsLoading);
+  const stableServices = dedupeServices(services);
+  const dashboardState = useDashboardState(stableServices, settings, settingsLoading);
   const { actions, state } = useTerminalActions({
-    services,
+    services: stableServices,
     needsSetup: dashboardState.needsSetup,
   });
-  const activeService = services.find(s => s.id === state.streamState.serviceId);
-  const loadingId = getLoadingId(state.streamState, state.deletingServiceId);
+  const activeService = stableServices.find(s => s.id === state.streamState.serviceId);
   useTerminalShortcuts({
     onExposeAll: actions.handleExposeAll,
     onUnexposeAll: actions.handleUnexposeAll,
@@ -228,7 +281,7 @@ function TerminalDashboardContent({
   return (
     <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
       <TerminalHeader
-        serviceCount={services.length}
+        serviceCount={stableServices.length}
         exposedCount={dashboardState.exposedCount}
         connectionStatus={dashboardState.connectionStatus}
         serverName={settings?.platform?.name ?? 'Server'}
@@ -239,7 +292,7 @@ function TerminalDashboardContent({
         isScanning={state.scanMutation.isPending}
         dnsProvider={settings?.dns?.provider}
         proxyProvider={settings?.proxy?.provider}
-        services={services.map(s => ({
+        services={stableServices.map(s => ({
           id: s.id,
           name: s.name,
           subdomain: s.subdomain,
@@ -250,11 +303,11 @@ function TerminalDashboardContent({
         onHelp={() => setShortcutsOpen(true)}
       />
       <MainContent
-        services={services}
+        services={stableServices}
         state={state}
         actions={actions}
         activeService={activeService}
-        loadingId={loadingId}
+        loadingId={getLoadingId(state.streamState, state.deletingServiceId)}
         settingsData={settings}
         baseDomain={settings?.dns?.domain ?? null}
         canExpose={dashboardState.canExpose}
@@ -263,7 +316,7 @@ function TerminalDashboardContent({
       />
       <ConfirmDialogs
         action={state.confirmAction}
-        serviceCount={services.length}
+        serviceCount={stableServices.length}
         exposedCount={dashboardState.exposedCount}
         onConfirm={actions.handleConfirm}
         onCancel={() => actions.setConfirmAction(null)}

@@ -98,6 +98,8 @@ export const api = {
   services: {
     list: (): Promise<{ services: ServiceRecord[] }> =>
       request<{ services: ServiceRecord[] }>('/services'),
+    getChangesVersion: (): Promise<{ version: number; lastChange: number }> =>
+      request<{ version: number; lastChange: number }>('/services/changes/version'),
     get: (id: string): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}`),
     create: (data: {
@@ -160,6 +162,13 @@ export const api = {
       request<{ fixed: string[]; errors: string[] }>(`/services/${id}/fix-config`, {
         method: 'POST',
       }),
+    migrateSubdomain: (
+      id: string
+    ): Promise<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }> =>
+      request<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }>(
+        `/services/${id}/migrate-subdomain`,
+        { method: 'POST' }
+      ),
     exposeDnsOnly: (id: string): Promise<{ service: ServiceRecord; dnsRecordId?: string }> =>
       request<{ service: ServiceRecord; dnsRecordId?: string }>(`/services/${id}/dns-only`, {
         method: 'POST',

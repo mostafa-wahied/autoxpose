@@ -47,7 +47,8 @@ export class SyncService {
     const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
     const isExposed = Boolean(dnsRecord) || Boolean(proxyHost);
 
-    const warnings = this.detectConfigMismatches(service, proxyHost ?? undefined);
+    const exposedSubdomain = proxyHost ? this.extractSubdomain(proxyHost.domain, baseDomain) : null;
+    const warnings = this.detectConfigMismatches(service, proxyHost ?? undefined, exposedSubdomain);
 
     await this.servicesRepo.update(service.id, {
       enabled: isExposed,
@@ -261,7 +262,8 @@ export class SyncService {
     const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
     const shouldBeEnabled = dnsExists && proxyExists;
     const subdomainNeedsUpdate = exposedSubdomain && exposedSubdomain !== service.subdomain;
-    const warnings = this.detectConfigMismatches(service, proxyHost);
+    const warnings = this.detectConfigMismatches(service, proxyHost, exposedSubdomain);
+    const hasSubdomainMismatch = warnings.includes('subdomain_mismatch');
 
     return {
       exposureSource,
@@ -274,19 +276,24 @@ export class SyncService {
       enabled: shouldBeEnabled,
       sslPending: proxyHost?.sslPending ?? null,
       sslError: proxyHost?.sslError ?? null,
-      ...(subdomainNeedsUpdate && { subdomain: exposedSubdomain }),
+      ...(subdomainNeedsUpdate && !hasSubdomainMismatch && { subdomain: exposedSubdomain }),
     };
   }
 
   private detectConfigMismatches(
     service: ServiceRecord,
-    proxyHost: ProxyHost | undefined
+    proxyHost: ProxyHost | undefined,
+    newExposedSubdomain: string | null
   ): string[] {
     const warnings: string[] = [];
     if (!proxyHost) return warnings;
 
     if (proxyHost.targetPort !== service.port) {
       warnings.push('port_mismatch');
+    }
+
+    if (newExposedSubdomain && newExposedSubdomain !== service.subdomain) {
+      warnings.push('subdomain_mismatch');
     }
 
     return warnings;

@@ -40,16 +40,13 @@ const handleCheckBulk = async (
   if (!dns?.config.domain) {
     return { results: {} };
   }
-
+  const proxy = await ctx.settings.getProxyProvider();
   const services = await Promise.all(serviceIds.map(id => ctx.services.getServiceById(id)));
-
-  const checks = services.map(async service => {
+  const checks = services.map(service => {
     if (!service || !service.enabled || !service.subdomain) {
-      return { id: service?.id ?? '', online: false, protocol: null };
+      return Promise.resolve({ id: service?.id ?? '', online: false, protocol: null });
     }
-    const fqdn = `${service.subdomain}.${dns.config.domain}`;
-    const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
-    return { id: service.id, online: result.ok, protocol: result.protocol ?? null };
+    return resolveServiceStatus(service as NonNullable<typeof service>, dns.config.domain, proxy);
   });
 
   const results = await Promise.allSettled(checks);
@@ -67,9 +64,40 @@ const handleCheckBulk = async (
   return { results: statusMap };
 };
 
+async function resolveServiceStatus(
+  service: NonNullable<Awaited<ReturnType<AppContext['services']['getServiceById']>>>,
+  baseDomain: string,
+  proxy: Awaited<ReturnType<AppContext['settings']['getProxyProvider']>>
+): Promise<{ id: string; online: boolean; protocol: string | null }> {
+  const fqdn = `${service.subdomain}.${baseDomain}`;
+  const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
+  if (result.ok) return { id: service.id, online: true, protocol: result.protocol ?? null };
+  const host = proxy ? await proxy.findByDomain(fqdn) : null;
+  if (host) return { id: service.id, online: true, protocol: host.ssl ? 'https' : 'http' };
+  return { id: service.id, online: false, protocol: null };
+}
+
+const handleMigration = async (
+  ctx: AppContext,
+  serviceId: string,
+  reply: FastifyReply
+): Promise<unknown> => {
+  const service = await ctx.services.getServiceById(serviceId);
+  if (!service) return notFound(reply);
+  if (!service.enabled || !service.dnsRecordId || !service.proxyHostId) {
+    return reply.status(400).send({ error: 'Service must be fully exposed to migrate' });
+  }
+  if (!service.exposedSubdomain || service.exposedSubdomain === service.subdomain) {
+    return reply.status(400).send({ error: 'No subdomain mismatch detected' });
+  }
+  return ctx.expose.migrateSubdomain(service.id);
+};
+
 export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
   return async server => {
     server.get('/', async () => ({ services: await ctx.services.getAllServices() }));
+
+    server.get('/changes/version', async () => ctx.changeTracker.getInfo());
 
     server.get<{ Params: IdParams }>('/:id', async (request, reply) => {
       const service = await ctx.services.getServiceById(request.params.id);
@@ -131,6 +159,10 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       if (!service) return notFound(reply);
       const result = await ctx.services.fixConfig(request.params.id);
       return result;
+    });
+
+    server.post<{ Params: IdParams }>('/:id/migrate-subdomain', async (request, reply) => {
+      return handleMigration(ctx, request.params.id, reply);
     });
 
     await server.register(createSslRoutes(ctx));

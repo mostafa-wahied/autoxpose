@@ -6,6 +6,7 @@ import { ServicesRepository } from '../features/services/services.repository.js'
 import { ServicesService } from '../features/services/services.service.js';
 import { SyncService } from '../features/services/sync.service.js';
 import { SettingsRepository, SettingsService } from '../features/settings/index.js';
+import { ChangeTracker } from './change-tracker.js';
 import type { AppDatabase } from './database/index.js';
 import { createLogger } from './logger/index.js';
 
@@ -32,6 +33,7 @@ export interface AppContext {
   streamingExpose: StreamingExposeService;
   sync: SyncService;
   discovery: DockerDiscoveryProvider | null;
+  changeTracker: ChangeTracker;
   lanIp: string;
   startWatcher: () => void;
 }
@@ -45,13 +47,17 @@ type CoreServices = {
   sync: SyncService;
 };
 
-function createCoreServices(
-  db: AppDatabase,
-  publicIp: string,
-  lanIp: string,
-  lanProvided: boolean
-): CoreServices {
-  const servicesRepo = new ServicesRepository(db);
+interface CoreServicesOptions {
+  db: AppDatabase;
+  publicIp: string;
+  lanIp: string;
+  lanProvided: boolean;
+  changeTracker: ChangeTracker;
+}
+
+function createCoreServices(options: CoreServicesOptions): CoreServices {
+  const { db, publicIp, lanIp, lanProvided, changeTracker } = options;
+  const servicesRepo = new ServicesRepository(db, changeTracker);
   const settingsRepo = new SettingsRepository(db);
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
   const services = new ServicesService(servicesRepo, settings);
@@ -71,12 +77,14 @@ export function createAppContext(
 ): AppContext {
   const resolvedLanIp = network?.lanIp || 'localhost';
   const resolvedPublicIp = network?.publicIp || 'localhost';
-  const core = createCoreServices(
+  const changeTracker = new ChangeTracker();
+  const core = createCoreServices({
     db,
-    resolvedPublicIp,
-    resolvedLanIp,
-    Boolean(network?.lanProvided)
-  );
+    publicIp: resolvedPublicIp,
+    lanIp: resolvedLanIp,
+    lanProvided: Boolean(network?.lanProvided),
+    changeTracker,
+  });
 
   const discovery = dockerConfig ? new DockerDiscoveryProvider(dockerConfig) : null;
 
@@ -87,12 +95,18 @@ export function createAppContext(
       expose: core.expose,
       streamingExpose: core.streamingExpose,
       settings: core.settings,
+      sync: core.sync,
+      servicesRepo: core.servicesRepo,
+      discovery,
     };
-    discovery.watch((svc: DiscoveredService, event: string) => handleDockerEvent(svc, event, deps));
+    discovery.watch(
+      (svc: DiscoveredService, event: string) => handleDockerEvent(svc, event, deps),
+      (containerId: string) => handleContainerRemoved(containerId, deps)
+    );
     logger.info('Docker watcher started');
   };
 
-  return { ...core, discovery, lanIp: resolvedLanIp, startWatcher };
+  return { ...core, discovery, changeTracker, lanIp: resolvedLanIp, startWatcher };
 }
 
 interface DockerEventDeps {
@@ -100,6 +114,19 @@ interface DockerEventDeps {
   expose: ExposeService;
   streamingExpose: StreamingExposeService;
   settings: SettingsService;
+  sync: SyncService;
+  servicesRepo: ServicesRepository;
+  discovery: DockerDiscoveryProvider;
+}
+
+async function handleContainerRemoved(containerId: string, deps: DockerEventDeps): Promise<void> {
+  const existing = await deps.servicesRepo.findBySourceId(containerId);
+  if (!existing) return;
+  logger.info(
+    { name: existing.name, containerId },
+    'Container labels changed; reconciling via scan'
+  );
+  await fullReconcile(deps);
 }
 
 async function handleDockerEvent(
@@ -109,15 +136,17 @@ async function handleDockerEvent(
 ): Promise<void> {
   logger.info({ name: service.name, event, autoExpose: service.autoExpose }, 'Docker event');
 
-  if (event === 'start') {
-    const result = await deps.services.syncFromDiscovery([service]);
-    if (result.created.length > 0 && service.autoExpose) {
+  if (event === 'start' || event === 'update') {
+    const svc = await deps.services.upsertService(service);
+    await deps.sync.detectExistingConfigurations([svc]);
+    await fullReconcile(deps);
+    const isNewService = !svc.enabled && !svc.dnsRecordId && !svc.proxyHostId;
+    if (isNewService && service.autoExpose) {
       const hasConfig = await checkProvidersConfigured(deps.settings);
       if (!hasConfig) {
         logger.warn({ name: service.name }, 'Auto-expose skipped: no providers configured');
         return;
       }
-      const svc = result.created[0];
       logger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing on container start');
       deps.streamingExpose
         .exposeWithProgress(svc.id, createNoopProgressCallback())
@@ -126,6 +155,13 @@ async function handleDockerEvent(
         });
     }
   }
+}
+
+async function fullReconcile(deps: DockerEventDeps): Promise<void> {
+  const discovered = await deps.discovery.discover();
+  await deps.services.syncFromDiscovery(discovered);
+  const all = await deps.services.getAllServices();
+  await deps.sync.detectExistingConfigurations(all);
 }
 
 async function checkProvidersConfigured(settings: SettingsService): Promise<boolean> {

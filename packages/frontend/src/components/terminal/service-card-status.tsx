@@ -88,21 +88,28 @@ function ServiceWarnings({
 }): JSX.Element {
   const warnings = parseWarnings(service.configWarnings);
   const showUnreachableReasons = isExposed && liveStatus === 'offline';
-
   const badges = buildWarningBadges(warnings, showUnreachableReasons, service);
-  const icons = buildExposureIcons(service);
+  const exposureIcons = [
+    service.exposureSource === 'discovered' && {
+      type: 'discovered',
+      msg: 'Discovered existing configuration',
+    },
+    service.exposureSource === 'auto' && { type: 'auto', msg: 'Auto-exposed on discovery' },
+  ].filter(Boolean) as Array<{ type: string; msg: string }>;
 
   return (
     <>
       {badges.map((w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />)}
-      <FixConfigButton service={service} warnings={warnings} />
+      <MigrateSubdomainButton service={service} warnings={warnings} />
       <PartialExposureButtons service={service} showUnreachableReasons={showUnreachableReasons} />
-      {icons.map((ic, i) => ic.show && <ExposureIcon key={i} type={ic.type} message={ic.msg} />)}
+      {exposureIcons.map((ic, i) => (
+        <ExposureIcon key={i} type={ic.type} message={ic.msg} />
+      ))}
     </>
   );
 }
 
-function FixConfigButton({
+function MigrateSubdomainButton({
   service,
   warnings,
 }: {
@@ -110,25 +117,37 @@ function FixConfigButton({
   warnings: ReturnType<typeof parseWarnings>;
 }): JSX.Element | null {
   const queryClient = useQueryClient();
-  const fixMutation = useMutation({
-    mutationFn: (id: string) => api.services.fixConfig(id),
+  const migrateMutation = useMutation({
+    mutationFn: (id: string) => api.services.migrateSubdomain(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
     },
   });
 
-  const hasFixable = warnings.port_mismatch || warnings.ip_mismatch;
-  if (!hasFixable) return null;
+  if (!warnings.subdomain_mismatch) return null;
+
+  const handleMigrate = (): void => {
+    if (
+      window.confirm(
+        `Migrate from ${service.exposedSubdomain} to ${service.subdomain}? This will create new DNS and proxy resources, then delete the old ones.`
+      )
+    ) {
+      migrateMutation.mutate(service.id);
+    }
+  };
 
   return (
-    <button
-      onClick={() => fixMutation.mutate(service.id)}
-      disabled={fixMutation.isPending}
-      className="px-2 py-0.5 text-xs bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded hover:bg-yellow-900/50 disabled:opacity-50"
-      title="Fix configuration mismatch automatically"
+    <Tooltip
+      content={`Migrate from ${service.exposedSubdomain} to ${service.subdomain}. Creates new DNS/Proxy → Updates DB → Deletes old resources.`}
     >
-      {fixMutation.isPending ? 'Fixing...' : 'Fix'}
-    </button>
+      <button
+        onClick={handleMigrate}
+        disabled={migrateMutation.isPending}
+        className="px-2 py-0.5 text-xs bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded hover:bg-yellow-900/50 disabled:opacity-50"
+      >
+        {migrateMutation.isPending ? 'Migrating...' : 'Migrate'}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -201,13 +220,51 @@ function PartialButton({
   );
 }
 
+function calculatePropagationState(service: ServiceRecord): {
+  isPropagating: boolean;
+  hideUnreachable: boolean;
+} {
+  const recentlyExposed = service.updatedAt
+    ? Date.now() - new Date(service.updatedAt).getTime() < 30000
+    : false;
+  const isUnreachable = service.reachabilityStatus === 'unreachable';
+  const isPropagating =
+    Boolean(service.enabled) && recentlyExposed && !service.lastReachabilityCheck && isUnreachable;
+  return { isPropagating, hideUnreachable: isPropagating };
+}
+
+function isLocalDnsLag(service: ServiceRecord, showUnreachableReasons: boolean): boolean {
+  if (!showUnreachableReasons) return false;
+  const properlyConfigured =
+    Boolean(service.enabled) &&
+    service.dnsExists === true &&
+    service.proxyExists === true &&
+    (!service.configWarnings || service.configWarnings === '[]');
+  const isUnreachable = service.reachabilityStatus === 'unreachable';
+  const recentlyConfigured = service.updatedAt
+    ? Date.now() - new Date(service.updatedAt).getTime() < 300000
+    : false;
+  const { isPropagating } = calculatePropagationState(service);
+  return properlyConfigured && isUnreachable && recentlyConfigured && !isPropagating;
+}
+
 function buildWarningBadges(
   warnings: ReturnType<typeof parseWarnings>,
   showUnreachableReasons: boolean,
   service: ServiceRecord
 ): Array<{ show: boolean; type: string; msg: string }> {
   const hasMismatch = service.dnsExists !== service.proxyExists;
+  const { isPropagating, hideUnreachable } = calculatePropagationState(service);
+  const shouldHide = hideUnreachable && showUnreachableReasons;
+  const localDnsLag = isLocalDnsLag(service, showUnreachableReasons);
+
   return [
+    { show: isPropagating, type: 'Propagating', msg: 'DNS propagating, please wait' },
+    {
+      show: localDnsLag,
+      type: 'Local DNS',
+      msg: 'May work externally. Local DNS cache needs time to update.',
+    },
     {
       show: hasMismatch && service.dnsExists === false && service.proxyExists === true,
       type: 'DNS',
@@ -219,31 +276,23 @@ function buildWarningBadges(
       msg: 'Proxy host missing',
     },
     {
-      show: showUnreachableReasons && service.dnsExists === null,
+      show: showUnreachableReasons && !shouldHide && service.dnsExists === null,
       type: 'DNS?',
       msg: 'DNS status unknown',
     },
     {
-      show: showUnreachableReasons && service.proxyExists === null,
+      show: showUnreachableReasons && !shouldHide && service.proxyExists === null,
       type: 'Proxy?',
-      msg: 'Proxy status unknown',
+      msg: 'DNS status unknown',
     },
     { show: warnings.port_mismatch, type: 'Port', msg: 'Port mismatch detected' },
     { show: warnings.scheme_mismatch, type: 'Scheme', msg: 'Scheme mismatch detected' },
     { show: warnings.ip_mismatch, type: 'IP', msg: 'IP address mismatch detected' },
-  ];
-}
-
-function buildExposureIcons(
-  service: ServiceRecord
-): Array<{ show: boolean; type: string; msg: string }> {
-  return [
     {
-      show: service.exposureSource === 'discovered',
-      type: 'discovered',
-      msg: 'Discovered existing configuration',
+      show: warnings.subdomain_mismatch,
+      type: 'Subdomain',
+      msg: `Exposed as ${service.exposedSubdomain}, label says ${service.subdomain}`,
     },
-    { show: service.exposureSource === 'auto', type: 'auto', msg: 'Auto-exposed on discovery' },
   ];
 }
 

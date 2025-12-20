@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import type { ChangeTracker } from '../../core/change-tracker.js';
 import type { AppDatabase } from '../../core/database/index.js';
 import * as schema from '../../core/database/schema.js';
 
@@ -58,7 +59,10 @@ export interface UpdateServiceInput {
 }
 
 export class ServicesRepository {
-  constructor(private db: AppDatabase) {}
+  constructor(
+    private db: AppDatabase,
+    private changeTracker: ChangeTracker
+  ) {}
 
   async findAll(): Promise<ServiceRecord[]> {
     return this.db.select().from(schema.services).all();
@@ -110,6 +114,7 @@ export class ServicesRepository {
       updatedAt: now,
     };
     await this.db.insert(schema.services).values(record);
+    this.changeTracker.increment();
     return record;
   }
 
@@ -122,11 +127,15 @@ export class ServicesRepository {
       .set({ ...input, updatedAt: new Date() })
       .where(eq(schema.services.id, id));
 
+    this.changeTracker.increment();
     return this.findById(id);
   }
 
   async delete(id: string): Promise<boolean> {
     const result = await this.db.delete(schema.services).where(eq(schema.services.id, id));
+    if (result.changes > 0) {
+      this.changeTracker.increment();
+    }
     return result.changes > 0;
   }
 }
