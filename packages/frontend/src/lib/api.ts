@@ -100,6 +100,8 @@ export const api = {
       request<{ services: ServiceRecord[] }>('/services'),
     getChangesVersion: (): Promise<{ version: number; lastChange: number }> =>
       request<{ version: number; lastChange: number }>('/services/changes/version'),
+    getOrphans: (): Promise<{ orphans: ServiceRecord[] }> =>
+      request<{ orphans: ServiceRecord[] }>('/services/orphans'),
     get: (id: string): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}`),
     create: (data: {
@@ -169,6 +171,8 @@ export const api = {
         `/services/${id}/migrate-subdomain`,
         { method: 'POST' }
       ),
+    cleanup: (id: string): Promise<{ success: boolean }> =>
+      request<{ success: boolean }>(`/services/${id}/cleanup`, { method: 'DELETE' }),
     exposeDnsOnly: (id: string): Promise<{ service: ServiceRecord; dnsRecordId?: string }> =>
       request<{ service: ServiceRecord; dnsRecordId?: string }>(`/services/${id}/dns-only`, {
         method: 'POST',

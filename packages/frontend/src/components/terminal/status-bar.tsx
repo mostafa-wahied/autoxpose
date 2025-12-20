@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, type IpState, type SettingsStatus } from '../../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { api, type SettingsStatus } from '../../lib/api';
+import { type IpMsg, useIpMessages } from './ip-messages';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 
@@ -24,22 +25,19 @@ interface SettingsStatusBarProps {
   settings: SettingsStatus | null | undefined;
   isExpanded: boolean;
   onToggle: () => void;
+  orphanCount: number;
+  onOrphansClick: () => void;
 }
 
 export function SettingsStatusBar({
   settings,
   isExpanded,
   onToggle,
+  orphanCount,
+  onOrphansClick,
 }: SettingsStatusBarProps): JSX.Element {
   const { dnsState, proxyState } = useConnectionStates(settings);
   const [dismissed, setDismissed] = useState(getDismissedWarnings);
-
-  const serverIpState = settings?.network?.serverIpState;
-  const lanIpState = settings?.network?.lanIpState;
-  const serverIp = settings?.network?.serverIp;
-  const lanIp = settings?.network?.lanIp;
-  const detectedIp = settings?.network?.detectedIp;
-  const proxyConfigured = settings?.proxy?.configured ?? false;
 
   const handleDismiss = useCallback((key: string) => {
     setDismissed(prev => {
@@ -51,12 +49,12 @@ export function SettingsStatusBar({
   }, []);
 
   const ipMessages = useIpMessages({
-    serverIpState,
-    lanIpState,
-    serverIp,
-    lanIp,
-    detectedIp,
-    proxyConfigured,
+    serverIpState: settings?.network?.serverIpState,
+    lanIpState: settings?.network?.lanIpState,
+    serverIp: settings?.network?.serverIp,
+    lanIp: settings?.network?.lanIp,
+    detectedIp: settings?.network?.detectedIp,
+    proxyConfigured: settings?.proxy?.configured ?? false,
     dismissed,
   });
 
@@ -68,34 +66,149 @@ export function SettingsStatusBar({
 
   return (
     <div className={`border-t px-4 py-2 ${barStyle}`}>
+      <StatusBarContent
+        dnsState={dnsState}
+        proxyState={proxyState}
+        settings={settings}
+        orphanCount={orphanCount}
+        onOrphansClick={onOrphansClick}
+        isExpanded={isExpanded}
+        needsSetup={needsSetup}
+        warningCount={warningCount}
+        onToggle={onToggle}
+        ipMessages={ipMessages}
+        onDismiss={handleDismiss}
+      />
+    </div>
+  );
+}
+
+interface StatusBarContentProps {
+  dnsState: ConnectionState;
+  proxyState: ConnectionState;
+  settings: SettingsStatus | null | undefined;
+  orphanCount: number;
+  onOrphansClick: () => void;
+  isExpanded: boolean;
+  needsSetup: boolean;
+  warningCount: number;
+  onToggle: () => void;
+  ipMessages: Array<IpMsg & { key: string }>;
+  onDismiss: (key: string) => void;
+}
+
+const ORPHAN_BADGE_KEY = 'autoxpose:orphan-badge-minimized';
+
+function OrphanBadge({
+  count,
+  onClick,
+}: {
+  count: number;
+  onClick: () => void;
+}): JSX.Element | null {
+  const [isMinimized, setIsMinimized] = useState(() => {
+    try {
+      return localStorage.getItem(ORPHAN_BADGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORPHAN_BADGE_KEY, String(isMinimized));
+    } catch {
+      return;
+    }
+  }, [isMinimized]);
+
+  if (count === 0) return null;
+
+  const handleMinimize = (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    setIsMinimized(true);
+  };
+
+  const handleExpand = (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    setIsMinimized(false);
+  };
+
+  if (isMinimized) {
+    return (
+      <Tooltip content="Container stopped but DNS/proxy records still exist">
+        <button
+          onClick={handleExpand}
+          className="h-2 w-2 rounded-full bg-[#f0883e] transition-transform hover:scale-125"
+          aria-label="Expand orphaned services badge"
+        />
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip content="Container stopped but DNS/proxy records still exist">
+      <button
+        onClick={onClick}
+        className="group flex items-center gap-1.5 rounded bg-[#f0883e20] px-2 py-1 transition-all hover:bg-[#f0883e30]"
+      >
+        <span className="text-xs font-medium text-[#f0883e]">{count} orphaned</span>
+        <button
+          onClick={handleMinimize}
+          className="flex h-3.5 w-3.5 items-center justify-center rounded text-[#f0883e] opacity-0 transition-opacity hover:bg-[#f0883e40] group-hover:opacity-100"
+          aria-label="Minimize badge"
+        >
+          −
+        </button>
+      </button>
+    </Tooltip>
+  );
+}
+
+function StatusBarContent(props: StatusBarContentProps): JSX.Element {
+  return (
+    <>
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
-          <StatusIndicator label="DNS" state={dnsState} provider={settings?.dns?.provider} />
+          <StatusIndicator
+            label="DNS"
+            state={props.dnsState}
+            provider={props.settings?.dns?.provider}
+          />
           <span className="text-[#30363d]">|</span>
-          <StatusIndicator label="Proxy" state={proxyState} provider={settings?.proxy?.provider} />
-          <StatusMessage dnsState={dnsState} proxyState={proxyState} />
+          <StatusIndicator
+            label="Proxy"
+            state={props.proxyState}
+            provider={props.settings?.proxy?.provider}
+          />
+          <StatusMessage dnsState={props.dnsState} proxyState={props.proxyState} />
         </div>
-        <ConfigureButton
-          isExpanded={isExpanded}
-          needsSetup={needsSetup}
-          warningCount={warningCount}
-          onClick={onToggle}
-        />
+        <div className="flex items-center gap-3">
+          {props.orphanCount > 0 && (
+            <OrphanBadge count={props.orphanCount} onClick={props.onOrphansClick} />
+          )}
+          <ConfigureButton
+            isExpanded={props.isExpanded}
+            needsSetup={props.needsSetup}
+            warningCount={props.warningCount}
+            onClick={props.onToggle}
+          />
+        </div>
       </div>
-      {isExpanded && ipMessages.length > 0 && (
+      {props.isExpanded && props.ipMessages.length > 0 && (
         <div className="mt-3 space-y-2 border-t border-[#30363d] pt-3">
-          {ipMessages.map(msg => (
+          {props.ipMessages.map(msg => (
             <NetworkWarning
               key={msg.key}
               message={msg.text}
               dismissible={msg.dismissible}
-              onDismiss={() => handleDismiss(msg.key)}
+              onDismiss={() => props.onDismiss(msg.key)}
               severity={msg.severity}
             />
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -180,112 +293,6 @@ function StatusMessage({ dnsState, proxyState }: StatusMessageProps): JSX.Elemen
   if (proxyState !== 'connected') messages.push('Configure Proxy manager');
 
   return <span className="text-[#f85149]">{messages.join(' & ')}</span>;
-}
-
-type IpMsg = {
-  text: string;
-  dismissible: boolean;
-  severity: 'error' | 'warning' | 'info';
-};
-
-function getServerIpMessage(state: IpState, ip: string, detected: string | null): IpMsg {
-  const msgs: Record<IpState, IpMsg> = {
-    missing: {
-      text: `Server IP: localhost (set SERVER_IP)`,
-      dismissible: false,
-      severity: 'error',
-    },
-    invalid: { text: `Server IP: invalid format "${ip}"`, dismissible: false, severity: 'error' },
-    placeholder: {
-      text: `Server IP: placeholder "${ip}" (set real IP)`,
-      dismissible: false,
-      severity: 'error',
-    },
-    valid: { text: '', dismissible: false, severity: 'info' },
-    'bridge-autodetected': { text: '', dismissible: false, severity: 'info' },
-    mismatch: {
-      text: detected ? `Server IP: ${ip} but detected ${detected} (VPN?)` : '',
-      dismissible: true,
-      severity: 'warning',
-    },
-  };
-  return msgs[state];
-}
-
-function getLanIpMessage(state: IpState, ip: string): IpMsg {
-  const msgs: Record<IpState, IpMsg> = {
-    missing: { text: '', dismissible: false, severity: 'info' },
-    invalid: { text: `LAN IP: invalid format "${ip}"`, dismissible: false, severity: 'error' },
-    placeholder: {
-      text: `LAN IP: placeholder "${ip}" (set real IP)`,
-      dismissible: false,
-      severity: 'error',
-    },
-    valid: { text: '', dismissible: false, severity: 'info' },
-    'bridge-autodetected': {
-      text: `LAN IP: auto-detected ${ip} (set LAN_IP if needed)`,
-      dismissible: true,
-      severity: 'info',
-    },
-    mismatch: { text: '', dismissible: false, severity: 'info' },
-  };
-  return msgs[state];
-}
-
-function buildIpMessages(p: {
-  srv: IpState | undefined;
-  lan: IpState | undefined;
-  srvIp: string;
-  lanIp: string;
-  det: string | null;
-  proxyCfg: boolean;
-  dis: Set<string>;
-}): Array<IpMsg & { key: string }> {
-  const res: Array<IpMsg & { key: string }> = [];
-
-  if (p.srv && p.srv !== 'valid') {
-    const k = `server:${p.srv}:${p.srvIp}`;
-    if (!p.dis.has(k)) {
-      const m = getServerIpMessage(p.srv, p.srvIp, p.det);
-      if (m.text) res.push({ ...m, key: k });
-    }
-  }
-
-  if (p.lan && p.lan !== 'valid' && p.proxyCfg) {
-    const k = `lan:${p.lan}:${p.lanIp}`;
-    if (!p.dis.has(k)) {
-      const m = getLanIpMessage(p.lan, p.lanIp);
-      if (m.text) res.push({ ...m, key: k });
-    }
-  }
-
-  return res;
-}
-
-function useIpMessages(params: {
-  serverIpState: IpState | undefined;
-  lanIpState: IpState | undefined;
-  serverIp: string | undefined;
-  lanIp: string | undefined;
-  detectedIp: string | null | undefined;
-  proxyConfigured: boolean;
-  dismissed: Set<string>;
-}): Array<IpMsg & { key: string }> {
-  const { serverIpState, lanIpState, serverIp, lanIp, detectedIp, proxyConfigured, dismissed } =
-    params;
-  return useMemo(
-    () =>
-      buildIpMessages({
-        srv: serverIpState,
-        lan: lanIpState,
-        srvIp: serverIp || '',
-        lanIp: lanIp || '',
-        det: detectedIp || null,
-        proxyCfg: proxyConfigured,
-        dis: dismissed,
-      }),
-    [serverIpState, lanIpState, serverIp, lanIp, detectedIp, proxyConfigured, dismissed]
-  );
 }
 
 function NetworkWarning({

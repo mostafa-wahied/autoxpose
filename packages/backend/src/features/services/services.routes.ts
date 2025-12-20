@@ -93,11 +93,45 @@ const handleMigration = async (
   return ctx.expose.migrateSubdomain(service.id);
 };
 
+async function handleGetOrphans(ctx: AppContext): Promise<{ orphans: unknown[] }> {
+  if (!ctx.discovery) return { orphans: [] };
+  const containers = await ctx.discovery.discover();
+  const containerIds = containers.map(c => c.id);
+  const orphans = await ctx.sync.detectOrphans(containerIds);
+  return { orphans };
+}
+
+async function handleCleanup(
+  ctx: AppContext,
+  serviceId: string,
+  reply: FastifyReply
+): Promise<{ success: boolean } | void> {
+  const service = await ctx.services.getServiceById(serviceId);
+  if (!service) return notFound(reply);
+  if (service.exposureSource === 'discovered') {
+    return reply.code(400).send({ error: 'Cannot cleanup discovered services' });
+  }
+  const promises = [];
+  if (service.dnsRecordId) {
+    const dns = await ctx.settings.getDnsProvider();
+    if (dns) promises.push(dns.deleteRecord(service.dnsRecordId).catch(() => null));
+  }
+  if (service.proxyHostId) {
+    const proxy = await ctx.settings.getProxyProvider();
+    if (proxy) promises.push(proxy.deleteHost(service.proxyHostId).catch(() => null));
+  }
+  await Promise.all(promises);
+  await ctx.services.deleteService(serviceId);
+  return { success: true };
+}
+
 export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
   return async server => {
     server.get('/', async () => ({ services: await ctx.services.getAllServices() }));
 
     server.get('/changes/version', async () => ctx.changeTracker.getInfo());
+
+    server.get('/orphans', async () => handleGetOrphans(ctx));
 
     server.get<{ Params: IdParams }>('/:id', async (request, reply) => {
       const service = await ctx.services.getServiceById(request.params.id);
@@ -163,6 +197,10 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
 
     server.post<{ Params: IdParams }>('/:id/migrate-subdomain', async (request, reply) => {
       return handleMigration(ctx, request.params.id, reply);
+    });
+
+    server.delete<{ Params: IdParams }>('/:id/cleanup', async (request, reply) => {
+      return handleCleanup(ctx, request.params.id, reply);
     });
 
     await server.register(createSslRoutes(ctx));

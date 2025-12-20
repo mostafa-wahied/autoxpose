@@ -2,11 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { SettingsStatusBar, TerminalHeader, TerminalSidebar } from '../components/terminal';
 import { KeyboardShortcutsModal } from '../components/terminal/keyboard-shortcuts-modal';
+import { OrphansModal } from '../components/terminal/orphans-modal';
 import { SettingsPanel } from '../components/terminal/settings-panel';
 import { TerminalThemeProvider } from '../components/terminal/theme';
 import { api, type ServiceRecord } from '../lib/api';
 import { ConfirmDialogs } from './terminal/confirm-dialogs';
 import { ContentArea } from './terminal/content-area';
+import { useTerminalShortcuts } from './terminal/keyboard-shortcuts';
 import { ErrorView, LoadingView } from './terminal/status-views';
 import { useTerminalActions } from './terminal/use-terminal-actions';
 
@@ -54,113 +56,6 @@ function getLoadingId(
 ): string | null {
   const streamLoading = streamState.isActive ? streamState.serviceId : null;
   return streamLoading || deletingId;
-}
-
-function isTextTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || target.isContentEditable;
-}
-
-function trySettingsShortcut(
-  key: string,
-  event: KeyboardEvent,
-  isOpen: boolean,
-  toggle: (open: boolean) => void
-): boolean {
-  const isSettingsKey = key === ',' || key === 'comma';
-  if (!isSettingsKey || event.shiftKey) return false;
-  event.preventDefault();
-  toggle(!isOpen);
-  return true;
-}
-
-function handleActionShortcut(
-  event: KeyboardEvent,
-  actions: {
-    canExpose: boolean;
-    onExposeAll: () => void;
-    onUnexposeAll: () => void;
-    onScan: () => void;
-  }
-): void {
-  if (!event.altKey) return;
-  const code = event.code.toLowerCase();
-  if (code === 'keye') {
-    event.preventDefault();
-    if (actions.canExpose) actions.onExposeAll();
-    return;
-  }
-  if (code === 'keyu') {
-    event.preventDefault();
-    actions.onUnexposeAll();
-    return;
-  }
-  if (code === 'keys') {
-    event.preventDefault();
-    actions.onScan();
-  }
-}
-
-function useTerminalShortcuts(params: {
-  onExposeAll: () => void;
-  onUnexposeAll: () => void;
-  onScan: () => void;
-  settingsOpen: boolean;
-  setSettingsOpen: (open: boolean) => void;
-  canExpose: boolean;
-  shortcutsOpen: boolean;
-  setShortcutsOpen: (open: boolean) => void;
-}): void {
-  const {
-    onExposeAll,
-    onUnexposeAll,
-    onScan,
-    settingsOpen,
-    setSettingsOpen,
-    canExpose,
-    shortcutsOpen,
-    setShortcutsOpen,
-  } = params;
-
-  useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent): void => {
-      if (isTextTarget(event.target)) return;
-      const key = event.key.toLowerCase();
-
-      if (key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        event.preventDefault();
-        setShortcutsOpen(!shortcutsOpen);
-        return;
-      }
-
-      const ctrl = event.ctrlKey || event.metaKey;
-      if (!ctrl) return;
-
-      const toggled = trySettingsShortcut(key, event, settingsOpen, setSettingsOpen);
-      if (toggled) return;
-
-      handleActionShortcut(event, {
-        canExpose,
-        onExposeAll,
-        onUnexposeAll,
-        onScan,
-      });
-    };
-
-    const remove = (): void => window.removeEventListener('keydown', handleShortcut);
-    window.addEventListener('keydown', handleShortcut);
-    return remove;
-  }, [
-    canExpose,
-    onExposeAll,
-    onScan,
-    onUnexposeAll,
-    setSettingsOpen,
-    settingsOpen,
-    shortcutsOpen,
-    setShortcutsOpen,
-  ]);
 }
 
 function useSmartRefetchInterval(services: ServiceRecord[] | undefined): number | false {
@@ -260,12 +155,21 @@ function TerminalDashboardContent({
   settingsLoading,
 }: DashboardContentProps): JSX.Element {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [orphansOpen, setOrphansOpen] = useState(false);
   const stableServices = dedupeServices(services);
   const dashboardState = useDashboardState(stableServices, settings, settingsLoading);
   const { actions, state } = useTerminalActions({
     services: stableServices,
     needsSetup: dashboardState.needsSetup,
   });
+
+  const orphansQuery = useQuery({
+    queryKey: ['orphans'],
+    queryFn: api.services.getOrphans,
+    refetchInterval: 10000,
+  });
+
+  const orphanCount = orphansQuery.data?.orphans?.length ?? 0;
   const activeService = stableServices.find(s => s.id === state.streamState.serviceId);
   useTerminalShortcuts({
     onExposeAll: actions.handleExposeAll,
@@ -302,27 +206,62 @@ function TerminalDashboardContent({
         proxyConfigured={dashboardState.proxyOk}
         onHelp={() => setShortcutsOpen(true)}
       />
-      <MainContent
+      <DashboardMain
         services={stableServices}
         state={state}
         actions={actions}
         activeService={activeService}
-        loadingId={getLoadingId(state.streamState, state.deletingServiceId)}
-        settingsData={settings}
-        baseDomain={settings?.dns?.domain ?? null}
-        canExpose={dashboardState.canExpose}
-        canExposeReason={dashboardState.canExpose ? undefined : dashboardState.canExposeReason}
+        settings={settings}
+        dashboardState={dashboardState}
+        orphanCount={orphanCount}
         setShortcutsOpen={setShortcutsOpen}
-      />
-      <ConfirmDialogs
-        action={state.confirmAction}
-        serviceCount={stableServices.length}
-        exposedCount={dashboardState.exposedCount}
-        onConfirm={actions.handleConfirm}
-        onCancel={() => actions.setConfirmAction(null)}
+        setOrphansOpen={setOrphansOpen}
       />
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <OrphansModal isOpen={orphansOpen} onClose={() => setOrphansOpen(false)} />
     </div>
+  );
+}
+
+interface DashboardMainProps {
+  services: ServiceRecord[];
+  state: ReturnType<typeof useTerminalActions>['state'];
+  actions: ReturnType<typeof useTerminalActions>['actions'];
+  activeService: ServiceRecord | undefined;
+  settings: Awaited<ReturnType<typeof api.settings.status>> | undefined;
+  dashboardState: ReturnType<typeof useDashboardState>;
+  orphanCount: number;
+  setShortcutsOpen: (open: boolean) => void;
+  setOrphansOpen: (open: boolean) => void;
+}
+
+function DashboardMain(props: DashboardMainProps): JSX.Element {
+  return (
+    <>
+      <MainContent
+        services={props.services}
+        state={props.state}
+        actions={props.actions}
+        activeService={props.activeService}
+        loadingId={getLoadingId(props.state.streamState, props.state.deletingServiceId)}
+        settingsData={props.settings}
+        baseDomain={props.settings?.dns?.domain ?? null}
+        canExpose={props.dashboardState.canExpose}
+        canExposeReason={
+          props.dashboardState.canExpose ? undefined : props.dashboardState.canExposeReason
+        }
+        setShortcutsOpen={props.setShortcutsOpen}
+        orphanCount={props.orphanCount}
+        onOrphansClick={() => props.setOrphansOpen(true)}
+      />
+      <ConfirmDialogs
+        action={props.state.confirmAction}
+        serviceCount={props.services.length}
+        exposedCount={props.dashboardState.exposedCount}
+        onConfirm={props.actions.handleConfirm}
+        onCancel={() => props.actions.setConfirmAction(null)}
+      />
+    </>
   );
 }
 
@@ -337,6 +276,8 @@ interface MainContentProps {
   canExpose: boolean;
   canExposeReason?: string;
   setShortcutsOpen: (open: boolean) => void;
+  orphanCount: number;
+  onOrphansClick: () => void;
 }
 
 function MainContent({
@@ -350,6 +291,8 @@ function MainContent({
   canExpose,
   canExposeReason,
   setShortcutsOpen,
+  orphanCount,
+  onOrphansClick,
 }: MainContentProps): JSX.Element {
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -382,6 +325,8 @@ function MainContent({
           settings={settingsData}
           isExpanded={state.settingsOpen}
           onToggle={() => state.setSettingsOpen(!state.settingsOpen)}
+          orphanCount={orphanCount}
+          onOrphansClick={onOrphansClick}
         />
       </div>
     </div>

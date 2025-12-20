@@ -342,4 +342,18 @@ export class SyncService {
     const cfg = await this.settings.getDnsConfig();
     return cfg?.config.domain || '';
   }
+
+  async detectOrphans(containerIds: string[]): Promise<ServiceRecord[]> {
+    const allServices = await this.servicesRepo.findAll();
+    const containerIdSet = new Set(containerIds);
+
+    const orphans = allServices.filter(service => {
+      const isAutoxposeManaged = ['manual', 'auto'].includes(service.exposureSource || '');
+      const hasNoContainer = service.sourceId && !containerIdSet.has(service.sourceId);
+      const isExposed = service.enabled && (service.dnsRecordId || service.proxyHostId);
+      return isAutoxposeManaged && hasNoContainer && isExposed;
+    });
+
+    return orphans;
+  }
 }
