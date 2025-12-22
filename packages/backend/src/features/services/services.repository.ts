@@ -25,6 +25,7 @@ export interface ServiceRecord {
   sslPending: boolean | null;
   sslError: string | null;
   sslForced: boolean | null;
+  tags: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 }
@@ -36,6 +37,7 @@ export interface CreateServiceInput {
   scheme?: string;
   source: string;
   sourceId?: string;
+  tags?: string;
 }
 
 export interface UpdateServiceInput {
@@ -56,6 +58,7 @@ export interface UpdateServiceInput {
   sslPending?: boolean | null;
   sslError?: string | null;
   sslForced?: boolean;
+  tags?: string | null;
 }
 
 export class ServicesRepository {
@@ -110,6 +113,7 @@ export class ServicesRepository {
       sslPending: null,
       sslError: null,
       sslForced: false,
+      tags: input.tags ?? null,
       createdAt: now,
       updatedAt: now,
     };

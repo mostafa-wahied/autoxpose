@@ -21,6 +21,7 @@ export interface ServiceRecord {
   sslPending: boolean | null;
   sslError: string | null;
   sslForced: boolean | null;
+  tags: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

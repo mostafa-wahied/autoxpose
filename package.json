@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
     "build": "pnpm --filter backend build && pnpm --filter frontend build",
+    "build:metadata": "tsx scripts/build-metadata.ts",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check",
     "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",
@@ -16,7 +17,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "prettier": "^3.2.0"
+    "prettier": "^3.2.0",
+    "tsx": "^4.21.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

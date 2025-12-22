@@ -34,6 +34,7 @@ function recreateSchema(sqlite: Database.Database): void {
       ssl_pending INTEGER,
       ssl_error TEXT,
       ssl_forced INTEGER DEFAULT 0,
+      tags TEXT,
       created_at INTEGER,
       updated_at INTEGER
     );
@@ -45,6 +46,13 @@ function recreateSchema(sqlite: Database.Database): void {
       created_at INTEGER
     );
   `);
+
+  const columns = sqlite.prepare('PRAGMA table_info(services)').all() as Array<{ name: string }>;
+  const hasTagsColumn = columns.some(col => col.name === 'tags');
+
+  if (!hasTagsColumn) {
+    sqlite.exec('ALTER TABLE services ADD COLUMN tags TEXT');
+  }
 }
 
 export function getDatabase(path: string): AppDatabase {

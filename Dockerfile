@@ -27,6 +27,7 @@ COPY packages/backend/package.json ./packages/backend/package.json
 RUN pnpm install --filter backend --prod --frozen-lockfile
 
 COPY --from=builder --chown=autoxpose:nodejs /app/packages/backend/dist ./packages/backend/dist
+COPY --from=builder --chown=autoxpose:nodejs /app/packages/backend/src/data ./packages/backend/src/data
 COPY --from=builder --chown=autoxpose:nodejs /app/packages/frontend/dist ./public
 
 RUN mkdir -p /app/packages/backend/data && chown autoxpose:nodejs /app/packages/backend/data
