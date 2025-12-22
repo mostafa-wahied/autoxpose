@@ -129,7 +129,7 @@ function MigrateSubdomainButton({
   const handleMigrate = (): void => {
     if (
       window.confirm(
-        `Migrate from ${service.exposedSubdomain} to ${service.subdomain}? This will create new DNS and proxy resources, then delete the old ones.`
+        `Migrate from ${service.subdomain} to ${service.exposedSubdomain}? This will create new DNS and proxy resources, then delete the old ones.`
       )
     ) {
       migrateMutation.mutate(service.id);
@@ -138,7 +138,7 @@ function MigrateSubdomainButton({
 
   return (
     <Tooltip
-      content={`Migrate from ${service.exposedSubdomain} to ${service.subdomain}. Creates new DNS/Proxy → Updates DB → Deletes old resources.`}
+      content={`Migrate from ${service.subdomain} to ${service.exposedSubdomain}. Creates new DNS/Proxy → Updates DB → Deletes old resources.`}
     >
       <button
         onClick={handleMigrate}

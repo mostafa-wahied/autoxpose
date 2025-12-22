@@ -20,10 +20,20 @@ export type SyncStatus = {
   isSynced: boolean;
 };
 
-type ProviderData = {
-  dnsRecords: DnsRecord[];
-  proxyHosts: ProxyHost[];
-  baseDomain: string;
+type ProviderData = { dnsRecords: DnsRecord[]; proxyHosts: ProxyHost[]; baseDomain: string };
+
+type ServiceUpdate = {
+  exposureSource: string | null;
+  dnsExists: boolean;
+  proxyExists: boolean;
+  configWarnings: string | null;
+  exposedSubdomain: string | null;
+  dnsRecordId: string | null;
+  proxyHostId: string | null;
+  enabled: boolean;
+  sslPending: boolean | null;
+  sslError: string | null;
+  subdomain?: string;
 };
 
 export class SyncService {
@@ -42,22 +52,23 @@ export class SyncService {
     const proxy = await this.settings.getProxyProvider();
     const baseDomain = await this.getBaseDomain();
     const fullDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
-
     const dnsRecord = dns ? await dns.findByHostname(service.subdomain) : null;
     const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
     const isExposed = Boolean(dnsRecord) || Boolean(proxyHost);
-
-    const exposedSubdomain = proxyHost ? this.extractSubdomain(proxyHost.domain, baseDomain) : null;
+    const exposedSubdomain = this.extractExposedSubdomain(proxyHost, baseDomain);
     const warnings = this.detectConfigMismatches(service, proxyHost ?? undefined, exposedSubdomain);
-
     await this.servicesRepo.update(service.id, {
       enabled: isExposed,
       dnsRecordId: dnsRecord?.id ?? null,
       proxyHostId: proxyHost?.id ?? null,
       configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
     });
-
     return (await this.servicesRepo.findById(service.id))!;
+  }
+
+  private extractExposedSubdomain(proxyHost: ProxyHost | null, baseDomain: string): string | null {
+    if (!proxyHost) return null;
+    return baseDomain ? proxyHost.domain.replace(`.${baseDomain}`, '') : proxyHost.domain;
   }
 
   async syncAll(services: ServiceRecord[]): Promise<{ synced: number; total: number }> {
@@ -81,7 +92,7 @@ export class SyncService {
     baseDomain: string
   ): Promise<boolean> {
     try {
-      const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+      const fullDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
       const dnsRecord = dns ? await dns.findByHostname(service.subdomain) : null;
       const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
       const needsSync = this.checkNeedsSync(service, dnsRecord, proxyHost);
@@ -109,10 +120,6 @@ export class SyncService {
     const dnsIdMatch = service.dnsRecordId === (dnsRecord?.id ?? null);
     const proxyIdMatch = service.proxyHostId === (proxyHost?.id ?? null);
     return service.enabled !== isExposed || !dnsIdMatch || !proxyIdMatch;
-  }
-
-  private buildFullDomain(subdomain: string, baseDomain: string): string {
-    return baseDomain ? `${subdomain}.${baseDomain}` : subdomain;
   }
 
   private async fetchProviderData(): Promise<ProviderData> {
@@ -188,13 +195,13 @@ export class SyncService {
     records: DnsRecord[],
     baseDomain: string
   ): DnsRecord | undefined {
-    const exactDomain = this.buildFullDomain(service.subdomain, baseDomain);
+    const exactDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
     const exactMatch = records.find(r => r.hostname === exactDomain && r.type === 'A');
     if (exactMatch) return exactMatch;
 
     return records.find(r => {
       if (r.type !== 'A') return false;
-      const recordSub = this.extractSubdomain(r.hostname, baseDomain);
+      const recordSub = baseDomain ? r.hostname.replace(`.${baseDomain}`, '') : r.hostname;
       return recordSub && this.fuzzyMatchSubdomain(recordSub, service.name);
     });
   }
@@ -204,12 +211,12 @@ export class SyncService {
     hosts: ProxyHost[],
     baseDomain: string
   ): ProxyHost | undefined {
-    const exactDomain = this.buildFullDomain(service.subdomain, baseDomain);
+    const exactDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
     const exactMatch = hosts.find(h => h.domain === exactDomain);
     if (exactMatch) return exactMatch;
 
     const fuzzyMatch = hosts.find(h => {
-      const hostSub = this.extractSubdomain(h.domain, baseDomain);
+      const hostSub = baseDomain ? h.domain.replace(`.${baseDomain}`, '') : h.domain;
       return hostSub && this.fuzzyMatchSubdomain(hostSub, service.name);
     });
     if (fuzzyMatch) return fuzzyMatch;
@@ -227,11 +234,15 @@ export class SyncService {
     this.logDetectionResults(service, dnsRecord, proxyHost, data);
 
     const exposedSubdomain = proxyHost
-      ? this.extractSubdomain(proxyHost.domain, data.baseDomain)
+      ? data.baseDomain
+        ? proxyHost.domain.replace(`.${data.baseDomain}`, '')
+        : proxyHost.domain
       : null;
 
     if (proxyHost && exposedSubdomain && exposedSubdomain !== service.subdomain) {
-      const fullDomain = this.buildFullDomain(exposedSubdomain, data.baseDomain);
+      const fullDomain = data.baseDomain
+        ? `${exposedSubdomain}.${data.baseDomain}`
+        : exposedSubdomain;
       dnsRecord = data.dnsRecords.find(r => r.hostname === fullDomain && r.type === 'A');
     }
 
@@ -244,58 +255,81 @@ export class SyncService {
     dnsRecord: DnsRecord | undefined,
     proxyHost: ProxyHost | undefined,
     exposedSubdomain: string | null
-  ): {
-    exposureSource: string | null;
-    dnsExists: boolean;
-    proxyExists: boolean;
-    configWarnings: string | null;
-    exposedSubdomain: string | null;
-    dnsRecordId: string | null;
-    proxyHostId: string | null;
-    enabled: boolean;
-    sslPending: boolean | null;
-    sslError: string | null;
-    subdomain?: string;
-  } {
+  ): ServiceUpdate {
+    const updateInfo = this.calculateUpdateInfo(service, dnsRecord, proxyHost, exposedSubdomain);
+    return {
+      ...updateInfo.baseUpdate,
+      ...(updateInfo.shouldUpdateSubdomain && exposedSubdomain && { subdomain: exposedSubdomain }),
+    };
+  }
+
+  private calculateUpdateInfo(
+    service: ServiceRecord,
+    dnsRecord: DnsRecord | undefined,
+    proxyHost: ProxyHost | undefined,
+    exposedSubdomain: string | null
+  ): { baseUpdate: Omit<ServiceUpdate, 'subdomain'>; shouldUpdateSubdomain: boolean } {
     const dnsExists = Boolean(dnsRecord);
     const proxyExists = Boolean(proxyHost);
-    const exposureSource = this.determineExposureSource(service, dnsExists, proxyExists);
-    const shouldBeEnabled = dnsExists && proxyExists;
-    const subdomainNeedsUpdate = exposedSubdomain && exposedSubdomain !== service.subdomain;
-    const warnings = this.detectConfigMismatches(service, proxyHost, exposedSubdomain);
-    const hasSubdomainMismatch = warnings.includes('subdomain_mismatch');
-
-    return {
-      exposureSource,
-      dnsExists,
-      proxyExists,
-      configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
+    const needsUpdate = Boolean(exposedSubdomain && exposedSubdomain !== service.subdomain);
+    const shouldAutoAdopt = this.shouldAutoAdoptSubdomain(
+      needsUpdate,
       exposedSubdomain,
-      dnsRecordId: dnsRecord?.id ?? service.dnsRecordId,
-      proxyHostId: proxyHost?.id ?? service.proxyHostId,
-      enabled: shouldBeEnabled,
-      sslPending: proxyHost?.sslPending ?? null,
-      sslError: proxyHost?.sslError ?? null,
-      ...(subdomainNeedsUpdate && !hasSubdomainMismatch && { subdomain: exposedSubdomain }),
+      service.subdomain
+    );
+    const warnings = this.detectConfigMismatches(
+      service,
+      proxyHost,
+      exposedSubdomain,
+      shouldAutoAdopt
+    );
+    const shouldUpdateSubdomain =
+      needsUpdate && (shouldAutoAdopt || !warnings.includes('subdomain_mismatch'));
+    return {
+      baseUpdate: {
+        exposureSource: this.determineExposureSource(service, dnsExists, proxyExists),
+        dnsExists,
+        proxyExists,
+        configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
+        exposedSubdomain,
+        dnsRecordId: dnsRecord?.id ?? service.dnsRecordId,
+        proxyHostId: proxyHost?.id ?? service.proxyHostId,
+        enabled: dnsExists && proxyExists,
+        sslPending: proxyHost?.sslPending ?? null,
+        sslError: proxyHost?.sslError ?? null,
+      },
+      shouldUpdateSubdomain,
     };
+  }
+
+  private shouldAutoAdoptSubdomain(
+    needsUpdate: boolean,
+    exposedSubdomain: string | null,
+    currentSubdomain: string
+  ): boolean {
+    if (!needsUpdate) return false;
+    return this.isCleanerSubdomain(exposedSubdomain!, currentSubdomain);
+  }
+
+  private isCleanerSubdomain(discovered: string, current: string): boolean {
+    if (discovered.length < current.length) return true;
+    if (current.startsWith('ix-') && !discovered.startsWith('ix-')) return true;
+    const currentParts = current.split('-');
+    const hasDuplicates = currentParts.length !== new Set(currentParts).size;
+    return hasDuplicates;
   }
 
   private detectConfigMismatches(
     service: ServiceRecord,
     proxyHost: ProxyHost | undefined,
-    newExposedSubdomain: string | null
+    newExposedSubdomain: string | null,
+    autoAdopting = false
   ): string[] {
     const warnings: string[] = [];
     if (!proxyHost) return warnings;
-
-    if (proxyHost.targetPort !== service.port) {
-      warnings.push('port_mismatch');
-    }
-
-    if (newExposedSubdomain && newExposedSubdomain !== service.subdomain) {
+    if (proxyHost.targetPort !== service.port) warnings.push('port_mismatch');
+    if (newExposedSubdomain && newExposedSubdomain !== service.subdomain && !autoAdopting)
       warnings.push('subdomain_mismatch');
-    }
-
     return warnings;
   }
 
@@ -324,18 +358,9 @@ export class SyncService {
     dnsExists: boolean,
     proxyExists: boolean
   ): string | null {
-    if (!service.enabled && (dnsExists || proxyExists)) {
-      return 'discovered';
-    }
-    if (service.enabled) {
-      return service.exposureSource || 'manual';
-    }
+    if (!service.enabled && (dnsExists || proxyExists)) return 'discovered';
+    if (service.enabled) return service.exposureSource || 'manual';
     return null;
-  }
-
-  private extractSubdomain(fullDomain: string, baseDomain: string): string {
-    if (!baseDomain) return fullDomain;
-    return fullDomain.replace(`.${baseDomain}`, '');
   }
 
   private async getBaseDomain(): Promise<string> {
@@ -346,14 +371,11 @@ export class SyncService {
   async detectOrphans(containerIds: string[]): Promise<ServiceRecord[]> {
     const allServices = await this.servicesRepo.findAll();
     const containerIdSet = new Set(containerIds);
-
-    const orphans = allServices.filter(service => {
+    return allServices.filter(service => {
       const isAutoxposeManaged = ['manual', 'auto'].includes(service.exposureSource || '');
       const hasNoContainer = service.sourceId && !containerIdSet.has(service.sourceId);
       const isExposed = service.enabled && (service.dnsRecordId || service.proxyHostId);
       return isAutoxposeManaged && hasNoContainer && isExposed;
     });
-
-    return orphans;
   }
 }

@@ -266,8 +266,8 @@ export class ExposeService {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
-    const oldSubdomain = service.exposedSubdomain as string;
-    const newSubdomain = service.subdomain;
+    const oldSubdomain = service.subdomain;
+    const newSubdomain = service.exposedSubdomain as string;
     const oldDnsRecordId = service.dnsRecordId;
     const oldProxyHostId = service.proxyHostId;
 
