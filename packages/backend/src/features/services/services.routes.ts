@@ -203,6 +203,11 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return handleCleanup(ctx, request.params.id, reply);
     });
 
+    server.post('/refresh-tags', async () => {
+      const result = await ctx.services.refreshAllTags();
+      return result;
+    });
+
     await server.register(createSslRoutes(ctx));
     await server.register(createSyncRoutes(ctx), { prefix: '/sync' });
   };

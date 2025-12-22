@@ -7,7 +7,6 @@
     "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
     "build": "pnpm --filter backend build && pnpm --filter frontend build",
     "build:metadata": "tsx scripts/build-metadata.ts",
-    "migrate:tags": "tsx scripts/migrate-tags.ts",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check",
     "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",

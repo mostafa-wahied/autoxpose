@@ -70,8 +70,8 @@ function createCoreServices(options: CoreServicesOptions): CoreServices {
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
   const metadataLoader = new MetadataLoader();
   const tagDetector = new TagDetector(metadataLoader);
-  const metadataUpdater = new MetadataUpdater(metadataLoader);
   const services = new ServicesService(servicesRepo, settings, tagDetector);
+  const metadataUpdater = new MetadataUpdater(metadataLoader, services);
   const sync = new SyncService(servicesRepo, settings);
   const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
   const expose = new ExposeService(exposeContext);

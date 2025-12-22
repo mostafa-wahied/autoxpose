@@ -1,4 +1,4 @@
-import { CommandPrompt } from '../../components/terminal';
+import { CommandPrompt, TagFilters, useTagFilters } from '../../components/terminal';
 import { ProgressOutput } from '../../components/terminal/progress';
 import { ScanSuccessNotice } from './status-views';
 import { ServiceGrid } from './service-grid';
@@ -33,12 +33,20 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
     settingsData,
     onScan,
   } = props;
+
+  const { selectedTags, setSelectedTags, tagCounts, filteredServices } = useTagFilters(services);
+
   return (
     <div className="space-y-6">
       <CommandPrompt command={`autoxpose status --services ${services.length}`} />
       {state.scanMutation.isSuccess && <ScanSuccessNotice data={state.scanMutation.data} />}
+      <TagFilters
+        selectedTags={selectedTags}
+        onTagsChange={setSelectedTags}
+        tagCounts={tagCounts}
+      />
       <ServiceGrid
-        services={services}
+        services={filteredServices}
         activeServiceId={state.streamState.serviceId}
         onExpose={actions.handleExpose}
         onDelete={actions.handleDelete}

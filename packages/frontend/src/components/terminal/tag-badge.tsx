@@ -1,3 +1,5 @@
+import { useTagPreferences } from '../../hooks/use-tag-preferences';
+
 const TAG_COLORS: Record<string, string> = {
   ai: '#ff6ec7',
   web: '#58a6ff',
@@ -12,6 +14,9 @@ const TAG_COLORS: Record<string, string> = {
   gaming: '#db61a2',
   communication: '#ffd33d',
   development: '#7ee787',
+  networking: '#8957e5',
+  storage: '#f778ba',
+  dashboard: '#3fb950',
 };
 
 const TAG_LABELS: Record<string, string> = {
@@ -28,6 +33,9 @@ const TAG_LABELS: Record<string, string> = {
   gaming: 'Gaming',
   communication: 'Communication',
   development: 'Development',
+  networking: 'Networking',
+  storage: 'Storage',
+  dashboard: 'Dashboard',
 };
 
 interface TagBadgeProps {
@@ -36,7 +44,9 @@ interface TagBadgeProps {
 }
 
 export function TagBadge({ tags, showAll = false }: TagBadgeProps): JSX.Element {
-  if (!tags || tags.length === 0) {
+  const { showTags } = useTagPreferences();
+
+  if (!showTags || !tags || tags.length === 0) {
     return <></>;
   }
 
@@ -52,11 +62,11 @@ export function TagBadge({ tags, showAll = false }: TagBadgeProps): JSX.Element 
         return (
           <span
             key={tag}
-            className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded"
+            className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal rounded opacity-60"
             style={{
-              backgroundColor: `${color}15`,
+              backgroundColor: `${color}09`,
               color: color,
-              border: `1px solid ${color}40`,
+              border: `1px solid ${color}25`,
             }}
             title={tags.join(', ')}
           >
@@ -66,7 +76,7 @@ export function TagBadge({ tags, showAll = false }: TagBadgeProps): JSX.Element 
       })}
       {remaining > 0 && (
         <span
-          className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded text-gray-400"
+          className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-normal rounded text-gray-500 opacity-70"
           title={tags.join(', ')}
         >
           +{remaining}

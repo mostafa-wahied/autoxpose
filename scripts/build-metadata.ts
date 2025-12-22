@@ -40,13 +40,16 @@ const TAG_SPECIFICITY: Record<string, number> = {
   development: 4,
   monitoring: 5,
   media: 6,
-  automation: 7,
-  communication: 8,
-  productivity: 9,
-  web: 10,
-  download: 11,
-  gaming: 12,
-  utility: 13,
+  dashboard: 7,
+  automation: 8,
+  communication: 9,
+  productivity: 10,
+  networking: 11,
+  storage: 12,
+  web: 13,
+  download: 14,
+  gaming: 15,
+  utility: 16,
 };
 
 const AI_PATTERNS = {
@@ -394,7 +397,7 @@ async function fetchTrueNASCatalog(): Promise<ServiceInfo[]> {
     for (const entry of catalogMatch) {
       const titleMatch = entry.match(/title:"([^"]+)"/);
       const urlMatch = entry.match(/"\/catalog\/([^\/"]+)\/"/);
-      
+
       if (!titleMatch || !urlMatch) continue;
 
       const name = titleMatch[1];
@@ -403,7 +406,7 @@ async function fetchTrueNASCatalog(): Promise<ServiceInfo[]> {
 
       const nameLower = name.toLowerCase();
       const normalizedSlug = slug.replace(/-/g, '');
-      
+
       // Infer category from name and description (TrueNAS doesn't provide topics or detailed metadata)
       const tags = inferCategoryFromTopics([], name + ' ' + description, name);
 
@@ -433,70 +436,99 @@ async function fetchTrueNASCatalog(): Promise<ServiceInfo[]> {
 }
 
 // Map GitHub topics to autoxpose categories
-function inferCategoryFromTopics(topics: string[], description: string, name: string = ''): CategoryTag[] {
+function inferCategoryFromTopics(
+  topics: string[],
+  description: string,
+  name: string = ''
+): CategoryTag[] {
   const lowerTopics = topics.map(t => t.toLowerCase());
   const lowerDesc = description.toLowerCase();
   const lowerName = name.toLowerCase();
-  
+
   // AI/LLM detection (highest priority)
-  if (lowerTopics.some(t => t.match(/^(ai|llm|machine-learning|artificial-intelligence|ml|neural|gpt|llama)$/)) ||
-      lowerDesc.match(/\b(llm|large language model|ai model|machine learning|neural network)\b/)) {
+  if (
+    lowerTopics.some(t =>
+      t.match(/^(ai|llm|machine-learning|artificial-intelligence|ml|neural|gpt|llama)$/)
+    ) ||
+    lowerDesc.match(/\b(llm|large language model|ai model|machine learning|neural network)\b/)
+  ) {
     return ['ai'];
   }
-  
+
   // Monitoring (include "tracker", "observability")
-  if (lowerTopics.some(t => t.match(/^(monitoring|observability|metrics|logs|logging|prometheus|grafana)$/)) ||
-      lowerDesc.match(/\b(monitor|observability|metrics|log viewer|logging|port track|container track|prometheus|grafana)\b/) ||
-      lowerName.match(/tracker|monitor|observ|grafana|prometheus/)) {
+  if (
+    lowerTopics.some(t =>
+      t.match(/^(monitoring|observability|metrics|logs|logging|prometheus|grafana)$/)
+    ) ||
+    lowerDesc.match(
+      /\b(monitor|observability|metrics|log viewer|logging|port track|container track|prometheus|grafana)\b/
+    ) ||
+    lowerName.match(/tracker|monitor|observ|grafana|prometheus/)
+  ) {
     return ['monitoring'];
   }
-  
+
   // Media
-  if (lowerTopics.some(t => t.match(/^(media|plex|jellyfin|video|streaming|movies|tv-shows)$/)) ||
-      lowerDesc.match(/\b(media server|video streaming|movies|tv shows|plex|jellyfin)\b/)) {
+  if (
+    lowerTopics.some(t => t.match(/^(media|plex|jellyfin|video|streaming|movies|tv-shows)$/)) ||
+    lowerDesc.match(/\b(media server|video streaming|movies|tv shows|plex|jellyfin)\b/)
+  ) {
     return ['media'];
   }
-  
+
   // Database
   if (lowerTopics.some(t => t.match(/^(database|db|sql|postgres|mysql|mongodb|redis)$/))) {
     return ['database'];
   }
-  
+
   // Networking
   if (lowerTopics.some(t => t.match(/^(networking|vpn|proxy|dns|nginx|traefik|reverse-proxy)$/))) {
     return ['networking'];
   }
-  
+
   // Security
   if (lowerTopics.some(t => t.match(/^(security|auth|authentication|authorization|sso|oauth)$/))) {
     return ['security'];
   }
-  
+
   // Development
-  if (lowerTopics.some(t => t.match(/^(development|dev-tools|ci-cd|git|github|gitlab|ide|docker)$/))) {
+  if (
+    lowerTopics.some(t => t.match(/^(development|dev-tools|ci-cd|git|github|gitlab|ide|docker)$/))
+  ) {
     return ['development'];
   }
-  
+
   // Automation
   if (lowerTopics.some(t => t.match(/^(automation|workflow|orchestration|scheduler)$/))) {
     return ['automation'];
   }
-  
+
   // Communication
   if (lowerTopics.some(t => t.match(/^(chat|communication|messaging|email|matrix|xmpp)$/))) {
     return ['communication'];
   }
-  
+
   // Productivity
   if (lowerTopics.some(t => t.match(/^(productivity|notes|wiki|knowledge-base|bookmarks)$/))) {
     return ['productivity'];
   }
-  
+
   // Storage
   if (lowerTopics.some(t => t.match(/^(storage|backup|sync|cloud|s3|object-storage)$/))) {
     return ['storage'];
   }
-  
+
+  // Dashboard (application launchers, homepage, startpage)
+  if (
+    lowerTopics.some(t => t.match(/^(dashboard|homepage|startpage|launcher)$/)) ||
+    lowerDesc.match(
+      /\b(dashboard|homepage|application launcher|start page|organise.*applications)\b/
+    ) ||
+    lowerName.match(/heimdall|homer|homarr|dashy|flame|organizr/)
+  ) {
+    return ['dashboard'];
+  }
+
   // Default to utility
   return ['utility'];
 }
@@ -516,10 +548,9 @@ async function fetchGitHubTrending(): Promise<ServiceInfo[]> {
 
     for (const query of queries) {
       try {
-        const json = await httpsGet(
-          `https://api.github.com/search/repositories?q=${query}`,
-          { 'User-Agent': 'autoxpose' }
-        );
+        const json = await httpsGet(`https://api.github.com/search/repositories?q=${query}`, {
+          'User-Agent': 'autoxpose',
+        });
         const data = JSON.parse(json);
 
         for (const repo of data.items || []) {
@@ -527,11 +558,13 @@ async function fetchGitHubTrending(): Promise<ServiceInfo[]> {
           if (seenRepos.has(repoFullName)) continue;
           seenRepos.add(repoFullName);
 
-          const name = repo.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+          const name = repo.name
+            .replace(/-/g, ' ')
+            .replace(/\b\w/g, (l: string) => l.toUpperCase());
           const description = repo.description || '';
           const slug = repo.name.toLowerCase();
           const topics = repo.topics || [];
-          
+
           // Infer category from GitHub topics and description
           const tags = inferCategoryFromTopics(topics, description, name);
 
@@ -552,24 +585,35 @@ async function fetchGitHubTrending(): Promise<ServiceInfo[]> {
       }
     }
 
-    const specificServices = ['mostafa-wahied/portracker', 'amir20/dozzle', 'mudler/localai', 'portainer/portainer'];
+    const specificServices = [
+      'mostafa-wahied/portracker',
+      'amir20/dozzle',
+      'mudler/localai',
+      'portainer/portainer',
+    ];
     for (const repo of specificServices) {
       if (seenRepos.has(repo.toLowerCase())) continue;
       try {
-        const json = await httpsGet(`https://api.github.com/repos/${repo}`, { 'User-Agent': 'autoxpose' });
+        const json = await httpsGet(`https://api.github.com/repos/${repo}`, {
+          'User-Agent': 'autoxpose',
+        });
         const data = JSON.parse(json);
         const name = data.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
         const slug = data.name.toLowerCase();
         const topics = data.topics || [];
         const description = data.description || '';
-        
+
         // Infer category from GitHub topics and description
         const tags = inferCategoryFromTopics(topics, description, name);
-        
+
         services.push({
           name,
           tags,
-          imagePatterns: [`${repo.toLowerCase()}`, `ghcr.io/${repo.toLowerCase()}`, `${slug}/${slug}`],
+          imagePatterns: [
+            `${repo.toLowerCase()}`,
+            `ghcr.io/${repo.toLowerCase()}`,
+            `${slug}/${slug}`,
+          ],
           namePatterns: [slug, slug.replace(/-/g, ''), slug.replace(/-/g, '_')],
           ports: [],
           url: data.html_url,

@@ -214,4 +214,32 @@ export class ServicesService {
     }
     return removed;
   }
+
+  async refreshAllTags(): Promise<{ updated: number }> {
+    if (!this.tagDetector) {
+      return { updated: 0 };
+    }
+
+    const services = await this.repository.findAll();
+    let updated = 0;
+
+    for (const service of services) {
+      const tags = this.tagDetector.detectTags({
+        labels: {},
+        image: service.sourceId || '',
+        name: service.name,
+        port: service.port,
+      });
+
+      const currentTags = service.tags;
+      const newTags = JSON.stringify(tags);
+
+      if (currentTags !== newTags) {
+        await this.repository.update(service.id, { tags: newTags });
+        updated++;
+      }
+    }
+
+    return { updated };
+  }
 }

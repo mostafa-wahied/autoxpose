@@ -4,6 +4,7 @@ import { Tooltip } from './tooltip';
 import { TrafficLightButton } from './traffic-light';
 import { TopologyPanel } from './topology-panel';
 import { usePlatform } from '../../hooks/use-platform';
+import { useTagPreferences } from '../../hooks/use-tag-preferences';
 
 interface ServiceItem {
   id: string;
@@ -161,6 +162,8 @@ interface HeaderLeftSectionProps extends TerminalHeaderProps {
 }
 
 function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
+  const { showTags, setShowTags } = useTagPreferences();
+
   return (
     <div className="flex items-center gap-3">
       <TrafficLights
@@ -193,6 +196,19 @@ function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
           }`}
         >
           ∴
+        </button>
+      </Tooltip>
+      <Tooltip content={showTags ? 'Hide tags' : 'Show tags'}>
+        <button
+          type="button"
+          onClick={() => setShowTags(!showTags)}
+          className={`rounded border px-2 py-1 text-xs transition-colors ${
+            showTags
+              ? 'border-[#58a6ff] bg-[#388bfd1a] text-[#58a6ff]'
+              : 'border-[#30363d] bg-[#21262d] text-[#8b949e] hover:border-[#58a6ff] hover:bg-[#30363d] hover:text-[#c9d1d9]'
+          }`}
+        >
+          #
         </button>
       </Tooltip>
     </div>

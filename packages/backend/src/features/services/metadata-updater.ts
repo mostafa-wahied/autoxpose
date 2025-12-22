@@ -4,6 +4,7 @@ import * as https from 'https';
 import { createLogger } from '../../core/logger/index.js';
 import type { ServiceMetadata } from './metadata-loader.js';
 import type { MetadataLoader } from './metadata-loader.js';
+import type { ServicesService } from './services.service.js';
 
 const logger = createLogger('metadata-updater');
 
@@ -13,7 +14,10 @@ export class MetadataUpdater {
     'https://raw.githubusercontent.com/mostafa-wahied/autoxpose/main/packages/backend/src/data/service-metadata.json';
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(private loader: MetadataLoader) {}
+  constructor(
+    private loader: MetadataLoader,
+    private servicesService?: ServicesService
+  ) {}
 
   async startAutoUpdate(): Promise<void> {
     logger.info('Starting metadata auto-update task (fetches from GitHub repo)');
@@ -57,6 +61,12 @@ export class MetadataUpdater {
     logger.info(`Updating metadata from ${currentVersion} to ${latest.version}`);
     await this.saveToFilesystem(latest);
     await this.loader.load();
+
+    if (this.servicesService) {
+      logger.info('Refreshing tags for existing services');
+      const result = await this.servicesService.refreshAllTags();
+      logger.info(`Refreshed tags for ${result.updated} services`);
+    }
 
     return true;
   }
