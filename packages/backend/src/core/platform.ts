@@ -110,15 +110,21 @@ export function determineIpState(
     return 'placeholder';
   if (!isValidIpFormat(ip)) return 'invalid';
   if (!provided && isBridge) return 'bridge-autodetected';
-  if (detectedIp && ip !== detectedIp) return 'mismatch';
+  const cleaned = ip.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const isHostname = !isIpv4(cleaned);
+  if (detectedIp && !isHostname && cleaned !== detectedIp) return 'mismatch';
   return 'valid';
 }
 
+export function isIpv4(value: string): boolean {
+  return /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(value);
+}
+
 export function isValidIpFormat(value: string): boolean {
-  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-  if (ipv4.test(value)) return true;
+  const cleaned = value.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (isIpv4(cleaned)) return true;
   const hostname = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i;
-  return hostname.test(value);
+  return hostname.test(cleaned);
 }
 
 export function isBridgeIp(value: string): boolean {

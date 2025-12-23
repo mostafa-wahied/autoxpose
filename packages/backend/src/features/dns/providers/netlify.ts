@@ -52,7 +52,7 @@ export class NetlifyDnsProvider implements DnsProvider {
     return (
       records.find(
         r =>
-          r.type === 'A' &&
+          (r.type === 'A' || r.type === 'CNAME') &&
           (this.matchesHostname(r.hostname, target) || this.matchesHostname(r.hostname, hostname))
       ) ?? null
     );

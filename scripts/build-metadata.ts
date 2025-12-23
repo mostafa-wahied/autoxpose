@@ -304,25 +304,29 @@ function httpsGet(url: string, customHeaders?: Record<string, string>): Promise<
     };
 
     https
-      .get(url, opts, res => {
-        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) {
-          if (res.headers.location) {
-            const redirectUrl = res.headers.location.startsWith('http')
-              ? res.headers.location
-              : new URL(res.headers.location, url).toString();
-            return httpsGet(redirectUrl).then(resolve).catch(reject);
+      .get(
+        url,
+        opts,
+        (res: NodeJS.ReadableStream & { statusCode?: number; headers: { location?: string } }) => {
+          if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) {
+            if (res.headers.location) {
+              const redirectUrl = res.headers.location.startsWith('http')
+                ? res.headers.location
+                : new URL(res.headers.location, url).toString();
+              return httpsGet(redirectUrl).then(resolve).catch(reject);
+            }
           }
-        }
 
-        if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode}`));
-          return;
-        }
+          if (res.statusCode !== 200) {
+            reject(new Error(`HTTP ${res.statusCode}`));
+            return;
+          }
 
-        let data = '';
-        res.on('data', chunk => (data += chunk));
-        res.on('end', () => resolve(data));
-      })
+          let data = '';
+          res.on('data', (chunk: string) => (data += chunk));
+          res.on('end', () => resolve(data));
+        }
+      )
       .on('error', reject);
   });
 }

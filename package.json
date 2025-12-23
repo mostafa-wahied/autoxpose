@@ -16,6 +16,7 @@
     "extends": "./.eslintrc.json"
   },
   "devDependencies": {
+    "@types/node": "^20.19.26",
     "concurrently": "^8.2.2",
     "drizzle-kit": "^0.20.18",
     "prettier": "^3.2.0",

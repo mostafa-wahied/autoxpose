@@ -1,4 +1,5 @@
 import https from 'node:https';
+import { isIpv4 } from '../../core/platform.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import { waitForDnsPropagation, type PropagationCallback } from './dns-propagation.js';
 import { updateStep, type ProgressEvent, type ProgressStep } from './progress.types.js';
@@ -114,9 +115,11 @@ export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResu
       recordId = existing.id;
     } else {
       emitRunning(ctx, 'dns', 15, 'Creating record...');
-      const record = await dns.createRecord({ subdomain, ip: publicIp });
+      const cleanedIp = publicIp.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const recordType = isIpv4(cleanedIp) ? 'A' : 'CNAME';
+      const record = await dns.createRecord({ subdomain, ip: cleanedIp, type: recordType });
       recordId = record.id;
-      emitRunning(ctx, 'dns', 25, `Created: ${svc.subdomain}`);
+      emitRunning(ctx, 'dns', 25, `Created ${recordType}: ${svc.subdomain}`);
     }
     const propagation = await runPropagationWithinDns(ctx, fullDomain);
     if (!propagation.success) {
