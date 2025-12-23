@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { api, type ProviderStatus } from '../lib/api';
+import { api, type ProviderStatus } from '../../lib/api';
 import { ProviderForm } from './provider-form';
 
 const DNS_PROVIDERS = ['cloudflare', 'netlify'];
