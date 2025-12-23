@@ -159,7 +159,7 @@ export class ExposeService {
   async exposeDnsOnly(serviceId: string): Promise<ExposeResult> {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
-    if (service.dnsRecordId) throw new Error('DNS record already exists');
+    if (service.dnsRecordId && service.dnsExists) throw new Error('DNS record already exists');
 
     const dnsRecordId = await this.createDnsRecord(service);
     if (!dnsRecordId) throw new Error('No DNS provider configured');
