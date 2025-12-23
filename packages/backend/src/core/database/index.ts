@@ -28,6 +28,35 @@ function getMigrationsPath(): string {
   return paths[0];
 }
 
+function initializeMigrationTracking(): void {
+  if (!sqliteConnection) return;
+
+  sqliteConnection
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        hash TEXT NOT NULL,
+        created_at INTEGER
+      )`
+    )
+    .run();
+
+  const existingCount = sqliteConnection
+    .prepare('SELECT COUNT(*) as count FROM __drizzle_migrations')
+    .get() as { count: number };
+
+  if (existingCount.count === 0) {
+    const migrations = ['0000_sticky_shocker', '0001_real_zzzax'];
+    const now = Date.now();
+    for (const hash of migrations) {
+      sqliteConnection
+        .prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)')
+        .run(hash, now);
+    }
+    logger.info(`Marked ${migrations.length} existing migrations as applied`);
+  }
+}
+
 function runMigrations(database: AppDatabase): void {
   const migrationsPath = getMigrationsPath();
 
@@ -40,7 +69,29 @@ function runMigrations(database: AppDatabase): void {
     logger.info('Running database migrations...');
     migrate(database, { migrationsFolder: migrationsPath });
     logger.info('Database migrations complete');
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error & { cause?: Error };
+    const errorMessage = err.message || '';
+    const errorStack = err.stack || '';
+    const causedBy = err.cause?.message || '';
+
+    const isTableExistsError =
+      errorMessage.includes('already exists') ||
+      errorStack.includes('already exists') ||
+      causedBy.includes('already exists');
+
+    if (isTableExistsError) {
+      logger.warn('Migration conflict detected - tables exist but migration tracking is missing');
+      logger.info('Initializing migration tracking for existing database...');
+      try {
+        initializeMigrationTracking();
+        logger.info('Migration tracking initialized successfully');
+        return;
+      } catch (recoveryError) {
+        logger.error('Failed to recover from migration conflict', { recoveryError });
+      }
+    }
+
     logger.error('Migration failed', { error });
     throw error;
   }

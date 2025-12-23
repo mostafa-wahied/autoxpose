@@ -58,6 +58,22 @@ function getLoadingId(
   return streamLoading || deletingId;
 }
 
+interface ServiceItem {
+  id: string;
+  name: string;
+  subdomain: string;
+  enabled: boolean;
+}
+
+function mapServicesToTopology(services: ServiceRecord[]): ServiceItem[] {
+  return services.map(s => ({
+    id: s.id,
+    name: s.name,
+    subdomain: s.subdomain,
+    enabled: s.enabled ?? false,
+  }));
+}
+
 function useSmartRefetchInterval(services: ServiceRecord[] | undefined): number | false {
   if (!services || services.length === 0) return false;
 
@@ -196,15 +212,11 @@ function TerminalDashboardContent({
         isScanning={state.scanMutation.isPending}
         dnsProvider={settings?.dns?.provider}
         proxyProvider={settings?.proxy?.provider}
-        services={stableServices.map(s => ({
-          id: s.id,
-          name: s.name,
-          subdomain: s.subdomain,
-          enabled: s.enabled ?? false,
-        }))}
+        services={mapServicesToTopology(stableServices)}
         dnsConfigured={dashboardState.dnsOk}
         proxyConfigured={dashboardState.proxyOk}
         onHelp={() => setShortcutsOpen(true)}
+        platformName={settings?.platform?.name}
       />
       <DashboardMain
         services={stableServices}

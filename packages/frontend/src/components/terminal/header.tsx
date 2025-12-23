@@ -29,6 +29,7 @@ interface TerminalHeaderProps {
   dnsConfigured?: boolean;
   proxyConfigured?: boolean;
   onHelp: () => void;
+  platformName?: string | null;
 }
 
 function getStatusInfo(status: TerminalHeaderProps['connectionStatus']): [string, string] {
@@ -147,6 +148,7 @@ export function TerminalHeader(props: TerminalHeaderProps): JSX.Element {
         services={services}
         dnsConfigured={dnsConfigured}
         proxyConfigured={proxyConfigured}
+        platformName={props.platformName}
       />
     </div>
   );

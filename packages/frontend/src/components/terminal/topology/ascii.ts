@@ -13,6 +13,7 @@ interface ASCIIOptions {
   proxyProvider: string | null | undefined;
   dnsConfigured: boolean;
   proxyConfigured: boolean;
+  platformName?: string | null;
 }
 
 function centerText(text: string, width: number): string {
@@ -195,7 +196,8 @@ function generateServicesASCII(services: ServiceItem[]): string {
 }
 
 export function generateTopologyASCII(options: ASCIIOptions): string {
-  const { services, dnsProvider, proxyProvider, dnsConfigured, proxyConfigured } = options;
+  const { services, dnsProvider, proxyProvider, dnsConfigured, proxyConfigured, platformName } =
+    options;
   const dnsName = dnsProvider ? getProviderDisplayName(dnsProvider) : 'DNS Not Set';
   const proxyName = proxyProvider ? getProviderDisplayName(proxyProvider) : 'Proxy Not Set';
   const check = '\u2713';
@@ -219,7 +221,8 @@ export function generateTopologyASCII(options: ASCIIOptions): string {
   let header = topBorder + title + bottomBorder;
   header += '                          \u2502\n';
 
-  let diagram = buildFlowBox('Docker', boxWidth);
+  const dockerLabel = platformName ? `Docker (on ${platformName})` : 'Docker';
+  let diagram = buildFlowBox(dockerLabel, boxWidth);
   diagram += '                          \u2502\n';
 
   diagram += generateServicesASCII(services);

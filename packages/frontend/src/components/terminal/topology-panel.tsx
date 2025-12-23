@@ -14,6 +14,7 @@ interface TopologyVisualizationProps {
   services: ServiceItem[];
   dnsConfigured: boolean;
   proxyConfigured: boolean;
+  platformName?: string | null;
 }
 
 function TopologyVisualization({
@@ -22,13 +23,14 @@ function TopologyVisualization({
   services,
   dnsConfigured,
   proxyConfigured,
+  platformName,
 }: TopologyVisualizationProps): JSX.Element {
   const exposedServices = services.filter(s => s.enabled);
   const bothConfigured = dnsConfigured && proxyConfigured;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
-      <TopologyNode emoji="docker" label="Docker" isDocker />
+      <TopologyNode emoji="docker" label="Docker" isDocker platformName={platformName} />
 
       <div className="text-[#6e7681] text-lg">↓</div>
       <ServicesDisplay services={exposedServices} />
@@ -82,6 +84,7 @@ interface TopologyPanelProps {
   services: ServiceItem[];
   dnsConfigured: boolean;
   proxyConfigured: boolean;
+  platformName?: string | null;
 }
 
 interface TopologyModalContentProps {
@@ -93,6 +96,7 @@ interface TopologyModalContentProps {
   services: ServiceItem[];
   dnsConfigured: boolean;
   proxyConfigured: boolean;
+  platformName?: string | null;
 }
 
 function TopologyModalContent({
@@ -104,6 +108,7 @@ function TopologyModalContent({
   services,
   dnsConfigured,
   proxyConfigured,
+  platformName,
 }: TopologyModalContentProps): JSX.Element {
   return (
     <div
@@ -138,6 +143,7 @@ function TopologyModalContent({
           services={services}
           dnsConfigured={dnsConfigured}
           proxyConfigured={proxyConfigured}
+          platformName={platformName}
         />
       </div>
     </div>
@@ -152,6 +158,7 @@ export function TopologyPanel({
   services,
   dnsConfigured,
   proxyConfigured,
+  platformName,
 }: TopologyPanelProps): JSX.Element | null {
   const [copied, setCopied] = useState(false);
 
@@ -178,6 +185,7 @@ export function TopologyPanel({
       proxyProvider,
       dnsConfigured,
       proxyConfigured,
+      platformName,
     });
     await copyToClipboard(ascii);
     setCopied(true);
@@ -201,6 +209,7 @@ export function TopologyPanel({
         services={services}
         dnsConfigured={dnsConfigured}
         proxyConfigured={proxyConfigured}
+        platformName={platformName}
       />
     </div>
   );

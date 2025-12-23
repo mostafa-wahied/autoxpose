@@ -11,6 +11,7 @@ interface TopologyNodeProps {
   isInternet?: boolean;
   bothConfigured?: boolean;
   provider?: string | null;
+  platformName?: string | null;
 }
 
 interface BaseNodeProps {
@@ -22,6 +23,7 @@ interface BaseNodeProps {
   statusColor: string;
   statusTooltip?: string;
   provider?: string | null;
+  platformName?: string | null;
 }
 
 function DockerIcon({ color }: { color: string }): JSX.Element {
@@ -117,6 +119,7 @@ function BaseNode({
   statusColor,
   statusTooltip,
   provider,
+  platformName,
 }: BaseNodeProps): JSX.Element {
   const nodeClass = 'flex flex-col items-center gap-1 text-center';
   const labelClass = 'text-xs font-bold uppercase tracking-wider';
@@ -149,6 +152,11 @@ function BaseNode({
             {getProviderDisplayName(provider)}
           </div>
         )}
+        {platformName && (
+          <div className="mt-0.5 text-xs" style={{ color: '#8b949e' }}>
+            on {platformName}
+          </div>
+        )}
       </div>
       {statusText &&
         (statusTooltip ? (
@@ -169,6 +177,7 @@ export function TopologyNode({
   isInternet,
   bothConfigured,
   provider,
+  platformName,
 }: TopologyNodeProps): JSX.Element {
   if (isDocker) {
     return (
@@ -180,6 +189,7 @@ export function TopologyNode({
         statusText=""
         statusColor="#8b949e"
         provider={provider}
+        platformName={platformName}
       />
     );
   }
