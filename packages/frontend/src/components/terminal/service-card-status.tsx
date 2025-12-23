@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ServiceRecord } from '../../lib/api';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
+import { SubdomainDialog } from './subdomain-dialog';
 
 interface StatusBadgeProps {
   serviceId: string;
@@ -116,38 +117,22 @@ function MigrateSubdomainButton({
   service: ServiceRecord;
   warnings: ReturnType<typeof parseWarnings>;
 }): JSX.Element | null {
-  const queryClient = useQueryClient();
-  const migrateMutation = useMutation({
-    mutationFn: (id: string) => api.services.migrateSubdomain(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] });
-    },
-  });
+  const [showDialog, setShowDialog] = useState(false);
 
   if (!warnings.subdomain_mismatch) return null;
 
-  const handleMigrate = (): void => {
-    if (
-      window.confirm(
-        `Migrate from ${service.subdomain} to ${service.exposedSubdomain}? This will create new DNS and proxy resources, then delete the old ones.`
-      )
-    ) {
-      migrateMutation.mutate(service.id);
-    }
-  };
-
   return (
-    <Tooltip
-      content={`Migrate from ${service.subdomain} to ${service.exposedSubdomain}. Creates new DNS/Proxy → Updates DB → Deletes old resources.`}
-    >
-      <button
-        onClick={handleMigrate}
-        disabled={migrateMutation.isPending}
-        className="px-2 py-0.5 text-xs bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded hover:bg-yellow-900/50 disabled:opacity-50"
-      >
-        {migrateMutation.isPending ? 'Migrating...' : 'Migrate'}
-      </button>
-    </Tooltip>
+    <>
+      <Tooltip content="Resolve subdomain conflict. Choose which subdomain to keep.">
+        <button
+          onClick={() => setShowDialog(true)}
+          className="px-2 py-0.5 text-xs bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded hover:bg-yellow-900/50"
+        >
+          Resolve
+        </button>
+      </Tooltip>
+      {showDialog && <SubdomainDialog service={service} onClose={() => setShowDialog(false)} />}
+    </>
   );
 }
 

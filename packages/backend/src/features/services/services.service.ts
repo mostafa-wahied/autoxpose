@@ -105,6 +105,7 @@ export class ServicesService {
         port: discovered.port,
         scheme: discovered.scheme,
         tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       return updated!;
     }
@@ -116,6 +117,7 @@ export class ServicesService {
       source: discovered.source,
       sourceId: discovered.id,
       tags,
+      hasExplicitSubdomainLabel: !!discovered.labels['autoxpose.subdomain'],
     });
   }
 
@@ -156,6 +158,7 @@ export class ServicesService {
       seenIds.add(disc.id);
       if (existingMap.has(disc.id)) continue;
       const tags = this.detectServiceTags(disc);
+      const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const svc = await this.repository.create({
         name: disc.name,
         subdomain: disc.subdomain,
@@ -164,6 +167,7 @@ export class ServicesService {
         source: disc.source,
         sourceId: disc.id,
         tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       created.push(svc);
     }
@@ -189,6 +193,7 @@ export class ServicesService {
         port: disc.port,
         scheme: disc.scheme,
         tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       if (upd) updated.push(upd);
     }

@@ -258,53 +258,77 @@ export class ExposeService {
     if (proxy) await proxy.deleteHost(svc.proxyHostId);
   }
 
-  async migrateSubdomain(serviceId: string): Promise<{
-    service: ServiceRecord;
-    oldSubdomain: string;
-    newSubdomain: string;
-  }> {
+  async migrateSubdomain(
+    serviceId: string,
+    targetSubdomain: string
+  ): Promise<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }> {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
-    const oldSubdomain = service.subdomain;
-    const newSubdomain = service.exposedSubdomain as string;
-    const oldDnsRecordId = service.dnsRecordId;
-    const oldProxyHostId = service.proxyHostId;
-
-    logger.info({ serviceId, oldSubdomain, newSubdomain }, 'Starting subdomain migration');
-
-    const freshService = { ...service, dnsRecordId: null, proxyHostId: null };
-    const { dnsRecordId, proxyHostId, sslPending, sslError } = await this.createProviderResources(
-      freshService,
-      true
-    );
-
-    if (!dnsRecordId && !proxyHostId) {
-      throw new Error('Failed to create new resources');
+    const isKeepingExposed = targetSubdomain === service.exposedSubdomain;
+    if (isKeepingExposed) {
+      return this.alignToExposedSubdomain(service, targetSubdomain);
     }
+    return this.performProviderMigration(service, targetSubdomain);
+  }
 
+  private async alignToExposedSubdomain(
+    service: ServiceRecord,
+    targetSubdomain: string
+  ): Promise<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }> {
+    const oldSubdomain = service.subdomain;
+    logger.info({ serviceId: service.id, oldSubdomain, targetSubdomain }, 'Aligning to exposed');
+    await this.context.servicesRepo.update(service.id, {
+      subdomain: targetSubdomain,
+      configWarnings: null,
+      hasExplicitSubdomainLabel: false,
+      labelMismatchIgnored: true,
+    });
+    const updated = await this.context.servicesRepo.findById(service.id);
+    return { service: updated!, oldSubdomain, newSubdomain: targetSubdomain };
+  }
+
+  private async performProviderMigration(
+    service: ServiceRecord,
+    targetSubdomain: string
+  ): Promise<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }> {
+    const oldSubdomain = service.subdomain;
+    const oldDnsId = service.dnsRecordId;
+    const oldProxyId = service.proxyHostId;
+    logger.info({ serviceId: service.id, oldSubdomain, targetSubdomain }, 'Migrating providers');
+
+    const fresh = { ...service, subdomain: targetSubdomain, dnsRecordId: null, proxyHostId: null };
+    const res = await this.createProviderResources(fresh, true);
+    if (!res.dnsRecordId && !res.proxyHostId) throw new Error('Failed to create new resources');
+
+    await this.updateServiceForMigration(service.id, targetSubdomain, res);
+
+    if (res.proxyHostId) await this.tryImmediateSsl(service.id, res.proxyHostId, targetSubdomain);
+    await this.deleteOldResources(oldDnsId, oldProxyId);
+
+    const updated = await this.context.servicesRepo.findById(service.id);
+    return { service: updated!, oldSubdomain, newSubdomain: targetSubdomain };
+  }
+
+  private async updateServiceForMigration(
+    serviceId: string,
+    targetSubdomain: string,
+    res: { dnsRecordId?: string; proxyHostId?: string; sslPending?: boolean; sslError?: string }
+  ): Promise<void> {
     try {
       await this.context.servicesRepo.update(serviceId, {
-        dnsRecordId: dnsRecordId ?? null,
-        proxyHostId: proxyHostId ?? null,
-        exposedSubdomain: newSubdomain,
+        subdomain: targetSubdomain,
+        dnsRecordId: res.dnsRecordId ?? null,
+        proxyHostId: res.proxyHostId ?? null,
+        exposedSubdomain: targetSubdomain,
         configWarnings: null,
-        sslPending: sslPending ?? null,
-        sslError: sslError ?? null,
+        sslPending: res.sslPending ?? null,
+        sslError: res.sslError ?? null,
       });
     } catch (err) {
-      await this.rollbackMigration(dnsRecordId, proxyHostId);
+      await this.rollbackMigration(res.dnsRecordId, res.proxyHostId);
       throw err;
     }
-
-    if (proxyHostId) await this.tryImmediateSsl(serviceId, proxyHostId, newSubdomain);
-
-    await this.deleteOldResources(oldDnsRecordId, oldProxyHostId);
-
-    const updated = await this.context.servicesRepo.findById(serviceId);
-    logger.info({ serviceId, oldSubdomain, newSubdomain }, 'Subdomain migration completed');
-
-    return { service: updated!, oldSubdomain, newSubdomain };
   }
 
   private async rollbackMigration(

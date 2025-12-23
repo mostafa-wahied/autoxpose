@@ -26,6 +26,8 @@ export interface ServiceRecord {
   sslError: string | null;
   sslForced: boolean | null;
   tags: string | null;
+  hasExplicitSubdomainLabel: boolean | null;
+  labelMismatchIgnored: boolean | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 }
@@ -38,6 +40,7 @@ export interface CreateServiceInput {
   source: string;
   sourceId?: string;
   tags?: string;
+  hasExplicitSubdomainLabel?: boolean;
 }
 
 export interface UpdateServiceInput {
@@ -59,6 +62,8 @@ export interface UpdateServiceInput {
   sslError?: string | null;
   sslForced?: boolean;
   tags?: string | null;
+  hasExplicitSubdomainLabel?: boolean;
+  labelMismatchIgnored?: boolean;
 }
 
 export class ServicesRepository {
@@ -101,6 +106,8 @@ export class ServicesRepository {
       enabled: false,
       source: input.source,
       sourceId: input.sourceId ?? null,
+      hasExplicitSubdomainLabel: input.hasExplicitSubdomainLabel ?? false,
+      labelMismatchIgnored: false,
       dnsRecordId: null,
       proxyHostId: null,
       exposureSource: null,

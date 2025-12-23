@@ -166,11 +166,12 @@ export const api = {
         method: 'POST',
       }),
     migrateSubdomain: (
-      id: string
+      id: string,
+      targetSubdomain: string
     ): Promise<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }> =>
       request<{ service: ServiceRecord; oldSubdomain: string; newSubdomain: string }>(
-        `/services/${id}/migrate-subdomain`,
-        { method: 'POST' }
+        `/services/${id}/migrate`,
+        { method: 'POST', body: JSON.stringify({ targetSubdomain }) }
       ),
     cleanup: (id: string): Promise<{ success: boolean }> =>
       request<{ success: boolean }>(`/services/${id}/cleanup`, { method: 'DELETE' }),

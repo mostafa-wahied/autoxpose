@@ -10,6 +10,9 @@ importers:
       concurrently:
         specifier: ^8.2.2
         version: 8.2.2
+      drizzle-kit:
+        specifier: ^0.20.18
+        version: 0.20.18
       prettier:
         specifier: ^3.2.0
         version: 3.7.4

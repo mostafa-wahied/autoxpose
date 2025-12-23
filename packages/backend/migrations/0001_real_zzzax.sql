@@ -1,0 +1,1 @@
+ALTER TABLE services ADD `label_mismatch_ignored` integer DEFAULT false;

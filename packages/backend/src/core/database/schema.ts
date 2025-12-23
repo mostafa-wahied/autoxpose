@@ -22,6 +22,10 @@ export const services = sqliteTable('services', {
   sslError: text('ssl_error'),
   sslForced: integer('ssl_forced', { mode: 'boolean' }).default(false),
   tags: text('tags'),
+  hasExplicitSubdomainLabel: integer('has_explicit_subdomain_label', { mode: 'boolean' }).default(
+    false
+  ),
+  labelMismatchIgnored: integer('label_mismatch_ignored', { mode: 'boolean' }).default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
