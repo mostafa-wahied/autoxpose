@@ -3,6 +3,7 @@ import { type ServiceRecord } from '../../lib/api';
 import { EditableServiceName, EditableSubdomain } from './editable';
 import { InlineSpinner } from './progress';
 import { StatusBadge } from './service-card-status';
+import { TagBadge } from './tag-badge';
 import { TERMINAL_COLORS } from './theme';
 import { Tooltip } from './tooltip';
 interface TerminalServiceCardProps {
@@ -54,6 +55,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         containerName={service.sourceId || service.name}
         port={service.port}
         scheme={service.scheme || 'http'}
+        tags={service.tags}
         onNameChange={onNameChange}
       />
       <EditableSubdomain
@@ -87,6 +89,7 @@ interface CardHeaderProps {
   containerName: string;
   port: number;
   scheme: string;
+  tags: string | null;
   onNameChange: (name: string) => void;
 }
 function CardHeader({
@@ -94,8 +97,11 @@ function CardHeader({
   containerName,
   port,
   scheme,
+  tags,
   onNameChange,
 }: CardHeaderProps): JSX.Element {
+  const parsedTags = tags ? JSON.parse(tags) : [];
+
   return (
     <div className="mb-2">
       <div className="flex items-center justify-between">
@@ -109,7 +115,7 @@ function CardHeader({
           <span className="text-xs text-[#8b949e]">:{port}</span>
         </Tooltip>
       </div>
-      <div className="mt-1">
+      <div className="mt-1 flex items-center gap-2">
         <span
           className="rounded px-2 py-0.5 text-xs font-medium"
           style={{
@@ -119,6 +125,7 @@ function CardHeader({
         >
           {(scheme || 'http').toUpperCase()}
         </span>
+        <TagBadge tags={parsedTags} />
       </div>
     </div>
   );

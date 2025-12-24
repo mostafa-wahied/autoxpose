@@ -29,6 +29,7 @@ export type DiscoveredService = {
   source: string;
   labels: Record<string, string>;
   autoExpose: boolean;
+  image: string;
 };
 
 export interface DiscoveryProvider {
@@ -171,6 +172,8 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
 
     const name = container.Names?.[0]?.replace(/^\//, '') || '';
     const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
+    const image = container.Image || '';
+
     return {
       id: container.Id,
       name: labels[`${this.labelPrefix}.name`] || name,
@@ -180,6 +183,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
       source: 'docker',
       labels,
       autoExpose: enableValue === 'auto',
+      image,
     };
   }
 
@@ -240,6 +244,8 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
 
     const name = info.Name.replace(/^\//, '');
     const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
+    const image = info.Config.Image || '';
+
     return {
       id: info.Id,
       name: labels[`${this.labelPrefix}.name`] || name,
@@ -249,6 +255,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
       source: 'docker',
       labels,
       autoExpose: enableValue === 'auto',
+      image,
     };
   }
 

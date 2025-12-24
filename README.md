@@ -21,6 +21,8 @@ Add a label to your container, and autoxpose creates the DNS record and configur
 - **DNS Management**: Creates and removes DNS records with propagation verification
 - **SSL & Scheme Auto-Detection**: Automatic HTTPS detection and SSL certificate management
 - **Auto-Expose Mode**: Automatically expose services when discovered with `autoxpose.enable=auto`
+- **Service Tags**: Auto-categorize services (web, database, media, etc.) with color-coded badges
+- **Orphaned Resource Cleanup**: Detect and clean up stale DNS records and proxy hosts
 - **Lightweight**: Single container with embedded SQLite database - no external dependencies
 
 ## Supported Providers

@@ -45,7 +45,9 @@ export class CloudflareDnsProvider implements DnsProvider {
 
   async findByHostname(hostname: string): Promise<DnsRecord | null> {
     const records = await this.listRecords();
-    return records.find(r => r.hostname === hostname && r.type === 'A') ?? null;
+    return (
+      records.find(r => r.hostname === hostname && (r.type === 'A' || r.type === 'CNAME')) ?? null
+    );
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {

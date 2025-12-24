@@ -5,6 +5,7 @@ export { BlinkingCursor, CommandPrompt } from './prompt';
 export { TerminalServiceCard } from './service-card';
 export { TerminalSidebar } from './sidebar';
 export { SettingsStatusBar } from './status-bar';
+export { TagFilters, useTagFilters } from './tag-filters';
 export { TERMINAL_COLORS } from './theme';
 export { TopologyPanel } from './topology-panel';
 export { Tooltip } from './tooltip';

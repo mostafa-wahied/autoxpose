@@ -29,6 +29,40 @@ interface CheckBulkBody {
   serviceIds: string[];
 }
 
+async function handleProbe(
+  ctx: AppContext,
+  serviceId: string,
+  reply: FastifyReply
+): Promise<unknown> {
+  const service = await ctx.services.getServiceById(serviceId);
+  if (!service) return notFound(reply);
+  const result = await probeBackend(ctx.lanIp, service.port);
+  const shouldUpdate = result.responsive && result.scheme !== service.scheme;
+  if (shouldUpdate) await ctx.services.updateService(service.id, { scheme: result.scheme });
+  return {
+    responsive: result.responsive,
+    detectedScheme: result.scheme,
+    currentScheme: service.scheme,
+    updated: shouldUpdate,
+  };
+}
+
+async function handleOnline(
+  ctx: AppContext,
+  serviceId: string,
+  reply: FastifyReply
+): Promise<unknown> {
+  const service = await ctx.services.getServiceById(serviceId);
+  if (!service) return notFound(reply);
+  if (!service.enabled || !service.subdomain) return { online: false };
+  const dns = await ctx.settings.getDnsConfig();
+  if (!dns?.config.domain) return { online: false };
+  const subdomainToTest = service.exposedSubdomain || service.subdomain;
+  const fqdn = `${subdomainToTest}.${dns.config.domain}`;
+  const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
+  return { online: result.ok, domain: fqdn, protocol: result.protocol };
+}
+
 const notFound = (reply: FastifyReply): FastifyReply =>
   reply.status(404).send({ error: 'Service not found' });
 
@@ -69,7 +103,8 @@ async function resolveServiceStatus(
   baseDomain: string,
   proxy: Awaited<ReturnType<AppContext['settings']['getProxyProvider']>>
 ): Promise<{ id: string; online: boolean; protocol: string | null }> {
-  const fqdn = `${service.subdomain}.${baseDomain}`;
+  const subdomainToTest = service.exposedSubdomain || service.subdomain;
+  const fqdn = `${subdomainToTest}.${baseDomain}`;
   const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
   if (result.ok) return { id: service.id, online: true, protocol: result.protocol ?? null };
   const host = proxy ? await proxy.findByDomain(fqdn) : null;
@@ -80,7 +115,8 @@ async function resolveServiceStatus(
 const handleMigration = async (
   ctx: AppContext,
   serviceId: string,
-  reply: FastifyReply
+  reply: FastifyReply,
+  targetSubdomain: string
 ): Promise<unknown> => {
   const service = await ctx.services.getServiceById(serviceId);
   if (!service) return notFound(reply);
@@ -90,7 +126,7 @@ const handleMigration = async (
   if (!service.exposedSubdomain || service.exposedSubdomain === service.subdomain) {
     return reply.status(400).send({ error: 'No subdomain mismatch detected' });
   }
-  return ctx.expose.migrateSubdomain(service.id);
+  return ctx.expose.migrateSubdomain(service.id, targetSubdomain);
 };
 
 async function handleGetOrphans(ctx: AppContext): Promise<{ orphans: unknown[] }> {
@@ -153,36 +189,17 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return deleted ? { success: true } : notFound(reply);
     });
 
-    server.post<{ Params: IdParams }>('/:id/probe', async (request, reply) => {
-      const service = await ctx.services.getServiceById(request.params.id);
-      if (!service) return notFound(reply);
-
-      const result = await probeBackend(ctx.lanIp, service.port);
-      const shouldUpdate = result.responsive && result.scheme !== service.scheme;
-      if (shouldUpdate) await ctx.services.updateService(service.id, { scheme: result.scheme });
-
-      return {
-        responsive: result.responsive,
-        detectedScheme: result.scheme,
-        currentScheme: service.scheme,
-        updated: shouldUpdate,
-      };
-    });
+    server.post<{ Params: IdParams }>('/:id/probe', async (request, reply) =>
+      handleProbe(ctx, request.params.id, reply)
+    );
 
     server.post<{ Body: ProbeBody }>('/probe', async request => {
       return probeBackend(request.body.host, request.body.port);
     });
 
-    server.post<{ Params: IdParams }>('/:id/online', async (request, reply) => {
-      const service = await ctx.services.getServiceById(request.params.id);
-      if (!service) return notFound(reply);
-      if (!service.enabled || !service.subdomain) return { online: false };
-      const dns = await ctx.settings.getDnsConfig();
-      if (!dns?.config.domain) return { online: false };
-      const fqdn = `${service.subdomain}.${dns.config.domain}`;
-      const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
-      return { online: result.ok, domain: fqdn, protocol: result.protocol };
-    });
+    server.post<{ Params: IdParams }>('/:id/online', async (request, reply) =>
+      handleOnline(ctx, request.params.id, reply)
+    );
 
     server.post<{ Body: CheckBulkBody }>('/check-bulk', async request => {
       return handleCheckBulk(ctx, request.body.serviceIds);
@@ -195,12 +212,21 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return result;
     });
 
-    server.post<{ Params: IdParams }>('/:id/migrate-subdomain', async (request, reply) => {
-      return handleMigration(ctx, request.params.id, reply);
-    });
+    server.post<{ Params: IdParams; Body: { targetSubdomain: string } }>(
+      '/:id/migrate-subdomain',
+      async (request, reply) => {
+        const { targetSubdomain } = request.body;
+        return handleMigration(ctx, request.params.id, reply, targetSubdomain);
+      }
+    );
 
     server.delete<{ Params: IdParams }>('/:id/cleanup', async (request, reply) => {
       return handleCleanup(ctx, request.params.id, reply);
+    });
+
+    server.post('/refresh-tags', async () => {
+      const result = await ctx.services.refreshAllTags();
+      return result;
     });
 
     await server.register(createSslRoutes(ctx));

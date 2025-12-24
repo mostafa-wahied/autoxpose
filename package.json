@@ -1,11 +1,15 @@
 {
   "name": "autoxpose",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
     "build": "pnpm --filter backend build && pnpm --filter frontend build",
+    "build:metadata": "tsx scripts/build-metadata.ts",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push:sqlite",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check",
     "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",
@@ -15,8 +19,11 @@
     "extends": "./.eslintrc.json"
   },
   "devDependencies": {
+    "@types/node": "^20.19.26",
     "concurrently": "^8.2.2",
-    "prettier": "^3.2.0"
+    "drizzle-kit": "^0.20.18",
+    "prettier": "^3.2.0",
+    "tsx": "^4.21.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -28,5 +28,15 @@ export function createExposeRoutes(expose: ExposeService): FastifyPluginAsync {
       const result = await expose.exposeProxyOnly(id);
       return reply.code(200).send(result);
     });
+
+    server.post<{ Params: IdParams; Body: { targetSubdomain: string } }>(
+      '/:id/migrate',
+      async (request, reply) => {
+        const { id } = request.params;
+        const { targetSubdomain } = request.body;
+        const result = await expose.migrateSubdomain(id, targetSubdomain);
+        return reply.code(200).send(result);
+      }
+    );
   };
 }

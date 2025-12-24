@@ -31,6 +31,14 @@ async function main(): Promise<void> {
     lanIp: config.lanIp,
     lanProvided: Boolean(process.env.LAN_IP),
   });
+
+  logger.info('Loading service metadata...');
+  await ctx.metadataLoader.load();
+  logger.info(`Metadata loaded: version ${ctx.metadataLoader.getVersion()}`);
+
+  await ctx.metadataUpdater.startAutoUpdate();
+  logger.info('Metadata auto-update task started');
+
   const server = await createServer(config, ctx);
 
   ctx.startWatcher();

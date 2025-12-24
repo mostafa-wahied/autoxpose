@@ -1,7 +1,7 @@
-import { useProxyConfig } from '../hooks/use-proxy-config';
-import type { ProviderStatus } from '../lib/api';
+import { useProxyConfig } from '../../hooks/use-proxy-config';
+import type { ProviderStatus } from '../../lib/api';
+import { ConfigDisplay } from '../ui';
 import { ProviderForm } from './provider-form';
-import { ConfigDisplay } from './ui';
 
 const PROVIDERS = ['npm'];
 type Props = { current: ProviderStatus | null };

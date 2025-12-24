@@ -1,5 +1,6 @@
 import type { DiscoveredService } from '../discovery/docker.js';
 import type { SettingsService } from '../settings/settings.service.js';
+import type { TagDetector } from './tag-detector.js';
 import type {
   CreateServiceInput,
   ServiceRecord,
@@ -16,7 +17,8 @@ type SyncResult = {
 export class ServicesService {
   constructor(
     private repository: ServicesRepository,
-    private settings?: SettingsService
+    private settings?: SettingsService,
+    private tagDetector?: TagDetector
   ) {}
 
   async getAllServices(): Promise<ServiceRecord[]> {
@@ -90,6 +92,8 @@ export class ServicesService {
 
   async upsertService(discovered: DiscoveredService): Promise<ServiceRecord> {
     const existing = await this.repository.findBySourceId(discovered.id);
+    const tags = this.detectServiceTags(discovered);
+
     if (existing) {
       const needsUpdate = this.serviceNeedsUpdate(existing, discovered);
       if (!needsUpdate) return existing;
@@ -100,6 +104,8 @@ export class ServicesService {
         subdomain: subdomainToUse,
         port: discovered.port,
         scheme: discovered.scheme,
+        tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       return updated!;
     }
@@ -110,7 +116,22 @@ export class ServicesService {
       scheme: discovered.scheme,
       source: discovered.source,
       sourceId: discovered.id,
+      tags,
+      hasExplicitSubdomainLabel: !!discovered.labels['autoxpose.subdomain'],
     });
+  }
+
+  private detectServiceTags(discovered: DiscoveredService): string {
+    if (!this.tagDetector) return JSON.stringify(['utility']);
+
+    const tags = this.tagDetector.detectTags({
+      labels: discovered.labels,
+      image: discovered.image,
+      name: discovered.name,
+      port: discovered.port,
+    });
+
+    return JSON.stringify(tags);
   }
 
   async syncFromDiscovery(discovered: DiscoveredService[]): Promise<SyncResult> {
@@ -136,6 +157,8 @@ export class ServicesService {
     for (const disc of discovered) {
       seenIds.add(disc.id);
       if (existingMap.has(disc.id)) continue;
+      const tags = this.detectServiceTags(disc);
+      const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const svc = await this.repository.create({
         name: disc.name,
         subdomain: disc.subdomain,
@@ -143,6 +166,8 @@ export class ServicesService {
         scheme: disc.scheme,
         source: disc.source,
         sourceId: disc.id,
+        tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       created.push(svc);
     }
@@ -161,11 +186,14 @@ export class ServicesService {
       if (!needsUpdate) continue;
       const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const subdomainToUse = hasExplicitSubdomain ? disc.subdomain : existing.subdomain;
+      const tags = this.detectServiceTags(disc);
       const upd = await this.repository.update(existing.id, {
         name: disc.name,
         subdomain: subdomainToUse,
         port: disc.port,
         scheme: disc.scheme,
+        tags,
+        hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       if (upd) updated.push(upd);
     }
@@ -190,5 +218,33 @@ export class ServicesService {
       removed.push(svc.id);
     }
     return removed;
+  }
+
+  async refreshAllTags(): Promise<{ updated: number }> {
+    if (!this.tagDetector) {
+      return { updated: 0 };
+    }
+
+    const services = await this.repository.findAll();
+    let updated = 0;
+
+    for (const service of services) {
+      const tags = this.tagDetector.detectTags({
+        labels: {},
+        image: service.sourceId || '',
+        name: service.name,
+        port: service.port,
+      });
+
+      const currentTags = service.tags;
+      const newTags = JSON.stringify(tags);
+
+      if (currentTags !== newTags) {
+        await this.repository.update(service.id, { tags: newTags });
+        updated++;
+      }
+    }
+
+    return { updated };
   }
 }

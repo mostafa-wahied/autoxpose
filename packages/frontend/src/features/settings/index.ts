@@ -1,5 +1,4 @@
-export { DnsConfigCard } from '../../components/dns-config-card';
-export { ProxyConfigCard } from '../../components/proxy-config-card';
+export { DnsConfigCard, ProxyConfigCard } from '../../components/settings';
 export {
   DnsConfigSection,
   ProxyConfigSection,
