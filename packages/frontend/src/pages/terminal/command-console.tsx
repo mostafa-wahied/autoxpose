@@ -158,18 +158,33 @@ function PromptArea({
   onSelectSuggestion,
   onHighlight,
 }: PromptAreaProps): JSX.Element {
+  const [isFocused, setIsFocused] = React.useState(false);
+  const showGhostCaret = input.length === 0 && !isFocused;
+
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2 font-mono text-sm whitespace-nowrap">
         <span style={{ color: TERMINAL_COLORS.success }}>-{'>'}</span>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          className="min-w-0 flex-1 bg-transparent text-[#c9d1d9] outline-none"
-          aria-label="terminal input"
-        />
+        <div className="relative min-w-0 flex-1">
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={e => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className="w-full bg-transparent text-[#c9d1d9] outline-none"
+            aria-label="terminal input"
+          />
+          {showGhostCaret && (
+            <span
+              className="pointer-events-none absolute left-0 top-0 animate-pulse text-[#8b949e]"
+              aria-hidden="true"
+            >
+              _
+            </span>
+          )}
+        </div>
       </div>
       {suggestions.length > 0 && (
         <SuggestionList
