@@ -61,7 +61,7 @@ volumes:
 
 Deploy: `docker-compose up -d`
 
-**Note:** This same compose file can be deployed as a stack in Portainer.
+**Note:** This same compose file can be deployed as a stack in **Portainer**.
 
 </details>
 
@@ -98,7 +98,7 @@ docker run -d \
    Container name becomes subdomain by default. To customize:
 
    ```yaml
-   - autoxpose.subdomain=custom-name
+   - autoxpose.subdomain=myapp # recommended
    ```
 
 For provider configuration and adding labels by platform, see [Setup Guides](#setup-guides) below.
@@ -171,7 +171,7 @@ See the production template at [docker-compose.yaml](./docker-compose.yaml).
 
 1. Ensure Nginx Proxy Manager is running and accessible
 2. In autoxpose: Settings → Proxy Provider → NPM
-   - **URL:** Your NPM URL (e.g., `http://npm-ip:port`)
+   - **URL:** Your NPM URL (e.g., `http://server-ip:npm-port`)
    - **Username:** Your NPM admin email
    - **Password:** Your NPM password
 
@@ -181,9 +181,9 @@ See the production template at [docker-compose.yaml](./docker-compose.yaml).
 <summary>Caddy</summary>
 
 1. Ensure Caddy is running with API enabled (default port 2019)
-2. Verify API is accessible: `curl http://caddy-ip:2019/config/`
+2. Verify API is accessible: `curl http://server-ip:caddy-port/config/`
 3. In autoxpose: Settings → Proxy Provider → Caddy
-   - **API URL:** `http://caddy-ip:2019` (internal Docker network IP if containerized)
+   - **API URL:** `http://server-ip:caddy-port` (internal Docker network IP if containerized)
 
 **Note:** Caddy API has no authentication by default. Ensure the API port is not exposed publicly.
 
@@ -315,7 +315,7 @@ services:
 | Label                  | Description                                            | Required |
 | ---------------------- | ------------------------------------------------------ | -------- |
 | **`autoxpose.enable`** | `true` to show in UI, `auto` to auto-expose            | **Yes**  |
-| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No       |
+| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No (Recommended)       |
 | `autoxpose.port`       | Override auto-detected port                            | No       |
 | `autoxpose.scheme`     | Override auto-detected scheme (`http`/`https`)         | No       |
 | `autoxpose.name`       | Display name in UI (default: container name)           | No       |
