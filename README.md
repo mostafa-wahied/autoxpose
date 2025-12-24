@@ -312,13 +312,13 @@ services:
       - autoxpose.subdomain=myapp
 ```
 
-| Label                  | Description                                            | Required |
-| ---------------------- | ------------------------------------------------------ | -------- |
-| **`autoxpose.enable`** | `true` to show in UI, `auto` to auto-expose            | **Yes**  |
-| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No (Recommended)       |
-| `autoxpose.port`       | Override auto-detected port                            | No       |
-| `autoxpose.scheme`     | Override auto-detected scheme (`http`/`https`)         | No       |
-| `autoxpose.name`       | Display name in UI (default: container name)           | No       |
+| Label                  | Description                                            | Required         |
+| ---------------------- | ------------------------------------------------------ | ---------------- |
+| **`autoxpose.enable`** | `true` to show in UI, `auto` to auto-expose            | **Yes**          |
+| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No (Recommended) |
+| `autoxpose.port`       | Override auto-detected port                            | No               |
+| `autoxpose.scheme`     | Override auto-detected scheme (`http`/`https`)         | No               |
+| `autoxpose.name`       | Display name in UI (default: container name)           | No               |
 
 ### Understanding Auto-Expose Modes
 
