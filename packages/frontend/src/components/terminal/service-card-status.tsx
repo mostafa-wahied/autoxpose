@@ -194,14 +194,15 @@ function PartialButton({
   title: string;
 }): JSX.Element {
   return (
-    <button
-      onClick={onClick}
-      disabled={isPending}
-      className="px-2 py-0.5 text-xs bg-red-900/30 text-red-400 border border-red-700/50 rounded hover:bg-red-900/50 disabled:opacity-50"
-      title={title}
-    >
-      {isPending ? 'Creating...' : label}
-    </button>
+    <Tooltip content={title}>
+      <button
+        onClick={onClick}
+        disabled={isPending}
+        className="px-2 py-0.5 text-xs bg-red-900/30 text-red-400 border border-red-700/50 rounded hover:bg-red-900/50 disabled:opacity-50"
+      >
+        {isPending ? 'Creating...' : label}
+      </button>
+    </Tooltip>
   );
 }
 
