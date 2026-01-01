@@ -2,8 +2,10 @@ import type { DnsRecord } from '../dns/dns.types.js';
 import type { ProxyHost } from '../proxy/proxy.types.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { ServiceRecord, ServicesRepository } from './services.repository.js';
+import type { DockerDiscoveryProvider } from '../discovery/docker.js';
 import { createLogger } from '../../core/logger/index.js';
 import { fuzzyMatchSubdomain, isCleanerSubdomain, getExposedSubdomain } from './sync-helpers.js';
+import { isPortExposedByContainer } from './port-validator.js';
 
 const logger = createLogger('sync-service');
 
@@ -39,7 +41,8 @@ type ServiceUpdate = {
 export class SyncService {
   constructor(
     private servicesRepo: ServicesRepository,
-    private settings: SettingsService
+    private settings: SettingsService,
+    private dockerProvider?: DockerDiscoveryProvider
   ) {}
 
   async getStatuses(services: ServiceRecord[]): Promise<SyncStatus[]> {
@@ -56,7 +59,11 @@ export class SyncService {
     const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
     const isExposed = Boolean(dnsRecord) || Boolean(proxyHost);
     const exposedSubdomain = getExposedSubdomain(proxyHost, baseDomain);
-    const warnings = this.detectConfigMismatches(service, proxyHost ?? undefined, exposedSubdomain);
+    const warnings = await this.detectConfigMismatches(
+      service,
+      proxyHost ?? undefined,
+      exposedSubdomain
+    );
     await this.servicesRepo.update(service.id, {
       enabled: isExposed,
       dnsRecordId: dnsRecord?.id ?? null,
@@ -240,21 +247,26 @@ export class SyncService {
       dnsRecord = data.dnsRecords.find(r => r.hostname === fullDomain && r.type === 'A');
     }
 
-    const updateData = this.buildServiceUpdate(service, dnsRecord, proxyHost, exposedSubdomain);
+    const updateData = await this.buildServiceUpdate(
+      service,
+      dnsRecord,
+      proxyHost,
+      exposedSubdomain
+    );
     await this.servicesRepo.update(service.id, updateData);
   }
 
-  private buildServiceUpdate(
+  private async buildServiceUpdate(
     service: ServiceRecord,
     dnsRecord: DnsRecord | undefined,
     proxyHost: ProxyHost | undefined,
     exposedSubdomain: string | null
-  ): ServiceUpdate {
+  ): Promise<ServiceUpdate> {
     const dnsExists = Boolean(dnsRecord);
     const proxyExists = Boolean(proxyHost);
     const needsUpdate = Boolean(exposedSubdomain && exposedSubdomain !== service.subdomain);
     const shouldAutoAdopt = this.shouldAutoAdoptSubdomain(service, needsUpdate, exposedSubdomain);
-    const warnings = this.detectConfigMismatches(service, proxyHost, exposedSubdomain, {
+    const warnings = await this.detectConfigMismatches(service, proxyHost, exposedSubdomain, {
       autoAdopting: shouldAutoAdopt,
     });
     const shouldUpdateSubdomain =
@@ -311,15 +323,26 @@ export class SyncService {
     return isCleanerSubdomain(exposedSubdomain!, service.subdomain);
   }
 
-  private detectConfigMismatches(
+  private async detectConfigMismatches(
     service: ServiceRecord,
     proxyHost: ProxyHost | undefined,
     newExposedSubdomain: string | null,
     opts: { autoAdopting?: boolean } = {}
-  ): string[] {
+  ): Promise<string[]> {
     if (!proxyHost) return [];
     const warnings = [];
-    if (proxyHost.targetPort !== service.port) warnings.push('port_mismatch');
+
+    if (proxyHost.targetPort !== service.port) {
+      const exposed = await isPortExposedByContainer(
+        service.sourceId,
+        proxyHost.targetPort,
+        this.dockerProvider
+      );
+      if (!exposed) {
+        warnings.push('port_mismatch');
+      }
+    }
+
     const hasSubdomainMismatch = newExposedSubdomain && newExposedSubdomain !== service.subdomain;
     const skipWarning = opts.autoAdopting || service.labelMismatchIgnored;
     if (hasSubdomainMismatch && !skipWarning) warnings.push('subdomain_mismatch');
