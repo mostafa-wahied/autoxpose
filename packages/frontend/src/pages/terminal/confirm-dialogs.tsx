@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { ConfirmDialog } from '../../components/terminal';
 import { type ServiceRecord } from '../../lib/api';
 
 export type ConfirmAction =
   | { type: 'expose-all' }
   | { type: 'unexpose-all' }
-  | { type: 'delete'; service: ServiceRecord }
+  | { type: 'delete'; service: ServiceRecord; shouldUnexpose?: boolean }
   | null;
 
 interface ConfirmDialogsProps {
@@ -13,6 +14,7 @@ interface ConfirmDialogsProps {
   exposedCount: number;
   onConfirm: () => void;
   onCancel: () => void;
+  onUnexposeChange?: (shouldUnexpose: boolean) => void;
 }
 
 export function ConfirmDialogs({
@@ -21,9 +23,24 @@ export function ConfirmDialogs({
   exposedCount,
   onConfirm,
   onCancel,
+  onUnexposeChange,
 }: ConfirmDialogsProps): JSX.Element {
   const unexposedCount = serviceCount - exposedCount;
   const deleteName = action?.type === 'delete' ? action.service.name : '';
+  const hasResources =
+    action?.type === 'delete' &&
+    (action.service.dnsRecordId !== null || action.service.proxyHostId !== null);
+  const defaultUnexpose = hasResources ? true : false;
+  const [unexposeChecked, setUnexposeChecked] = useState(defaultUnexpose);
+
+  const handleUnexposeChange = (checked: boolean): void => {
+    setUnexposeChecked(checked);
+    onUnexposeChange?.(checked);
+  };
+
+  const deleteMessage = hasResources
+    ? `"${deleteName}" is currently exposed. Uncheck to keep it accessible.`
+    : `Remove "${deleteName}" from tracking?`;
 
   return (
     <>
@@ -47,10 +64,14 @@ export function ConfirmDialogs({
       />
       <ConfirmDialog
         isOpen={action?.type === 'delete'}
-        title="Delete Service"
-        message={`Remove "${deleteName}" from tracking? This will also unexpose it if exposed.`}
-        confirmText="Delete"
+        title="Remove Service"
+        message={deleteMessage}
+        confirmText="Remove"
         variant="danger"
+        showCheckbox={hasResources}
+        checkboxLabel="Also remove DNS record and proxy host"
+        checkboxChecked={unexposeChecked}
+        onCheckboxChange={handleUnexposeChange}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />

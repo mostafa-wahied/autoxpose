@@ -5,6 +5,10 @@ interface ConfirmDialogProps {
   confirmText: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'default';
+  showCheckbox?: boolean;
+  checkboxLabel?: string;
+  checkboxChecked?: boolean;
+  onCheckboxChange?: (checked: boolean) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -24,6 +28,10 @@ export function ConfirmDialog({
   confirmText,
   cancelText = 'Cancel',
   variant = 'default',
+  showCheckbox = false,
+  checkboxLabel,
+  checkboxChecked = false,
+  onCheckboxChange,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): JSX.Element | null {
@@ -36,7 +44,18 @@ export function ConfirmDialog({
         style={{ fontFamily: FONT_STACK }}
       >
         <h3 className="mb-2 text-lg font-bold text-[#c9d1d9]">{title}</h3>
-        <p className="mb-6 text-sm text-[#8b949e]">{message}</p>
+        <p className="mb-4 text-sm text-[#8b949e]">{message}</p>
+        {showCheckbox && checkboxLabel && onCheckboxChange && (
+          <label className="mb-6 flex cursor-pointer items-center gap-2 text-sm text-[#c9d1d9]">
+            <input
+              type="checkbox"
+              checked={checkboxChecked}
+              onChange={e => onCheckboxChange(e.target.checked)}
+              className="h-4 w-4 cursor-pointer accent-[#58a6ff]"
+            />
+            <span>{checkboxLabel}</span>
+          </label>
+        )}
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}

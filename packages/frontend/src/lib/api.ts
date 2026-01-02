@@ -129,8 +129,8 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
-    delete: (id: string): Promise<{ success: boolean }> =>
-      request<{ success: boolean }>(`/services/${id}`, { method: 'DELETE' }),
+    delete: (id: string, unexpose: boolean = false): Promise<{ success: boolean }> =>
+      request<{ success: boolean }>(`/services/${id}?unexpose=${unexpose}`, { method: 'DELETE' }),
     expose: (id: string): Promise<{ service: ServiceRecord }> =>
       request<{ service: ServiceRecord }>(`/services/${id}/expose`, { method: 'POST' }),
     unexpose: (id: string): Promise<{ service: ServiceRecord }> =>

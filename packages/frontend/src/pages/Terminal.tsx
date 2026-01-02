@@ -272,6 +272,14 @@ function DashboardMain(props: DashboardMainProps): JSX.Element {
         exposedCount={props.dashboardState.exposedCount}
         onConfirm={props.actions.handleConfirm}
         onCancel={() => props.actions.setConfirmAction(null)}
+        onUnexposeChange={(shouldUnexpose: boolean) => {
+          if (props.state.confirmAction?.type === 'delete') {
+            props.actions.setConfirmAction({
+              ...props.state.confirmAction,
+              shouldUnexpose,
+            });
+          }
+        }}
       />
     </>
   );
