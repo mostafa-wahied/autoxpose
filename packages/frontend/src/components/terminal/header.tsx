@@ -5,6 +5,7 @@ import { TrafficLightButton } from './traffic-light';
 import { TopologyPanel } from './topology-panel';
 import { usePlatform } from '../../hooks/use-platform';
 import { useTagPreferences } from '../../hooks/use-tag-preferences';
+import { Logo } from '../logo';
 
 interface ServiceItem {
   id: string;
@@ -168,6 +169,17 @@ function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
 
   return (
     <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={props.onLogoClick}
+        className="group flex items-center focus:outline-none"
+      >
+        <Logo
+          size={36}
+          isAnimating={props.isScanning}
+          className="text-white transition-all duration-300 group-hover:rotate-[15deg] group-hover:text-[#58a6ff]"
+        />
+      </button>
       <TrafficLights
         onUnexposeAll={props.onUnexposeAll}
         onScan={props.onScan}
@@ -177,13 +189,6 @@ function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
         isScanning={props.isScanning}
         canExpose={props.canExpose}
       />
-      <button
-        type="button"
-        onClick={props.onLogoClick}
-        className="ml-2 font-bold text-[#c9d1d9] hover:text-white focus:outline-none"
-      >
-        autoxpose
-      </button>
       <span className="text-xs text-[#8b949e]">
         {props.serviceCount} {props.svcLabel} | {props.exposedCount} exposed
       </span>
