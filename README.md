@@ -5,14 +5,22 @@
 
 <p align="center">
   <strong>Automatic DNS and reverse proxy configuration for Docker containers.</strong>
+  <p align="center">
+    Add a label to your container, and autoxpose creates the DNS record and configures your reverse proxy with SSL - no manual setup required.
+  </p>
 </p>
+
 
 <p align="center">
   <a href="https://github.com/mostafa-wahied/autoxpose/blob/main/LICENSE"><img src="https://img.shields.io/github/license/mostafa-wahied/autoxpose?style=flat-square" alt="License"></a>
+  <a href="https://hub.docker.com/r/mostafawahied/autoxpose"><img src="https://img.shields.io/docker/v/mostafawahied/autoxpose?label=docker&style=flat-square" alt="Docker Version"></a>
   <a href="https://github.com/mostafa-wahied/autoxpose/releases"><img src="https://img.shields.io/github/v/release/mostafa-wahied/autoxpose?style=flat-square" alt="Latest Release"></a>
+    <a href="https://github.com/mostafa-wahied/autoxpose/actions"><img src="https://img.shields.io/github/actions/workflow/status/mostafa-wahied/autoxpose/docker-publish.yml?style=flat-square" alt="Build Status"></a>
 </p>
 
-Add a label to your container, and autoxpose creates the DNS record and configures your reverse proxy with SSL - no manual setup required.
+<p align="center">
+  <img src="screenshots/1.png" alt="autoxpose Dashboard Screenshot" style="width: 95%;" />
+</p>
 
 ---
 
