@@ -1,4 +1,5 @@
-<div align="center">
+<div align="center" >
+  <img src="packages/frontend/public/autoxpose-logo.svg" alt="autoxpose Logo" width="370"/>
   <h1 style="font-size: 3em; margin-bottom: 0.1em;">autoxpose</h1>
 </div>
 
