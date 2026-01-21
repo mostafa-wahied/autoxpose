@@ -61,10 +61,11 @@ interface CoreServicesOptions {
   lanIp: string;
   lanProvided: boolean;
   changeTracker: ChangeTracker;
+  discovery: DockerDiscoveryProvider | null;
 }
 
 function createCoreServices(options: CoreServicesOptions): CoreServices {
-  const { db, publicIp, lanIp, lanProvided, changeTracker } = options;
+  const { db, publicIp, lanIp, lanProvided, changeTracker, discovery } = options;
   const servicesRepo = new ServicesRepository(db, changeTracker);
   const settingsRepo = new SettingsRepository(db);
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
@@ -72,7 +73,7 @@ function createCoreServices(options: CoreServicesOptions): CoreServices {
   const tagDetector = new TagDetector(metadataLoader);
   const services = new ServicesService(servicesRepo, settings, tagDetector);
   const metadataUpdater = new MetadataUpdater(metadataLoader, services);
-  const sync = new SyncService(servicesRepo, settings);
+  const sync = new SyncService(servicesRepo, settings, discovery ?? undefined);
   const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
   const expose = new ExposeService(exposeContext);
   const streamingExpose = new StreamingExposeService(servicesRepo, settings, publicIp, lanIp);
@@ -99,15 +100,15 @@ export function createAppContext(
   const resolvedLanIp = network?.lanIp || 'localhost';
   const resolvedPublicIp = network?.publicIp || 'localhost';
   const changeTracker = new ChangeTracker();
+  const discovery = dockerConfig ? new DockerDiscoveryProvider(dockerConfig) : null;
   const core = createCoreServices({
     db,
     publicIp: resolvedPublicIp,
     lanIp: resolvedLanIp,
     lanProvided: Boolean(network?.lanProvided),
     changeTracker,
+    discovery,
   });
-
-  const discovery = dockerConfig ? new DockerDiscoveryProvider(dockerConfig) : null;
 
   const startWatcher = (): void => {
     if (!discovery) return;

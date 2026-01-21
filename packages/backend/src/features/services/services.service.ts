@@ -40,8 +40,37 @@ export class ServicesService {
     return this.repository.update(id, input);
   }
 
-  async deleteService(id: string): Promise<boolean> {
+  async deleteService(id: string, shouldUnexpose: boolean = false): Promise<boolean> {
+    if (shouldUnexpose && this.settings) {
+      const service = await this.repository.findById(id);
+      if (service && (service.dnsRecordId || service.proxyHostId)) {
+        await this.unexposeService(service);
+      }
+    }
     return this.repository.delete(id);
+  }
+
+  private async unexposeService(service: ServiceRecord): Promise<void> {
+    const dns = await this.settings!.getDnsProvider();
+    const proxy = await this.settings!.getProxyProvider();
+
+    if (service.dnsRecordId && dns) {
+      try {
+        await dns.deleteRecord(service.dnsRecordId);
+      } catch (err) {
+        throw new Error(`Failed to delete DNS: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+
+    if (service.proxyHostId && proxy) {
+      try {
+        await proxy.deleteHost(service.proxyHostId);
+      } catch (err) {
+        throw new Error(
+          `Failed to delete proxy: ${err instanceof Error ? err.message : 'Unknown'}`
+        );
+      }
+    }
   }
 
   async fixConfig(id: string): Promise<{ fixed: string[]; errors: string[] }> {

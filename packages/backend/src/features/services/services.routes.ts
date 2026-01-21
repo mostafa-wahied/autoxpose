@@ -184,10 +184,14 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
       return service ? { service } : notFound(reply);
     });
 
-    server.delete<{ Params: IdParams }>('/:id', async (request, reply) => {
-      const deleted = await ctx.services.deleteService(request.params.id);
-      return deleted ? { success: true } : notFound(reply);
-    });
+    server.delete<{ Params: IdParams; Querystring: { unexpose?: string } }>(
+      '/:id',
+      async (request, reply) => {
+        const shouldUnexpose = request.query.unexpose === 'true';
+        const deleted = await ctx.services.deleteService(request.params.id, shouldUnexpose);
+        return deleted ? { success: true } : notFound(reply);
+      }
+    );
 
     server.post<{ Params: IdParams }>('/:id/probe', async (request, reply) =>
       handleProbe(ctx, request.params.id, reply)

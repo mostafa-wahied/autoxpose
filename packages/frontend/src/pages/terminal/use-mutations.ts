@@ -18,7 +18,7 @@ type RetrySslResult = { success: boolean; error?: string };
 
 interface MutationsReturn {
   scanMutation: UseMutationResult<ScanResult, Error, void>;
-  deleteMutation: UseMutationResult<DeleteResult, Error, string>;
+  deleteMutation: UseMutationResult<DeleteResult, Error, { id: string; unexpose: boolean }>;
   updateMutation: UseMutationResult<UpdateResult, Error, UpdateInput>;
   retrySslMutation: UseMutationResult<RetrySslResult, Error, string>;
   deletingServiceId: string | null;
@@ -64,7 +64,8 @@ export function useTerminalMutations(): MutationsReturn {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (serviceId: string) => api.services.delete(serviceId),
+    mutationFn: ({ id, unexpose }: { id: string; unexpose: boolean }) =>
+      api.services.delete(id, unexpose),
     onSuccess: (): void => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       setDeletingServiceId(null);

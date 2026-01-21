@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { type SettingsStatus, api } from '../../lib/api';
 import { ConfirmDialog } from './confirm-dialog';
 import { DnsConfigSection, ProxyConfigSection } from './config';
+import { Tooltip } from './tooltip';
 
 function downloadFile(content: string, filename: string): void {
   const blob = new Blob([content], { type: 'application/json' });
@@ -87,18 +88,22 @@ function PanelHeader({ onClose }: { onClose: () => void }): JSX.Element {
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-[#c9d1d9]">Configuration</h3>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
-          >
-            Export
-          </button>
-          <button
-            onClick={() => void handleImport()}
-            className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
-          >
-            Import
-          </button>
+          <Tooltip content="Export settings to JSON file">
+            <button
+              onClick={handleExport}
+              className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
+            >
+              Export
+            </button>
+          </Tooltip>
+          <Tooltip content="Import settings from JSON file">
+            <button
+              onClick={() => void handleImport()}
+              className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff]"
+            >
+              Import
+            </button>
+          </Tooltip>
           <button
             onClick={onClose}
             className="text-xs text-[#8b949e] transition-colors hover:text-[#c9d1d9]"

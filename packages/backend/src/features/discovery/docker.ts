@@ -3,6 +3,7 @@ import Docker from 'dockerode';
 import type { AppContext } from '../../core/context.js';
 import type { ProgressCallback } from '../expose/expose-handlers.js';
 import { createLogger } from '../../core/logger/index.js';
+import { getContainerExposedPorts } from './port-inspector.js';
 
 const logger = createLogger('docker-provider');
 const routesLogger = createLogger('discovery-routes');
@@ -230,6 +231,10 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     if (!selectedPort) return null;
 
     return { port: selectedPort, scheme: explicitScheme || detectedScheme };
+  }
+
+  getExposedPorts(containerId: string): Promise<number[]> {
+    return getContainerExposedPorts(this.docker, containerId);
   }
 
   private mapInspectedContainer(info: Docker.ContainerInspectInfo): DiscoveredService | null {

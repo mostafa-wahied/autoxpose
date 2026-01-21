@@ -49,7 +49,8 @@ function executeConfirm(p: ConfirmParams): void {
   if (!p.confirmAction) return;
   if (p.confirmAction.type === 'delete') {
     p.setDeletingServiceId(p.confirmAction.service.id);
-    p.deleteMutation.mutate(p.confirmAction.service.id);
+    const shouldUnexpose = p.confirmAction.shouldUnexpose ?? false;
+    p.deleteMutation.mutate({ id: p.confirmAction.service.id, unexpose: shouldUnexpose });
   } else if (p.confirmAction.type === 'expose-all') {
     const targets = p.services.filter(s => !s.enabled).map(s => s.id);
     p.startBatch('expose', targets);
