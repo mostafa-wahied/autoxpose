@@ -3,6 +3,7 @@ import { useState } from 'react';
 type LogoProps = {
   className?: string;
   size?: number;
+  isAnimating?: boolean;
 };
 
 const LOGO_PATH =
@@ -15,9 +16,10 @@ const QUADRANTS = [
   { id: 'br', clip: 'polygon(50% 50%, 100% 50%, 100% 100%, 50% 100%)', tx: 3, ty: 3 },
 ];
 
-export function Logo({ className, size = 30 }: LogoProps): JSX.Element {
+export function Logo({ className, size = 30, isAnimating = false }: LogoProps): JSX.Element {
   const [isHovered, setIsHovered] = useState(false);
   const height = Math.round(size * 0.7);
+  const shouldSplit = isHovered || isAnimating;
 
   return (
     <div
@@ -27,6 +29,12 @@ export function Logo({ className, size = 30 }: LogoProps): JSX.Element {
       onMouseLeave={() => setIsHovered(false)}
       aria-label="AutoXpose Logo"
     >
+      <style>{`
+        @keyframes logo-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+      `}</style>
       {QUADRANTS.map(q => (
         <svg
           key={q.id}
@@ -40,8 +48,9 @@ export function Logo({ className, size = 30 }: LogoProps): JSX.Element {
             left: 0,
             top: 0,
             clipPath: q.clip,
-            transform: isHovered ? `translate(${q.tx}%, ${q.ty}%)` : 'translate(0, 0)',
+            transform: shouldSplit ? `translate(${q.tx}%, ${q.ty}%)` : 'translate(0, 0)',
             transition: 'transform 150ms ease-out',
+            animation: isAnimating ? 'logo-pulse 1.2s ease-in-out infinite' : 'none',
           }}
         >
           <path fill="currentColor" d={LOGO_PATH} />

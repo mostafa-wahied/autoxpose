@@ -176,6 +176,7 @@ function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
       >
         <Logo
           size={36}
+          isAnimating={props.isScanning}
           className="text-white transition-all duration-300 group-hover:rotate-[15deg] group-hover:text-[#58a6ff]"
         />
       </button>
