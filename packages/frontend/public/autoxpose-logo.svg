@@ -1,6 +1,12 @@
 <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 	 width="100%" viewBox="0 0 1024 560" enable-background="new 0 0 1024 560" xml:space="preserve">
-<path fill="#000000" opacity="1.000000" stroke="none" 
+<style>
+  path { fill: #000000; }
+  @media (prefers-color-scheme: dark) {
+    path { fill: #ffffff; }
+  }
+</style>
+<path opacity="1.000000" stroke="none" 
 	d="
 M668.656189,331.405029 
 	C684.834839,359.795013 700.751953,387.912903 716.873169,415.913361 
