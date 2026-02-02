@@ -1,9 +1,14 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppContext } from '../../core/context.js';
+import type { ServiceRecord } from './services.repository.js';
 import { probeBackend } from '../discovery/probe.js';
 import { checkDomainReachable } from '../settings/validation.js';
 import { createSslRoutes } from './ssl.routes.js';
 import { createSyncRoutes } from './sync.routes.js';
+
+interface ServicesQuery {
+  includeExternal?: string;
+}
 
 interface CreateBody {
   name: string;
@@ -161,9 +166,81 @@ async function handleCleanup(
   return { success: true };
 }
 
+type ExternalService = {
+  id: string;
+  name: string;
+  subdomain: string;
+  port: number;
+  scheme: string;
+  enabled: boolean;
+  source: 'external';
+  sourceId: null;
+  exposedSubdomain: string;
+  sslPending: boolean;
+  sslError: string | null;
+  proxyHostId: string;
+  dnsRecordId: null;
+  external: true;
+};
+
+async function mergeExternalSources(
+  ctx: AppContext,
+  services: ServiceRecord[]
+): Promise<(ServiceRecord | ExternalService)[]> {
+  const proxy = await ctx.settings.getProxyProvider();
+  if (!proxy) return services;
+  const dns = await ctx.settings.getDnsConfig();
+  if (!dns?.config?.domain) return services;
+  const baseDomain = dns.config.domain;
+  const managedDomains = new Set(
+    services
+      .filter(s => s.exposedSubdomain || s.subdomain)
+      .map(s => (s.exposedSubdomain || s.subdomain).toLowerCase())
+  );
+  let proxyHosts;
+  try {
+    proxyHosts = await proxy.listHosts();
+  } catch {
+    return services;
+  }
+  const externalServices: ExternalService[] = proxyHosts
+    .filter(host => {
+      if (!host.domain.endsWith(`.${baseDomain}`)) return false;
+      const subdomain = host.domain.replace(`.${baseDomain}`, '').toLowerCase();
+      return !managedDomains.has(subdomain);
+    })
+    .map(host => {
+      const subdomain = host.domain.replace(`.${baseDomain}`, '');
+      return {
+        id: `external-${host.id}`,
+        name: subdomain,
+        subdomain,
+        port: host.targetPort,
+        scheme: host.ssl ? 'https' : 'http',
+        enabled: host.enabled,
+        source: 'external' as const,
+        sourceId: null,
+        exposedSubdomain: subdomain,
+        sslPending: host.sslPending ?? false,
+        sslError: host.sslError ?? null,
+        proxyHostId: host.id,
+        dnsRecordId: null,
+        external: true as const,
+      };
+    });
+  return [...services, ...externalServices];
+}
+
 export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
   return async server => {
-    server.get('/', async () => ({ services: await ctx.services.getAllServices() }));
+    server.get<{ Querystring: ServicesQuery }>('/', async request => {
+      const services = await ctx.services.getAllServices();
+      if (request.query.includeExternal === 'true') {
+        const merged = await mergeExternalSources(ctx, services);
+        return { services: merged };
+      }
+      return { services };
+    });
 
     server.get('/changes/version', async () => ctx.changeTracker.getInfo());
 
