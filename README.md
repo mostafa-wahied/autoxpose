@@ -10,7 +10,6 @@
   </p>
 </p>
 
-
 <p align="center">
   <a href="https://github.com/mostafa-wahied/autoxpose/blob/main/LICENSE"><img src="https://img.shields.io/github/license/mostafa-wahied/autoxpose?style=flat-square" alt="License"></a>
   <a href="https://hub.docker.com/r/mostafawahied/autoxpose"><img src="https://img.shields.io/docker/v/mostafawahied/autoxpose?label=docker&style=flat-square" alt="Docker Version"></a>
