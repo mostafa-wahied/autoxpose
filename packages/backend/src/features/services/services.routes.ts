@@ -181,6 +181,7 @@ type ExternalService = {
   proxyHostId: string;
   dnsRecordId: null;
   external: true;
+  targetHost: string;
 };
 
 async function mergeExternalSources(
@@ -226,6 +227,7 @@ async function mergeExternalSources(
         proxyHostId: host.id,
         dnsRecordId: null,
         external: true as const,
+        targetHost: host.targetHost,
       };
     });
   return [...services, ...externalServices];
