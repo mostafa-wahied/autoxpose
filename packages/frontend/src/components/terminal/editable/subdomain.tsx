@@ -141,7 +141,8 @@ export function EditableSubdomain(props: EditableSubdomainProps): JSX.Element {
 
   if (!value) return <EmptyState onEdit={startEdit} />;
 
-  const fullDomain = baseDomain ? `${value}.${baseDomain}` : value;
+  const looksLikeFullDomain = value.includes('.') && value.split('.').length >= 2;
+  const fullDomain = looksLikeFullDomain ? value : baseDomain ? `${value}.${baseDomain}` : value;
   if (isExposed) return <ExposedLink domain={fullDomain} protocol={protocol || null} />;
 
   return (

@@ -86,15 +86,20 @@ export class ExposeService {
   }> {
     const baseDomain = await this.getBaseDomain();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
+    const isWildcardMode = await this.context.settings.isWildcardMode();
 
-    const dnsRecordId =
-      !forceCreate && service.dnsRecordId
-        ? service.dnsRecordId
-        : await this.createDnsRecord(service);
+    let dnsRecordId: string | undefined;
+    if (!isWildcardMode) {
+      dnsRecordId =
+        !forceCreate && service.dnsRecordId
+          ? service.dnsRecordId
+          : await this.createDnsRecord(service);
+    }
+
     const proxyResult =
       !forceCreate && service.proxyHostId !== null
         ? { id: service.proxyHostId }
-        : await this.createProxyHost(service, fullDomain);
+        : await this.createProxyHost(service, fullDomain, isWildcardMode);
 
     return {
       dnsRecordId,
@@ -210,8 +215,7 @@ export class ExposeService {
   }
 
   private async getBaseDomain(): Promise<string | null> {
-    const cfg = await this.context.settings.getDnsConfig();
-    return cfg?.config.domain ?? null;
+    return this.context.settings.getBaseDomainFromAnySource();
   }
 
   private buildFullDomain(subdomain: string, baseDomain: string | null): string {
@@ -231,10 +235,19 @@ export class ExposeService {
 
   private async createProxyHost(
     svc: ServiceRecord,
-    fullDomain: string
+    fullDomain: string,
+    isWildcardMode = false
   ): Promise<{ id: string; sslPending?: boolean; sslError?: string } | undefined> {
     const proxy = await this.context.settings.getProxyProvider();
     if (!proxy) return undefined;
+
+    let certificateId: number | undefined;
+    if (isWildcardMode) {
+      const wildcardConfig = await this.context.settings.getWildcardConfig();
+      if (wildcardConfig?.certId) {
+        certificateId = wildcardConfig.certId;
+      }
+    }
 
     const host = await proxy.createHost({
       domain: fullDomain,
@@ -242,6 +255,7 @@ export class ExposeService {
       targetPort: svc.port,
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
+      certificateId,
     });
     return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   }

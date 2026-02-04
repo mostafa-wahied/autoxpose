@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { detectPlatform } from '../../core/platform.js';
 import type { SettingsService } from './settings.service.js';
 import { testDnsProvider, testProxyProvider } from './validation.js';
+import { NpmProxyProvider } from '../proxy/providers/npm.js';
 
 type ProviderBody = { provider: string; config: Record<string, string> };
 type ParsedConfig = { provider: string; config: Record<string, string> } | null;
@@ -77,6 +78,7 @@ export function createSettingsRoutes(settings: SettingsService): FastifyPluginAs
   return async server => {
     registerDnsRoutes(server, settings);
     registerProxyRoutes(server, settings);
+    registerWildcardRoutes(server, settings);
     registerStatusRoute(server, settings);
     registerTestRoutes(server, settings);
     registerExportImportRoutes(server, settings);
@@ -130,12 +132,87 @@ function registerStatusRoute(
   server.get('/status', async () => {
     const dnsCfg = await settings.getDnsConfig();
     const proxyCfg = await settings.getProxyConfig();
+    const wildcardCfg = await settings.getWildcardConfig();
     const proxyConfigured = Boolean(proxyCfg);
     return {
       dns: formatDnsConfig(dnsCfg),
       proxy: formatProxyConfig(proxyCfg),
       platform: detectPlatform(),
       network: await settings.getNetworkInfo(proxyConfigured),
+      wildcard: {
+        enabled: wildcardCfg?.enabled ?? false,
+        domain: wildcardCfg?.domain ?? null,
+        certId: wildcardCfg?.certId ?? null,
+        detected: wildcardCfg?.certId !== null && wildcardCfg?.certId !== undefined,
+      },
+    };
+  });
+}
+
+function registerWildcardRoutes(
+  server: Parameters<FastifyPluginAsync>[0],
+  settings: SettingsService
+): void {
+  server.get('/wildcard', async () => {
+    const config = await settings.getWildcardConfig();
+    return {
+      enabled: config?.enabled ?? false,
+      domain: config?.domain ?? null,
+      certId: config?.certId ?? null,
+      detectedAt: config?.detectedAt ?? null,
+    };
+  });
+
+  server.post<{ Body: { enabled: boolean; domain: string } }>('/wildcard', async request => {
+    const { enabled, domain } = request.body;
+    let certId: number | null = null;
+
+    if (enabled) {
+      const proxyCfg = await settings.getProxyConfig();
+      if (proxyCfg?.provider === 'npm') {
+        const npm = new NpmProxyProvider({
+          url: proxyCfg.config.url,
+          username: proxyCfg.config.username,
+          password: proxyCfg.config.password,
+        });
+        const cert = await npm.findWildcardCertificate(domain);
+        certId = cert?.id ?? null;
+      }
+    }
+
+    const config = await settings.saveWildcardConfig({ enabled, domain, certId });
+    return { success: true, config };
+  });
+
+  server.get('/wildcard/detect', async () => {
+    const proxyCfg = await settings.getProxyConfig();
+    if (!proxyCfg || proxyCfg.provider !== 'npm') {
+      return { detected: false, domain: null, certId: null, fullDomain: null };
+    }
+
+    const npm = new NpmProxyProvider({
+      url: proxyCfg.config.url,
+      username: proxyCfg.config.username,
+      password: proxyCfg.config.password,
+    });
+
+    await npm['authenticate']();
+    type Cert = { id: number; domain_names: string[] };
+    const certs = await npm['request']<Cert[]>('/nginx/certificates');
+    const wildcardCert = certs.find(c => c.domain_names.some(d => d.startsWith('*.')));
+
+    if (!wildcardCert) {
+      return { detected: false, domain: null, certId: null, fullDomain: null };
+    }
+
+    const wildcardDomain = wildcardCert.domain_names.find(d => d.startsWith('*.'));
+    const baseDomain = wildcardDomain?.slice(2) ?? null;
+
+    return {
+      detected: true,
+      domain: baseDomain,
+      certId: wildcardCert.id,
+      fullDomain: wildcardDomain,
     };
   });
 }

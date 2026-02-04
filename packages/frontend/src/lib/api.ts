@@ -66,11 +66,26 @@ export interface PlatformInfo {
   os: string;
 }
 
+export interface WildcardConfig {
+  enabled: boolean;
+  domain: string | null;
+  certId: number | null;
+  detected: boolean;
+}
+
+export interface WildcardDetection {
+  detected: boolean;
+  domain: string | null;
+  certId: number | null;
+  fullDomain: string | null;
+}
+
 export interface SettingsStatus {
   dns: DnsStatus;
   proxy: ProviderStatus;
   network?: NetworkStatus;
   platform?: PlatformInfo;
+  wildcard?: WildcardConfig;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -229,6 +244,17 @@ export const api = {
       request<{ success: boolean }>('/settings/import', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    detectWildcard: (): Promise<WildcardDetection> =>
+      request<WildcardDetection>('/settings/wildcard/detect'),
+    getWildcard: (): Promise<WildcardConfig> => request<WildcardConfig>('/settings/wildcard'),
+    saveWildcard: (
+      enabled: boolean,
+      domain: string
+    ): Promise<{ success: boolean; config: WildcardConfig }> =>
+      request<{ success: boolean; config: WildcardConfig }>('/settings/wildcard', {
+        method: 'POST',
+        body: JSON.stringify({ enabled, domain }),
       }),
   },
 };

@@ -6,7 +6,11 @@ import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProvider } from '../proxy/proxy.types.js';
-import type { ProviderConfigRecord, SettingsRepository } from './settings.repository.js';
+import type {
+  ProviderConfigRecord,
+  SettingsRepository,
+  WildcardConfig,
+} from './settings.repository.js';
 import { detectPublicIp, determineIpState, isBridgeIp, type IpState } from '../../core/platform.js';
 
 type ParsedConfig = { provider: string; config: Record<string, string> } | null;
@@ -132,5 +136,35 @@ export class SettingsService {
 
   private parseConfig(record: ProviderConfigRecord): ParsedConfig {
     return { provider: record.provider, config: JSON.parse(record.config) };
+  }
+
+  async getWildcardConfig(): Promise<WildcardConfig | null> {
+    return this.repository.getWildcardConfig();
+  }
+
+  async saveWildcardConfig(
+    config: Partial<WildcardConfig> & { enabled: boolean; domain: string }
+  ): Promise<WildcardConfig> {
+    const fullConfig: WildcardConfig = {
+      enabled: config.enabled,
+      domain: config.domain,
+      certId: config.certId ?? null,
+      detectedAt: config.certId ? new Date().toISOString() : null,
+    };
+    return this.repository.saveWildcardConfig(fullConfig);
+  }
+
+  async isWildcardMode(): Promise<boolean> {
+    const config = await this.getWildcardConfig();
+    return config?.enabled ?? false;
+  }
+
+  async getBaseDomainFromAnySource(): Promise<string | null> {
+    const wildcardConfig = await this.getWildcardConfig();
+    if (wildcardConfig?.enabled && wildcardConfig.domain) {
+      return wildcardConfig.domain;
+    }
+    const dnsConfig = await this.getDnsConfig();
+    return dnsConfig?.config.domain ?? null;
   }
 }

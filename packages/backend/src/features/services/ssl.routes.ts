@@ -18,13 +18,13 @@ export const createSslRoutes = (ctx: AppContext): FastifyPluginAsync => {
       if (!service) return notFound(reply);
       if (!service.subdomain) return badRequest(reply, 'Service has no subdomain');
 
-      const dns = await ctx.settings.getDnsConfig();
-      if (!dns?.config.domain) return badRequest(reply, 'No DNS domain configured');
+      const baseDomain = await ctx.settings.getBaseDomainFromAnySource();
+      if (!baseDomain) return badRequest(reply, 'No domain configured');
 
       const proxy = await ctx.settings.getProxyProvider();
       if (!proxy) return badRequest(reply, 'No proxy provider configured');
 
-      const fqdn = `${service.subdomain}.${dns.config.domain}`;
+      const fqdn = `${service.subdomain}.${baseDomain}`;
       const host = await proxy.findByDomain(fqdn);
       if (!host) return badRequest(reply, 'No proxy host found for this service');
 

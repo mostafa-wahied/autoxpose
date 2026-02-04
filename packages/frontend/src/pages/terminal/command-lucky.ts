@@ -39,6 +39,9 @@ const LUCKY_LINES = [
   'The most secure server is the one that is unplugged. It is also the most useless.',
   'Remember when you started a homelab to save money? Good times.',
   'Feeling lucky? Try entering the Konami code.',
+  'Wildcard mode: because life is too short to create DNS records one at a time.',
+  'With great wildcard power comes great subdomain responsibility.',
+  'Your wildcard cert is doing all the heavy lifting. Give it some appreciation.',
 ];
 
 export function getLuckyLine(): string {
