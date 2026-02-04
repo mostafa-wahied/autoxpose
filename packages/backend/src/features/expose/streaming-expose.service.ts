@@ -161,8 +161,7 @@ export class StreamingExposeService {
   }
 
   private async getBaseDomain(): Promise<string | null> {
-    const cfg = await this.settings.getDnsConfig();
-    return cfg?.config.domain ?? null;
+    return this.settings.getBaseDomainFromAnySource();
   }
 
   private async determineScheme(

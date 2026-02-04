@@ -60,10 +60,10 @@ async function handleOnline(
   const service = await ctx.services.getServiceById(serviceId);
   if (!service) return notFound(reply);
   if (!service.enabled || !service.subdomain) return { online: false };
-  const dns = await ctx.settings.getDnsConfig();
-  if (!dns?.config.domain) return { online: false };
+  const baseDomain = await ctx.settings.getBaseDomainFromAnySource();
+  if (!baseDomain) return { online: false };
   const subdomainToTest = service.exposedSubdomain || service.subdomain;
-  const fqdn = `${subdomainToTest}.${dns.config.domain}`;
+  const fqdn = `${subdomainToTest}.${baseDomain}`;
   const result = await checkDomainReachable(fqdn, service.sslPending ?? undefined);
   return { online: result.ok, domain: fqdn, protocol: result.protocol };
 }
@@ -75,8 +75,8 @@ const handleCheckBulk = async (
   ctx: AppContext,
   serviceIds: string[]
 ): Promise<{ results: Record<string, { online: boolean; protocol: string | null }> }> => {
-  const dns = await ctx.settings.getDnsConfig();
-  if (!dns?.config.domain) {
+  const baseDomain = await ctx.settings.getBaseDomainFromAnySource();
+  if (!baseDomain) {
     return { results: {} };
   }
   const proxy = await ctx.settings.getProxyProvider();
@@ -85,7 +85,7 @@ const handleCheckBulk = async (
     if (!service || !service.enabled || !service.subdomain) {
       return Promise.resolve({ id: service?.id ?? '', online: false, protocol: null });
     }
-    return resolveServiceStatus(service as NonNullable<typeof service>, dns.config.domain, proxy);
+    return resolveServiceStatus(service as NonNullable<typeof service>, baseDomain, proxy);
   });
 
   const results = await Promise.allSettled(checks);
@@ -125,7 +125,12 @@ const handleMigration = async (
 ): Promise<unknown> => {
   const service = await ctx.services.getServiceById(serviceId);
   if (!service) return notFound(reply);
-  if (!service.enabled || !service.dnsRecordId || !service.proxyHostId) {
+  const wildcardConfig = await ctx.settings.getWildcardConfig();
+  const isWildcardMode = wildcardConfig?.enabled ?? false;
+  const hasRequiredProviders = isWildcardMode
+    ? service.proxyHostId
+    : service.dnsRecordId && service.proxyHostId;
+  if (!service.enabled || !hasRequiredProviders) {
     return reply.status(400).send({ error: 'Service must be fully exposed to migrate' });
   }
   if (!service.exposedSubdomain || service.exposedSubdomain === service.subdomain) {
@@ -190,9 +195,8 @@ async function mergeExternalSources(
 ): Promise<(ServiceRecord | ExternalService)[]> {
   const proxy = await ctx.settings.getProxyProvider();
   if (!proxy) return services;
-  const dns = await ctx.settings.getDnsConfig();
-  if (!dns?.config?.domain) return services;
-  const baseDomain = dns.config.domain;
+  const baseDomain = await ctx.settings.getBaseDomainFromAnySource();
+  if (!baseDomain) return services;
   const managedDomains = new Set(
     services
       .filter(s => s.exposedSubdomain || s.subdomain)
