@@ -23,6 +23,7 @@ export type CreateProxyHostInput = {
   targetScheme?: 'http' | 'https';
   ssl?: boolean;
   skipDnsWait?: boolean;
+  certificateId?: number;
 };
 
 export type UpdateProxyHostInput = {

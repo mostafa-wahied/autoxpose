@@ -32,7 +32,13 @@ export class NpmProxyProvider implements ProxyProvider {
       body: JSON.stringify(body),
     });
     const host = this.mapHost(response);
-    if (input.ssl) {
+
+    if (input.certificateId) {
+      await this.assignCertificateToHost(host.id, input.certificateId);
+      host.ssl = true;
+      host.sslPending = false;
+      host.sslError = undefined;
+    } else if (input.ssl) {
       const sslResult = await this.trySslSetup(host.id, input.domain, input.skipDnsWait);
       host.sslPending = !sslResult.success;
       host.sslError = sslResult.error;
@@ -116,7 +122,31 @@ export class NpmProxyProvider implements ProxyProvider {
   private async findCertificateByDomain(domain: string): Promise<number | null> {
     type Cert = { id: number; domain_names: string[] };
     const certs = await this.request<Cert[]>('/nginx/certificates');
-    return certs.find(c => c.domain_names.includes(domain))?.id ?? null;
+    const exactMatch = certs.find(c => c.domain_names.includes(domain))?.id;
+    if (exactMatch) return exactMatch;
+
+    const parts = domain.split('.');
+    if (parts.length >= 2) {
+      const baseDomain = parts.slice(-2).join('.');
+      const wildcardDomain = `*.${baseDomain}`;
+      const wildcardMatch = certs.find(c => c.domain_names.includes(wildcardDomain))?.id;
+      if (wildcardMatch) return wildcardMatch;
+    }
+    return null;
+  }
+
+  async findWildcardCertificate(
+    baseDomain: string
+  ): Promise<{ id: number; domain: string } | null> {
+    await this.authenticate();
+    type Cert = { id: number; domain_names: string[] };
+    const certs = await this.request<Cert[]>('/nginx/certificates');
+    const wildcardDomain = `*.${baseDomain}`;
+    const match = certs.find(c => c.domain_names.includes(wildcardDomain));
+    if (match) {
+      return { id: match.id, domain: wildcardDomain };
+    }
+    return null;
   }
 
   private async assignCertificateToHost(hostId: string, certId: number): Promise<void> {
