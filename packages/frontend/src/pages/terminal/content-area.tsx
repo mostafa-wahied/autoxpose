@@ -18,6 +18,7 @@ interface ContentAreaProps {
   canExposeReason?: string;
   settingsData: Awaited<ReturnType<typeof import('../../lib/api').api.settings.status>> | undefined;
   onScan: () => void;
+  isWildcardMode: boolean;
 }
 
 export function ContentArea(props: ContentAreaProps): JSX.Element {
@@ -32,6 +33,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
     canExposeReason,
     settingsData,
     onScan,
+    isWildcardMode,
   } = props;
 
   const { selectedTags, setSelectedTags, tagCounts, filteredServices } = useTagFilters(services);
@@ -60,6 +62,7 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
         onScan={onScan}
         retrySslPending={state.retrySslMutation.isPending}
         scanTrigger={state.scanTrigger}
+        isWildcardMode={isWildcardMode}
       />
       <ProgressSection
         streamState={state.streamState}

@@ -18,6 +18,7 @@ interface ServiceGridProps {
   onScan: () => void;
   retrySslPending: boolean;
   scanTrigger: number;
+  isWildcardMode: boolean;
 }
 
 export function ServiceGrid({
@@ -35,6 +36,7 @@ export function ServiceGrid({
   onScan,
   retrySslPending,
   scanTrigger,
+  isWildcardMode,
 }: ServiceGridProps): JSX.Element {
   const { statusMap, checkServices } = useBulkStatusCheck(scanTrigger);
 
@@ -72,6 +74,7 @@ export function ServiceGrid({
             isRetrySslPending={retrySslPending}
             scanTrigger={scanTrigger}
             bulkStatus={statusMap[service.id]}
+            isWildcardMode={isWildcardMode}
           />
         );
       })}

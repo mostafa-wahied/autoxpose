@@ -141,8 +141,10 @@ function useDashboardState(
   canExposeReason: string;
   exposedCount: number;
   connectionStatus: ConnectionStatus;
+  isWildcardMode: boolean;
 } {
-  const dnsOk = settings?.dns?.configured ?? false;
+  const isWildcardMode = settings?.wildcard?.enabled ?? false;
+  const dnsOk = isWildcardMode || (settings?.dns?.configured ?? false);
   const proxyOk = settings?.proxy?.configured ?? false;
   const serverIpState = settings?.network?.serverIpState ?? 'missing';
   const serverIpBlocking = ['missing', 'invalid', 'placeholder'].includes(serverIpState);
@@ -162,6 +164,7 @@ function useDashboardState(
     canExposeReason,
     exposedCount,
     connectionStatus,
+    isWildcardMode,
   };
 }
 
@@ -248,6 +251,11 @@ interface DashboardMainProps {
 }
 
 function DashboardMain(props: DashboardMainProps): JSX.Element {
+  const baseDomain =
+    props.settings?.wildcard?.enabled && props.settings?.wildcard?.domain
+      ? props.settings.wildcard.domain
+      : (props.settings?.dns?.domain ?? null);
+
   return (
     <>
       <MainContent
@@ -257,7 +265,7 @@ function DashboardMain(props: DashboardMainProps): JSX.Element {
         activeService={props.activeService}
         loadingId={getLoadingId(props.state.streamState, props.state.deletingServiceId)}
         settingsData={props.settings}
-        baseDomain={props.settings?.dns?.domain ?? null}
+        baseDomain={baseDomain}
         canExpose={props.dashboardState.canExpose}
         canExposeReason={
           props.dashboardState.canExpose ? undefined : props.dashboardState.canExposeReason
@@ -265,6 +273,7 @@ function DashboardMain(props: DashboardMainProps): JSX.Element {
         setShortcutsOpen={props.setShortcutsOpen}
         orphanCount={props.orphanCount}
         onOrphansClick={() => props.setOrphansOpen(true)}
+        isWildcardMode={props.dashboardState.isWildcardMode}
       />
       <ConfirmDialogs
         action={props.state.confirmAction}
@@ -298,6 +307,7 @@ interface MainContentProps {
   setShortcutsOpen: (open: boolean) => void;
   orphanCount: number;
   onOrphansClick: () => void;
+  isWildcardMode: boolean;
 }
 
 function MainContent({
@@ -313,6 +323,7 @@ function MainContent({
   setShortcutsOpen,
   orphanCount,
   onOrphansClick,
+  isWildcardMode,
 }: MainContentProps): JSX.Element {
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -334,6 +345,7 @@ function MainContent({
             canExpose={canExpose}
             canExposeReason={canExposeReason}
             onScan={actions.handleScan}
+            isWildcardMode={isWildcardMode}
           />
         </div>
         <SettingsPanel

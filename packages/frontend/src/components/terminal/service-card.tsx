@@ -21,6 +21,7 @@ interface TerminalServiceCardProps {
   isRetrySslPending?: boolean;
   scanTrigger?: number;
   bulkStatus?: { online: boolean; protocol: string | null };
+  isWildcardMode: boolean;
 }
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
@@ -37,6 +38,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     isRetrySslPending = false,
     scanTrigger,
     bulkStatus,
+    isWildcardMode,
   } = props;
   const [showDelete, setShowDelete] = useState(false);
   const [protocol, setProtocol] = useState<'https' | 'http' | null>(null);
@@ -80,6 +82,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         isRetrySslPending={isRetrySslPending}
         scanTrigger={scanTrigger}
         bulkStatus={bulkStatus}
+        isWildcardMode={isWildcardMode}
       />
     </div>
   );
@@ -145,6 +148,7 @@ interface CardFooterProps {
   isRetrySslPending: boolean;
   scanTrigger?: number;
   bulkStatus?: { online: boolean; protocol: string | null };
+  isWildcardMode: boolean;
 }
 function CardFooter(props: CardFooterProps): JSX.Element {
   const {
@@ -162,6 +166,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     isRetrySslPending,
     scanTrigger,
     bulkStatus,
+    isWildcardMode,
   } = props;
   return (
     <div className="flex items-center justify-between">
@@ -172,6 +177,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
         onProtocolChange={onProtocolChange}
         scanTrigger={scanTrigger}
         bulkStatus={bulkStatus}
+        isWildcardMode={isWildcardMode}
       />
       <div className="flex items-center gap-2">
         {isExposed && service.sslPending && (

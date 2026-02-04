@@ -12,6 +12,7 @@ interface StatusBadgeProps {
   onProtocolChange: (protocol: 'https' | 'http' | null) => void;
   scanTrigger?: number;
   bulkStatus?: { online: boolean; protocol: string | null };
+  isWildcardMode: boolean;
 }
 
 export function StatusBadge({
@@ -21,6 +22,7 @@ export function StatusBadge({
   onProtocolChange,
   scanTrigger,
   bulkStatus,
+  isWildcardMode,
 }: StatusBadgeProps): JSX.Element {
   const [liveStatus, setLiveStatus] = useState<'checking' | 'online' | 'offline' | null>(null);
   const queryClient = useQueryClient();
@@ -73,7 +75,12 @@ export function StatusBadge({
         proxyExists={service.proxyExists}
         sslPending={service.sslPending}
       />
-      <ServiceWarnings service={service} isExposed={isExposed} liveStatus={liveStatus} />
+      <ServiceWarnings
+        service={service}
+        isExposed={isExposed}
+        liveStatus={liveStatus}
+        isWildcardMode={isWildcardMode}
+      />
     </div>
   );
 }
@@ -82,14 +89,16 @@ function ServiceWarnings({
   service,
   isExposed,
   liveStatus,
+  isWildcardMode,
 }: {
   service: ServiceRecord;
   isExposed: boolean;
   liveStatus: string | null;
+  isWildcardMode: boolean;
 }): JSX.Element {
   const warnings = parseWarnings(service.configWarnings);
   const showUnreachableReasons = isExposed && liveStatus === 'offline';
-  const badges = buildWarningBadges(warnings, showUnreachableReasons, service);
+  const badges = buildWarningBadges(warnings, showUnreachableReasons, service, isWildcardMode);
   const exposureIcons = [
     service.exposureSource === 'discovered' && {
       type: 'discovered',
@@ -102,7 +111,11 @@ function ServiceWarnings({
     <>
       {badges.map((w, i) => w.show && <WarningBadge key={i} type={w.type} message={w.msg} />)}
       <MigrateSubdomainButton service={service} warnings={warnings} />
-      <PartialExposureButtons service={service} showUnreachableReasons={showUnreachableReasons} />
+      <PartialExposureButtons
+        service={service}
+        showUnreachableReasons={showUnreachableReasons}
+        isWildcardMode={isWildcardMode}
+      />
       {exposureIcons.map((ic, i) => (
         <ExposureIcon key={i} type={ic.type} message={ic.msg} />
       ))}
@@ -138,9 +151,11 @@ function MigrateSubdomainButton({
 
 function PartialExposureButtons({
   service,
+  isWildcardMode,
 }: {
   service: ServiceRecord;
   showUnreachableReasons: boolean;
+  isWildcardMode: boolean;
 }): JSX.Element | null {
   const queryClient = useQueryClient();
 
@@ -155,7 +170,7 @@ function PartialExposureButtons({
   });
 
   const hasMismatch = service.dnsExists !== service.proxyExists;
-  const showDnsButton = hasMismatch && service.proxyExists && !service.dnsExists;
+  const showDnsButton = !isWildcardMode && hasMismatch && service.proxyExists && !service.dnsExists;
   const showProxyButton = hasMismatch && service.dnsExists && !service.proxyExists;
 
   if (!showDnsButton && !showProxyButton) return null;
@@ -234,15 +249,23 @@ function isLocalDnsLag(service: ServiceRecord, showUnreachableReasons: boolean):
   return properlyConfigured && isUnreachable && recentlyConfigured && !isPropagating;
 }
 
+function showDnsMissingBadge(service: ServiceRecord, isWildcardMode: boolean): boolean {
+  if (isWildcardMode) return false;
+  const hasMismatch = service.dnsExists !== service.proxyExists;
+  return hasMismatch && service.dnsExists === false && service.proxyExists === true;
+}
+
 function buildWarningBadges(
   warnings: ReturnType<typeof parseWarnings>,
   showUnreachableReasons: boolean,
-  service: ServiceRecord
+  service: ServiceRecord,
+  isWildcardMode: boolean
 ): Array<{ show: boolean; type: string; msg: string }> {
   const hasMismatch = service.dnsExists !== service.proxyExists;
   const { isPropagating, hideUnreachable } = calculatePropagationState(service);
   const shouldHide = hideUnreachable && showUnreachableReasons;
   const localDnsLag = isLocalDnsLag(service, showUnreachableReasons);
+  const showUnknown = showUnreachableReasons && !shouldHide;
 
   return [
     { show: isPropagating, type: 'Propagating', msg: 'DNS propagating, please wait' },
@@ -251,23 +274,15 @@ function buildWarningBadges(
       type: 'Local DNS',
       msg: 'May work externally. Local DNS cache needs time to update.',
     },
-    {
-      show: hasMismatch && service.dnsExists === false && service.proxyExists === true,
-      type: 'DNS',
-      msg: 'DNS record missing',
-    },
+    { show: showDnsMissingBadge(service, isWildcardMode), type: 'DNS', msg: 'DNS record missing' },
     {
       show: hasMismatch && service.proxyExists === false && service.dnsExists === true,
       type: 'Proxy',
       msg: 'Proxy host missing',
     },
+    { show: showUnknown && service.dnsExists === null, type: 'DNS?', msg: 'DNS status unknown' },
     {
-      show: showUnreachableReasons && !shouldHide && service.dnsExists === null,
-      type: 'DNS?',
-      msg: 'DNS status unknown',
-    },
-    {
-      show: showUnreachableReasons && !shouldHide && service.proxyExists === null,
+      show: showUnknown && service.proxyExists === null,
       type: 'Proxy?',
       msg: 'DNS status unknown',
     },
