@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { type SettingsStatus, api } from '../../lib/api';
 import { ConfirmDialog } from './confirm-dialog';
 import { DnsConfigSection, ProxyConfigSection } from './config';
@@ -45,6 +46,14 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps): JSX.Element {
   const visClass = isOpen ? 'max-h-[60vh] opacity-100' : 'max-h-0 opacity-0';
+  const proxyConfigured = settings?.proxy?.configured ?? false;
+
+  const { data: wildcardDetection } = useQuery({
+    queryKey: ['wildcard-detection'],
+    queryFn: () => api.settings.detectWildcard(),
+    enabled: proxyConfigured && isOpen,
+    staleTime: 30000,
+  });
 
   return (
     <div
@@ -53,8 +62,13 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
       <div className="p-6 pb-8">
         <PanelHeader onClose={onClose} />
         <div className="grid gap-6 md:grid-cols-2">
-          <DnsConfigSection current={settings?.dns ?? null} />
           <ProxyConfigSection current={settings?.proxy ?? null} />
+          <DnsConfigSection
+            current={settings?.dns ?? null}
+            proxyConfigured={proxyConfigured}
+            wildcardConfig={settings?.wildcard ?? null}
+            wildcardDetection={wildcardDetection ?? null}
+          />
         </div>
       </div>
     </div>
