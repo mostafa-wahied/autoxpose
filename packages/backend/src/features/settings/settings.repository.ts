@@ -12,9 +12,16 @@ export interface ProviderConfigRecord {
 }
 
 export interface SaveProviderInput {
-  type: 'dns' | 'proxy';
+  type: 'dns' | 'proxy' | 'wildcard';
   provider: string;
-  config: Record<string, string>;
+  config: Record<string, unknown>;
+}
+
+export interface WildcardConfig {
+  enabled: boolean;
+  domain: string;
+  certId: number | null;
+  detectedAt: string | null;
 }
 
 export class SettingsRepository {
@@ -70,5 +77,21 @@ export class SettingsRepository {
       .delete(schema.providerConfigs)
       .where(eq(schema.providerConfigs.type, type));
     return result.changes > 0;
+  }
+
+  async getWildcardConfig(): Promise<WildcardConfig | null> {
+    const record = await this.getByType('wildcard');
+    if (!record) return null;
+    const parsed = JSON.parse(record.config) as WildcardConfig;
+    return parsed;
+  }
+
+  async saveWildcardConfig(config: WildcardConfig): Promise<WildcardConfig> {
+    await this.save({
+      type: 'wildcard',
+      provider: 'wildcard',
+      config: config as unknown as Record<string, unknown>,
+    });
+    return config;
   }
 }
