@@ -46,7 +46,7 @@ function initializeMigrationTracking(): void {
     .get() as { count: number };
 
   if (existingCount.count === 0) {
-    const migrations = ['0000_sticky_shocker', '0001_real_zzzax'];
+    const migrations = ['0000_sticky_shocker', '0001_real_zzzax', '0002_access_lists'];
     const now = Date.now();
     for (const hash of migrations) {
       sqliteConnection
@@ -117,6 +117,7 @@ export function resetDatabase(): void {
 
   sqliteConnection.exec(`
     DROP TABLE IF EXISTS services;
+    DROP TABLE IF EXISTS npm_access_lists;
     DROP TABLE IF EXISTS provider_configs;
     DROP TABLE IF EXISTS __drizzle_migrations;
   `);

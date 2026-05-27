@@ -22,6 +22,7 @@ interface UpdateBody {
   port?: number;
   scheme?: string;
   enabled?: boolean;
+  accessListId?: number | null;
 }
 interface IdParams {
   id: string;

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { TerminalServiceCard } from '../../components/terminal';
 import { useBulkStatusCheck } from '../../hooks/use-bulk-status-check';
+import { useAccessLists } from '../../hooks/use-access-lists';
 import { type ServiceRecord } from '../../lib/api';
 
 interface ServiceGridProps {
@@ -39,6 +40,13 @@ export function ServiceGrid({
   isWildcardMode,
 }: ServiceGridProps): JSX.Element {
   const { statusMap, checkServices } = useBulkStatusCheck(scanTrigger);
+  const { accessLists } = useAccessLists();
+
+  const accessListMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const al of accessLists) m.set(al.id, al.name);
+    return m;
+  }, [accessLists]);
 
   useEffect(() => {
     checkServices(services);
@@ -75,6 +83,7 @@ export function ServiceGrid({
             scanTrigger={scanTrigger}
             bulkStatus={statusMap[service.id]}
             isWildcardMode={isWildcardMode}
+            accessListName={service.accessListId ? accessListMap.get(service.accessListId) ?? null : null}
           />
         );
       })}

@@ -63,6 +63,7 @@ type ProxyService = {
   port: number;
   scheme: string | null;
   proxyHostId: string | null;
+  accessListId?: number | null;
 };
 type StepType = 'dns' | 'proxy';
 function emitSkipped(ctx: ExposeContext, step: StepType, detail: string): void {
@@ -250,6 +251,7 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
       skipDnsWait: true,
+      accessListId: svc.accessListId ?? undefined,
     });
 
     if (host.sslPending) {
