@@ -72,6 +72,28 @@ export function ProviderIcon({
     return <PorkbunIcon size={size} color={color} />;
   }
 
+  if (normalizedProvider === 'ovh') {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 4,
+          background: '#123F6D',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: size * 0.4,
+          fontWeight: 700,
+          letterSpacing: '-0.05em',
+        }}
+      >
+        OVH
+      </div>
+    );
+  }
+
   if (normalizedProvider === 'caddy') {
     return <CaddyIcon size={size} color={color} />;
   }
@@ -102,6 +124,7 @@ export function getProviderDisplayName(provider: string): string {
     netlify: 'Netlify',
     npm: 'Nginx Proxy Manager',
     porkbun: 'Porkbun',
+    ovh: 'OVH',
     caddy: 'Caddy',
   };
 

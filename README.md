@@ -35,7 +35,7 @@
 
 ## Supported Providers
 
-- **DNS**: Cloudflare, Netlify, DigitalOcean, Porkbun
+- **DNS**: Cloudflare, Netlify, DigitalOcean, Porkbun, OVH
 - **Proxy**: Nginx Proxy Manager, Caddy
 
 ## Quick Start
@@ -93,7 +93,7 @@ docker run -d \
 2. **Access UI:** Open `http://your-server:4949` → Settings
 
 3. **Configure providers:**
-   - Add DNS provider (Cloudflare, Netlify, DigitalOcean, or Porkbun)
+   - Add DNS provider (Cloudflare, Netlify, DigitalOcean, Porkbun, or OVH)
    - Add Proxy provider (Nginx Proxy Manager or Caddy)
 
 4. **Label your containers:**
@@ -166,6 +166,23 @@ See the production template at [docker-compose.yaml](./docker-compose.yaml).
 4. Click "Domain Management" → Find your domain → Click "Details"
 5. Scroll to "API Access" → Toggle to enable
 6. In autoxpose: Settings → DNS Provider → Porkbun → Paste API key and secret key, enter domain
+
+</details>
+
+<details style="margin-left: 20px;">
+<summary>OVH</summary>
+
+1. Choose the endpoint matching your account region (Europe: `ovh-eu`, Canada: `ovh-ca`, US: `ovh-us`).
+2. Go to the OVH token creation page for your region:
+   - Europe: <https://eu.api.ovh.com/createToken/>
+   - Canada: <https://ca.api.ovh.com/createToken/>
+   - US: <https://api.us.ovhcloud.com/createToken/>
+3. Fill the form with your OVH account credentials and request these rights on the zone (replace `example.com`):
+   - `GET /domain/zone/example.com/*`
+   - `POST /domain/zone/example.com/*`
+   - `DELETE /domain/zone/example.com/*`
+4. Submit to receive **Application Key**, **Application Secret**, and **Consumer Key** (shown only once).
+5. In autoxpose: Settings → DNS Provider → OVH → Select the endpoint, paste the three keys, and enter your domain.
 
 </details>
 

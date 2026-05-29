@@ -4,6 +4,7 @@ import type { DnsProviderConfig } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
+import { OvhDnsProvider } from '../dns/providers/ovh.js';
 import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
@@ -14,15 +15,25 @@ const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
 type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
+type OvhConfig = DnsProviderConfig & {
+  appKey: string;
+  appSecret: string;
+  consumerKey: string;
+  endpoint?: string;
+};
 
 export async function testDnsProvider(
   provider: string,
-  config: DnsProviderConfig | PorkbunConfig
+  config: DnsProviderConfig | PorkbunConfig | OvhConfig
 ): Promise<TestResult> {
   try {
     const dns = createDnsProvider(provider, config);
     if (!dns) return { ok: false, error: 'Unknown provider' };
-    await dns.listRecords();
+    if ('testConnection' in dns && typeof dns.testConnection === 'function') {
+      await dns.testConnection();
+    } else {
+      await dns.listRecords();
+    }
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -89,11 +100,12 @@ type DnsProviderType =
   | CloudflareDnsProvider
   | DigitalOceanDnsProvider
   | PorkbunDnsProvider
+  | OvhDnsProvider
   | null;
 
 function createDnsProvider(
   provider: string,
-  config: DnsProviderConfig | PorkbunConfig
+  config: DnsProviderConfig | PorkbunConfig | OvhConfig
 ): DnsProviderType {
   if (provider === 'netlify') return new NetlifyDnsProvider(config);
   if (provider === 'cloudflare') return new CloudflareDnsProvider(config);
@@ -105,6 +117,17 @@ function createDnsProvider(
       apiKey: pbConfig.apiKey,
       secretKey: pbConfig.secretKey,
       domain: pbConfig.domain,
+    });
+  }
+  if (provider === 'ovh') {
+    const ovhConfig = config as OvhConfig;
+    return new OvhDnsProvider({
+      token: ovhConfig.consumerKey,
+      appKey: ovhConfig.appKey,
+      appSecret: ovhConfig.appSecret,
+      consumerKey: ovhConfig.consumerKey,
+      endpoint: ovhConfig.endpoint,
+      domain: ovhConfig.domain,
     });
   }
   return null;
