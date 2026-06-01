@@ -31,13 +31,19 @@ export function getExposedSubdomain(
   return proxyHost.domain.replace(`.${baseDomain}`, '');
 }
 
+// Exposed records may be A (IP target) or CNAME (hostname target), depending on
+// what the server resolves to — see expose-handlers.ts.
+function isExposableDnsRecord(record: DnsRecord): boolean {
+  return record.type === 'A' || record.type === 'CNAME';
+}
+
 export function findMatchingDnsRecord(
   service: ServiceForMatching,
   records: DnsRecord[],
   baseDomain: string
 ): DnsRecord | undefined {
   const exactDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
-  const exactMatch = records.find(r => r.hostname === exactDomain && r.type === 'A');
+  const exactMatch = records.find(r => r.hostname === exactDomain && isExposableDnsRecord(r));
   if (exactMatch) return exactMatch;
 
   const recordsOnDomain = baseDomain
@@ -45,7 +51,7 @@ export function findMatchingDnsRecord(
     : records;
 
   return recordsOnDomain.find(r => {
-    if (r.type !== 'A') return false;
+    if (!isExposableDnsRecord(r)) return false;
     const recordSub = baseDomain ? r.hostname.replace(`.${baseDomain}`, '') : r.hostname;
     return recordSub && fuzzyMatchSubdomain(recordSub, service.name);
   });
