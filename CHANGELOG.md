@@ -8,6 +8,10 @@ All notable changes to autoxpose will be documented in this file.
 
 - **CORS**: Restrict cross-origin requests to same-origin by default so other websites cannot read your settings or provider credentials. Set `CORS_ORIGIN` to allow specific origins if needed.
 
+### Fixed
+
+- **Docker Discovery**: Automatically grant the container access to the Docker socket at startup, so container discovery works without manually adding `group_add` to your compose file. The app still runs as a non-root user.
+
 ## [0.4.1] - 2026-03-18
 
 ### Fixed
