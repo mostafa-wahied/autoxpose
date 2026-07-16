@@ -2,6 +2,12 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- **CORS**: Restrict cross-origin requests to same-origin by default so other websites cannot read your settings or provider credentials. Set `CORS_ORIGIN` to allow specific origins if needed.
+
 ## [0.4.1] - 2026-03-18
 
 ### Fixed
