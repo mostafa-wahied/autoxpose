@@ -126,6 +126,9 @@ export function createAppContext(
       (containerId: string) => handleContainerRemoved(containerId, deps)
     );
     logger.info('Docker watcher started');
+    fullReconcile(deps).catch((err: unknown) => {
+      logger.error({ err }, 'Initial discovery reconcile failed');
+    });
   };
 
   return { ...core, discovery, changeTracker, lanIp: resolvedLanIp, startWatcher };
