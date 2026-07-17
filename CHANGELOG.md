@@ -12,6 +12,8 @@ All notable changes to autoxpose will be documented in this file.
 
 - **Docker Discovery**: Automatically grant the container access to the Docker socket at startup, so container discovery works without manually adding `group_add` to your compose file. The app still runs as a non-root user.
 
+- **Discovery**: Detect containers that are already running when autoxpose starts, instead of only picking them up on later Docker events.
+
 ## [0.4.1] - 2026-03-18
 
 ### Fixed
