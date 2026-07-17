@@ -2,7 +2,7 @@
 
 All notable changes to autoxpose will be documented in this file.
 
-## [Unreleased]
+## [0.4.2] - 2026-07-17
 
 ### Security
 
