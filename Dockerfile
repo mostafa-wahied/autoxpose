@@ -18,6 +18,8 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+RUN apk add --no-cache su-exec
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 autoxpose
 
@@ -33,7 +35,8 @@ COPY --from=builder --chown=autoxpose:nodejs /app/packages/frontend/dist ./publi
 
 RUN mkdir -p /app/packages/backend/data && chown autoxpose:nodejs /app/packages/backend/data
 
-USER autoxpose
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -41,4 +44,5 @@ ENV PORT=3000
 EXPOSE 3000
 
 WORKDIR /app/packages/backend
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]
