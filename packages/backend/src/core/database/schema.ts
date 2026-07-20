@@ -11,6 +11,7 @@ export const services = sqliteTable('services', {
   sourceId: text('source_id'),
   dnsRecordId: text('dns_record_id'),
   proxyHostId: text('proxy_host_id'),
+  accessListId: integer('access_list_id'),
   exposureSource: text('exposure_source'),
   dnsExists: integer('dns_exists', { mode: 'boolean' }),
   proxyExists: integer('proxy_exists', { mode: 'boolean' }),
@@ -28,6 +29,15 @@ export const services = sqliteTable('services', {
   labelMismatchIgnored: integer('label_mismatch_ignored', { mode: 'boolean' }).default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const npmAccessLists = sqliteTable('npm_access_lists', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+  satisfyAny: integer('satisfy_any', { mode: 'boolean' }).default(false),
+  passAuth: integer('pass_auth', { mode: 'boolean' }).default(true),
+  proxyHostCount: integer('proxy_host_count').default(0),
+  syncedAt: integer('synced_at', { mode: 'timestamp' }),
 });
 
 export const providerConfigs = sqliteTable('provider_configs', {

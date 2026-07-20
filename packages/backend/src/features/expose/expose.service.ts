@@ -2,6 +2,7 @@ import { testBackendScheme } from './scheme-detection.js';
 import type { ServiceRecord, ServicesRepository } from '../services/services.repository.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { SyncService } from '../services/sync.service.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import { createLogger } from '../../core/logger/index.js';
 
 const logger = createLogger('expose-service');
@@ -14,6 +15,7 @@ type ExposeContext = {
   publicIp: string;
   lanIp: string;
   sync?: SyncService;
+  accessLists?: AccessListService;
 };
 
 export class ExposeService {
@@ -256,6 +258,7 @@ export class ExposeService {
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
       certificateId,
+      accessListId: svc.accessListId ?? undefined,
     });
     return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   }

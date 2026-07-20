@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import type { AppConfig } from './core/config/schema.js';
 import type { AppContext } from './core/context.js';
+import { createAccessListRoutes } from './features/access-lists/access-list.routes.js';
 import { createDiscoveryRoutes } from './features/discovery/docker.js';
 import { devRoutes } from './features/dev/dev.routes.js';
 import { createDnsRoutes } from './features/dns/dns.routes.js';
@@ -40,6 +41,9 @@ export async function createServer(_config: AppConfig, ctx: AppContext): Promise
   await server.register(createDiscoveryRoutes(ctx), { prefix: '/api/discovery' });
   await server.register(createSettingsRoutes(ctx.settings, ctx.servicesRepo), {
     prefix: '/api/settings',
+  });
+  await server.register(createAccessListRoutes(ctx.accessLists), {
+    prefix: '/api/access-lists',
   });
   await server.register(createExposeRoutes(ctx.expose), { prefix: '/api/services' });
   await server.register(createStreamingExposeRoutes(ctx.streamingExpose), {

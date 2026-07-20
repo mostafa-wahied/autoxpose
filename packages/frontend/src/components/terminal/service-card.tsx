@@ -22,6 +22,7 @@ interface TerminalServiceCardProps {
   scanTrigger?: number;
   bulkStatus?: { online: boolean; protocol: string | null };
   isWildcardMode: boolean;
+  accessListName?: string | null;
 }
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
@@ -58,6 +59,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         port={service.port}
         scheme={service.scheme || 'http'}
         tags={service.tags}
+        accessListName={props.accessListName ?? null}
         onNameChange={onNameChange}
       />
       <EditableSubdomain
@@ -93,6 +95,7 @@ interface CardHeaderProps {
   port: number;
   scheme: string;
   tags: string | null;
+  accessListName: string | null;
   onNameChange: (name: string) => void;
 }
 function CardHeader({
@@ -101,6 +104,7 @@ function CardHeader({
   port,
   scheme,
   tags,
+  accessListName,
   onNameChange,
 }: CardHeaderProps): JSX.Element {
   const parsedTags = tags ? JSON.parse(tags) : [];
@@ -129,6 +133,16 @@ function CardHeader({
           {(scheme || 'http').toUpperCase()}
         </span>
         <TagBadge tags={parsedTags} />
+        {accessListName && (
+          <Tooltip content={`Access List: ${accessListName}`}>
+            <span
+              className="rounded px-2 py-0.5 text-xs font-medium"
+              style={{ background: '#da3633' + '20', color: '#da3633' }}
+            >
+              AL: {accessListName}
+            </span>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

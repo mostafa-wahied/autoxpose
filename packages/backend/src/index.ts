@@ -36,6 +36,10 @@ async function main(): Promise<void> {
   await ctx.metadataLoader.load();
   logger.info(`Metadata loaded: version ${ctx.metadataLoader.getVersion()}`);
 
+  logger.info('Syncing NPM access lists...');
+  const alSync = await ctx.accessLists.syncFromProvider();
+  logger.info({ count: alSync.synced }, 'Access lists synced');
+
   await ctx.metadataUpdater.startAutoUpdate();
   logger.info('Metadata auto-update task started');
 

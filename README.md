@@ -320,13 +320,32 @@ services:
       - autoxpose.subdomain=myapp
 ```
 
-| Label                  | Description                                            | Required         |
-| ---------------------- | ------------------------------------------------------ | ---------------- |
-| **`autoxpose.enable`** | `true` to show in UI, `auto` to auto-expose            | **Yes**          |
-| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No (Recommended) |
-| `autoxpose.port`       | Override auto-detected port                            | No               |
-| `autoxpose.scheme`     | Override auto-detected scheme (`http`/`https`)         | No               |
-| `autoxpose.name`       | Display name in UI (default: container name)           | No               |
+| Label                      | Description                                            | Required         |
+| -------------------------- | ------------------------------------------------------ | ---------------- |
+| **`autoxpose.enable`**     | `true` to show in UI, `auto` to auto-expose            | **Yes**          |
+| `autoxpose.subdomain`      | Subdomain for the service (defaults to container name) | No (Recommended) |
+| `autoxpose.port`           | Override auto-detected port                            | No               |
+| `autoxpose.scheme`         | Override auto-detected scheme (`http`/`https`)         | No               |
+| `autoxpose.name`           | Display name in UI (default: container name)           | No               |
+| `autoxpose.access_list`    | Name of an NPM Access List to attach (NPM only)       | No               |
+
+### Access Lists (NPM only)
+
+You can restrict access to a service by attaching an existing [Nginx Proxy Manager Access List](https://nginxproxymanager.com/advanced-config/#access-lists). Create the access list in the NPM UI first, then reference it by name:
+
+```yaml
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    labels:
+      - autoxpose.enable=auto
+      - autoxpose.subdomain=vault
+      - "autoxpose.access_list=My Access List"
+```
+
+> **Note:** Quote the label value if the access list name contains spaces.
+
+autoxpose syncs access lists from NPM on startup. You can also trigger a manual sync from the Settings panel. If the name doesn't match any access list, the service falls back to publicly accessible.
 
 ### Understanding Auto-Expose Modes
 

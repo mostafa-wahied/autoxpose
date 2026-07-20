@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type SettingsStatus, api } from '../../lib/api';
+import { type SettingsStatus, type AccessListRecord, api } from '../../lib/api';
 import { ConfirmDialog } from './confirm-dialog';
 import { DnsConfigSection, ProxyConfigSection } from './config';
 import { Tooltip } from './tooltip';
@@ -56,11 +56,26 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
     staleTime: 30000,
   });
 
+  const { data: accessListsData } = useQuery({
+    queryKey: ['access-lists'],
+    queryFn: () => api.accessLists.list(),
+    enabled: proxyConfigured && isOpen,
+    staleTime: 60_000,
+  });
+
+  const syncAccessLists = useMutation({
+    mutationFn: () => api.accessLists.sync(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-lists'] });
+    },
+  });
+
   const refresh = (): void => {
     queryClient.invalidateQueries({ queryKey: ['settings'] });
     queryClient.invalidateQueries({ queryKey: ['services'] });
     queryClient.invalidateQueries({ queryKey: ['orphans'] });
     queryClient.invalidateQueries({ queryKey: ['wildcard-detection'] });
+    queryClient.invalidateQueries({ queryKey: ['access-lists'] });
   };
 
   const resetMutation = useMutation({
@@ -90,6 +105,13 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
             wildcardDetection={wildcardDetection ?? null}
           />
         </div>
+        {proxyConfigured && (
+          <AccessListsSection
+            accessLists={accessListsData?.accessLists ?? []}
+            onSync={() => syncAccessLists.mutate()}
+            isSyncing={syncAccessLists.isPending}
+          />
+        )}
       </div>
     </div>
   );
@@ -179,6 +201,57 @@ function HeaderActions(props: HeaderActionsProps): JSX.Element {
       >
         Close
       </button>
+    </div>
+  );
+}
+
+interface AccessListsSectionProps {
+  accessLists: AccessListRecord[];
+  onSync: () => void;
+  isSyncing: boolean;
+}
+
+function AccessListsSection({ accessLists, onSync, isSyncing }: AccessListsSectionProps): JSX.Element {
+  return (
+    <div className="mt-6 rounded border border-[#30363d] bg-[#161b22] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-sm font-bold text-[#c9d1d9]">NPM Access Lists</h4>
+        <button
+          onClick={onSync}
+          disabled={isSyncing}
+          className="text-xs text-[#58a6ff] transition-colors hover:text-[#79c0ff] disabled:opacity-50"
+        >
+          {isSyncing ? 'Syncing...' : 'Sync'}
+        </button>
+      </div>
+      {accessLists.length === 0 ? (
+        <p className="text-xs text-[#8b949e]">
+          No access lists found. Create them in NPM, then click Sync.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {accessLists.map(al => (
+            <div
+              key={al.id}
+              className="flex items-center justify-between rounded bg-[#0d1117] px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-[#c9d1d9]">{al.name}</span>
+                <span className="text-xs text-[#8b949e]">#{al.id}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-[#8b949e]">
+                {al.satisfyAny && <span>satisfy-any</span>}
+                {al.syncedAt && (
+                  <span>synced {new Date(al.syncedAt).toLocaleTimeString()}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-xs text-[#8b949e]">
+        Use <code className="rounded bg-[#21262d] px-1 text-[#f0883e]">autoxpose.access_list=name</code> to attach an access list to a container.
+      </p>
     </div>
   );
 }

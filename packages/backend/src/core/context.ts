@@ -8,6 +8,7 @@ import { SyncService } from '../features/services/sync.service.js';
 import { MetadataLoader } from '../features/services/metadata-loader.js';
 import { TagDetector } from '../features/services/tag-detector.js';
 import { MetadataUpdater } from '../features/services/metadata-updater.js';
+import { AccessListService } from '../features/access-lists/access-list.service.js';
 import { SettingsRepository, SettingsService } from '../features/settings/index.js';
 import { ChangeTracker } from './change-tracker.js';
 import type { AppDatabase } from './database/index.js';
@@ -40,6 +41,7 @@ export interface AppContext {
   lanIp: string;
   metadataLoader: MetadataLoader;
   metadataUpdater: MetadataUpdater;
+  accessLists: AccessListService;
   startWatcher: () => void;
 }
 
@@ -53,6 +55,7 @@ type CoreServices = {
   metadataLoader: MetadataLoader;
   tagDetector: TagDetector;
   metadataUpdater: MetadataUpdater;
+  accessLists: AccessListService;
 };
 
 interface CoreServicesOptions {
@@ -71,10 +74,11 @@ function createCoreServices(options: CoreServicesOptions): CoreServices {
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
   const metadataLoader = new MetadataLoader();
   const tagDetector = new TagDetector(metadataLoader);
-  const services = new ServicesService(servicesRepo, settings, tagDetector);
+  const accessLists = new AccessListService(db, settings);
+  const services = new ServicesService(servicesRepo, settings, tagDetector, accessLists);
   const metadataUpdater = new MetadataUpdater(metadataLoader, services);
   const sync = new SyncService(servicesRepo, settings, discovery ?? undefined);
-  const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
+  const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync, accessLists };
   const expose = new ExposeService(exposeContext);
   const streamingExpose = new StreamingExposeService(servicesRepo, settings, publicIp, lanIp);
   return {
@@ -87,6 +91,7 @@ function createCoreServices(options: CoreServicesOptions): CoreServices {
     metadataLoader,
     tagDetector,
     metadataUpdater,
+    accessLists,
   };
 }
 
