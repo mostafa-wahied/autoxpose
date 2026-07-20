@@ -21,7 +21,10 @@ const __dirname = dirname(__filename);
 export async function createServer(_config: AppConfig, ctx: AppContext): Promise<FastifyInstance> {
   const server = Fastify({ logger: false });
 
-  await server.register(cors, { origin: true });
+  const corsOrigin = process.env.CORS_ORIGIN;
+  await server.register(cors, {
+    origin: corsOrigin ? corsOrigin.split(',').map(value => value.trim()) : false,
+  });
 
   server.addContentTypeParser(
     ['application/x-www-form-urlencoded', 'text/plain'],
