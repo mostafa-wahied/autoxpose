@@ -45,6 +45,11 @@ function formatDnsConfig(cfg: ParsedConfig): DnsConfigResponse {
   } else if (cfg.provider === 'porkbun') {
     baseConfig.apiKey = maskSecret(cfg.config.apiKey);
     baseConfig.secretKey = maskSecret(cfg.config.secretKey);
+  } else if (cfg.provider === 'ovh') {
+    baseConfig.appKey = maskSecret(cfg.config.appKey);
+    baseConfig.appSecret = maskSecret(cfg.config.appSecret);
+    baseConfig.consumerKey = maskSecret(cfg.config.consumerKey);
+    baseConfig.endpoint = cfg.config.endpoint ?? 'ovh-eu';
   }
 
   return {

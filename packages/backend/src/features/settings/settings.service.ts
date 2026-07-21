@@ -2,6 +2,7 @@ import type { DnsProvider } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
+import { OvhDnsProvider } from '../dns/providers/ovh.js';
 import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
@@ -106,6 +107,16 @@ export class SettingsService {
         token: cfg.apiKey,
         apiKey: cfg.apiKey,
         secretKey: cfg.secretKey,
+        domain: cfg.domain,
+      });
+    }
+    if (provider === 'ovh') {
+      return new OvhDnsProvider({
+        token: cfg.consumerKey,
+        appKey: cfg.appKey,
+        appSecret: cfg.appSecret,
+        consumerKey: cfg.consumerKey,
+        endpoint: cfg.endpoint,
         domain: cfg.domain,
       });
     }
