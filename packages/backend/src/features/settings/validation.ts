@@ -5,6 +5,8 @@ import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
 import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
+import { AliyunDnsProvider } from '../dns/providers/aliyun.js';
+import { DnspodDnsProvider } from '../dns/providers/dnspod.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProviderConfig } from '../proxy/proxy.types.js';
@@ -14,6 +16,8 @@ const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
 type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
+type AliyunConfig = DnsProviderConfig & { accessKeyId: string; accessKeySecret: string };
+type DnspodConfig = DnsProviderConfig & { secretId: string; secretKey: string };
 
 export async function testDnsProvider(
   provider: string,
@@ -89,11 +93,13 @@ type DnsProviderType =
   | CloudflareDnsProvider
   | DigitalOceanDnsProvider
   | PorkbunDnsProvider
+  | AliyunDnsProvider
+  | DnspodDnsProvider
   | null;
 
 function createDnsProvider(
   provider: string,
-  config: DnsProviderConfig | PorkbunConfig
+  config: DnsProviderConfig | PorkbunConfig | AliyunConfig | DnspodConfig
 ): DnsProviderType {
   if (provider === 'netlify') return new NetlifyDnsProvider(config);
   if (provider === 'cloudflare') return new CloudflareDnsProvider(config);
@@ -105,6 +111,24 @@ function createDnsProvider(
       apiKey: pbConfig.apiKey,
       secretKey: pbConfig.secretKey,
       domain: pbConfig.domain,
+    });
+  }
+  if (provider === 'aliyun') {
+    const aliyunConfig = config as AliyunConfig;
+    return new AliyunDnsProvider({
+      token: aliyunConfig.accessKeyId,
+      accessKeyId: aliyunConfig.accessKeyId,
+      accessKeySecret: aliyunConfig.accessKeySecret,
+      domain: aliyunConfig.domain,
+    });
+  }
+  if (provider === 'dnspod') {
+    const dnspodConfig = config as DnspodConfig;
+    return new DnspodDnsProvider({
+      token: dnspodConfig.secretId,
+      secretId: dnspodConfig.secretId,
+      secretKey: dnspodConfig.secretKey,
+      domain: dnspodConfig.domain,
     });
   }
   return null;
