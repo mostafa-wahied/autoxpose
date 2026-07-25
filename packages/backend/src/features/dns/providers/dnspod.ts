@@ -1,12 +1,12 @@
 import crypto from 'crypto';
-import { ProviderError } from '../../../core/errors/index.js';
+import { ProviderError } from '../../../core/errors';
 import type { CreateRecordInput, DnsProvider, DnsProviderConfig, DnsRecord } from '../dns.types.js';
 
 const API_HOST = 'dnspod.tencentcloudapi.com';
 const SERVICE = 'dnspod';
 const API_VERSION = '2021-03-23';
 
-type DnspodConfig = DnsProviderConfig & {
+type DnspodConfig = Omit<DnsProviderConfig, 'token'> & {
   secretId: string;
   secretKey: string;
 };
@@ -31,8 +31,8 @@ export class DnspodDnsProvider implements DnsProvider {
   private domain: string;
 
   constructor(config: DnspodConfig) {
-    this.secretId = config.secretId || config.token;
-    this.secretKey = config.secretKey || '';
+    this.secretId = config.secretId;
+    this.secretKey = config.secretKey;
     this.domain = config.domain || '';
   }
 

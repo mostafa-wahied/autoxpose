@@ -1,10 +1,17 @@
 import crypto from 'crypto';
-import { ProviderError } from '../../../core/errors/index.js';
+import { ProviderError } from '../../../core/errors';
 import type { CreateRecordInput, DnsProvider, DnsProviderConfig, DnsRecord } from '../dns.types.js';
 
 const API_BASE = 'https://alidns.aliyuncs.com';
 
-type AliyunConfig = DnsProviderConfig & {
+function popEncode(str: string): string {
+  return encodeURIComponent(str)
+    .replace(/\*/g, '%2A')
+    .replace(/\+/g, '%20')
+    .replace(/%7E/g, '~');
+}
+
+type AliyunConfig = Omit<DnsProviderConfig, 'token'> & {
   accessKeyId: string;
   accessKeySecret: string;
 };
@@ -16,8 +23,8 @@ export class AliyunDnsProvider implements DnsProvider {
   private domain: string;
 
   constructor(config: AliyunConfig) {
-    this.accessKeyId = config.accessKeyId || config.token;
-    this.accessKeySecret = config.accessKeySecret || '';
+    this.accessKeyId = config.accessKeyId;
+    this.accessKeySecret = config.accessKeySecret;
     this.domain = config.domain || '';
   }
 
@@ -93,7 +100,8 @@ export class AliyunDnsProvider implements DnsProvider {
 
   private buildFullHostname(subdomain: string): string {
     if (!this.domain) return subdomain;
-    if (subdomain.endsWith(this.domain)) return subdomain;
+    if (subdomain.endsWith(`.${this.domain}`)) return subdomain;
+    if (subdomain === this.domain) return subdomain;
     if (subdomain === '@') return this.domain;
     return `${subdomain}.${this.domain}`;
   }
@@ -123,10 +131,10 @@ export class AliyunDnsProvider implements DnsProvider {
 
     const sortedAllParams = Object.keys(allParams)
       .sort()
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(allParams[key])}`)
+      .map(key => `${popEncode(key)}=${popEncode(allParams[key])}`)
       .join('&');
 
-    const stringToSign = `GET&${encodeURIComponent('/')}&${encodeURIComponent(sortedAllParams)}`;
+    const stringToSign = `GET&${popEncode('/')}&${popEncode(sortedAllParams)}`;
     const signature = crypto
       .createHmac('sha1', `${this.accessKeySecret}&`)
       .update(stringToSign)

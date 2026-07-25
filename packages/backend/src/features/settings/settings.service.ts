@@ -113,7 +113,6 @@ export class SettingsService {
     }
     if (provider === 'aliyun') {
       return new AliyunDnsProvider({
-        token: cfg.accessKeyId,
         accessKeyId: cfg.accessKeyId,
         accessKeySecret: cfg.accessKeySecret,
         domain: cfg.domain,
@@ -121,7 +120,6 @@ export class SettingsService {
     }
     if (provider === 'dnspod') {
       return new DnspodDnsProvider({
-        token: cfg.secretId,
         secretId: cfg.secretId,
         secretKey: cfg.secretKey,
         domain: cfg.domain,

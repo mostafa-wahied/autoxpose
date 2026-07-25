@@ -1,5 +1,5 @@
-import { cleanErrorMessage } from '../../core/errors/index.js';
-import { createLogger } from '../../core/logger/index.js';
+import { cleanErrorMessage } from '../../core/errors';
+import { createLogger } from '../../core/logger';
 import type { DnsProviderConfig } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
@@ -116,7 +116,6 @@ function createDnsProvider(
   if (provider === 'aliyun') {
     const aliyunConfig = config as AliyunConfig;
     return new AliyunDnsProvider({
-      token: aliyunConfig.accessKeyId,
       accessKeyId: aliyunConfig.accessKeyId,
       accessKeySecret: aliyunConfig.accessKeySecret,
       domain: aliyunConfig.domain,
@@ -125,7 +124,6 @@ function createDnsProvider(
   if (provider === 'dnspod') {
     const dnspodConfig = config as DnspodConfig;
     return new DnspodDnsProvider({
-      token: dnspodConfig.secretId,
       secretId: dnspodConfig.secretId,
       secretKey: dnspodConfig.secretKey,
       domain: dnspodConfig.domain,
