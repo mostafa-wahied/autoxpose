@@ -1,12 +1,16 @@
 import crypto from 'crypto';
-import { ProviderError } from '../../../core/errors';
+import { ProviderError } from '../../../core/errors/index.js';
 import type { CreateRecordInput, DnsProvider, DnsProviderConfig, DnsRecord } from '../dns.types.js';
 
 const API_HOST = 'dnspod.tencentcloudapi.com';
 const SERVICE = 'dnspod';
 const API_VERSION = '2021-03-23';
 
-type DnspodConfig = Omit<DnsProviderConfig, 'token'> & {
+function includesAny(value: string, terms: string[]): boolean {
+  return terms.some(term => value.includes(term));
+}
+
+export type DnspodConfig = Omit<DnsProviderConfig, 'token'> & {
   secretId: string;
   secretKey: string;
 };
@@ -69,8 +73,9 @@ export class DnspodDnsProvider implements DnsProvider {
     const records: DnsRecord[] = [];
     let offset = 0;
     const limit = 3000;
+    let totalCount: number | null = null;
 
-    while (true) {
+    do {
       const response = await this.request<{
         RecordList: DnspodRecord[];
         RecordCountInfo: { TotalCount: number };
@@ -80,13 +85,21 @@ export class DnspodDnsProvider implements DnsProvider {
         Limit: limit,
       });
 
-      const recordList = response.RecordList || [];
+      const recordList = response.RecordList;
+      totalCount = Number(response.RecordCountInfo?.TotalCount);
+      if (!Array.isArray(recordList) || !Number.isFinite(totalCount)) {
+        throw new ProviderError('dnspod', 'DNS record list response was incomplete.');
+      }
       records.push(...recordList.map(r => this.mapRecord(r)));
 
-      const totalCount = response.RecordCountInfo?.TotalCount ?? 0;
-      if (offset + limit >= totalCount) break;
-      offset += limit;
-    }
+      offset += recordList.length;
+      if (recordList.length === 0 && offset < totalCount) {
+        throw new ProviderError(
+          'dnspod',
+          'DNS record list ended before all records were returned.'
+        );
+      }
+    } while (offset < totalCount);
 
     return records;
   }
@@ -96,6 +109,7 @@ export class DnspodDnsProvider implements DnsProvider {
     return (
       records.find(
         r =>
+          r.active !== false &&
           (r.type === 'A' || r.type === 'CNAME') &&
           (r.hostname === hostname || r.hostname === this.buildFullHostname(hostname))
       ) ?? null
@@ -123,6 +137,7 @@ export class DnspodDnsProvider implements DnsProvider {
       type: raw.Type,
       value: raw.Value,
       ttl: Number(raw.TTL),
+      active: raw.Status === 'ENABLE',
     };
   }
 
@@ -189,38 +204,29 @@ export class DnspodDnsProvider implements DnsProvider {
       hashedCanonicalRequest,
     ].join('\n');
 
-    const secretDate = crypto
-      .createHmac('sha256', `TC3${this.secretKey}`)
-      .update(date)
-      .digest();
-    const secretService = crypto
-      .createHmac('sha256', secretDate)
-      .update(SERVICE)
-      .digest();
-    const secretSigning = crypto
-      .createHmac('sha256', secretService)
-      .update('tc3_request')
-      .digest();
-    const signature = crypto
-      .createHmac('sha256', secretSigning)
-      .update(stringToSign)
-      .digest('hex');
+    const secretDate = crypto.createHmac('sha256', `TC3${this.secretKey}`).update(date).digest();
+    const secretService = crypto.createHmac('sha256', secretDate).update(SERVICE).digest();
+    const secretSigning = crypto.createHmac('sha256', secretService).update('tc3_request').digest();
+    const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex');
 
     return `TC3-HMAC-SHA256 Credential=${this.secretId}/${credentialScope}, SignedHeaders=content-type;host;x-tc-action, Signature=${signature}`;
   }
 
   private getErrorMessage(code: string, message: string): string {
     const lower = (code + message).toLowerCase();
-    if (lower.includes('authfailure') || lower.includes('secretid') || lower.includes('signature')) {
+    if (includesAny(lower, ['authfailure', 'secretid', 'signature'])) {
       return 'Invalid API credentials. Check your SecretId and SecretKey.';
     }
-    if (lower.includes('domainnotexist') || lower.includes('no such domain')) {
-      return 'Domain not found. Ensure the domain is registered with Tencent Cloud DNSPod.';
+    if (includesAny(lower, ['domainnotexist', 'no such domain'])) {
+      return 'Domain not found. Confirm the domain is registered with Tencent Cloud DNSPod.';
     }
-    if (lower.includes('record') && lower.includes('exist')) {
+    if (/record.*not exist|not exist.*record/.test(lower)) {
+      return 'DNS record not found.';
+    }
+    if (/record.*exist|exist.*record/.test(lower)) {
       return 'Record already exists. Delete it first.';
     }
-    if (lower.includes('limitexceeded') || lower.includes('quota')) {
+    if (includesAny(lower, ['limitexceeded', 'quota'])) {
       return 'DNS record quota exceeded.';
     }
     const cleaned = message.trim();

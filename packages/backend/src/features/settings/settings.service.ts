@@ -34,10 +34,15 @@ export class SettingsService {
   }
 
   async saveDnsConfig(provider: string, config: Record<string, string>): Promise<void> {
-    const existing = await this.getDnsConfig();
-    const newConfig = this.mergeExistingConfig(existing, provider, config);
+    await this.repository.save({ type: 'dns', provider, config });
+  }
 
-    await this.repository.save({ type: 'dns', provider, config: newConfig });
+  async getMergedDnsConfig(
+    provider: string,
+    config: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const existing = await this.getDnsConfig();
+    return this.mergeExistingConfig(existing, provider, config);
   }
 
   async saveProxyConfig(provider: string, config: Record<string, string>): Promise<void> {

@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react';
 import { api, type SettingsStatus } from '../../../lib/api';
 import { FormActions, FormInput, FormSelect } from '../form-components';
 import { TestConnectionButton, type TestState } from '../test-button';
+import {
+  buildDnsConfig,
+  canSaveDnsConfig,
+  getSavedDnsCredentials,
+  type DnsFormValues,
+} from './dns-form-config';
 
 export const DNS_PROVIDERS = [
   { value: 'cloudflare', label: 'Cloudflare' },
@@ -10,7 +16,7 @@ export const DNS_PROVIDERS = [
   { value: 'digitalocean', label: 'DigitalOcean' },
   { value: 'porkbun', label: 'Porkbun' },
   { value: 'aliyun', label: 'Aliyun' },
-  { value: 'dnspod', label: 'DNSPod' },
+  { value: 'dnspod', label: 'Tencent Cloud DNSPod (China)' },
 ];
 
 interface DnsFieldsProps {
@@ -203,6 +209,7 @@ type DnsFormState = {
   dnspodSecretKey: string;
   isPending: boolean;
   isError: boolean;
+  error: string | null;
   mutate: () => void;
   isConfigured: boolean;
   canSave: boolean;
@@ -241,16 +248,21 @@ function useDnsForm(current: SettingsStatus['dns'] | null, onDone: () => void): 
     if (current?.domain) setDomain(current.domain);
   }, [current]);
 
-  const buildConfig = (): Record<string, string> => {
-    if (provider === 'porkbun') return { apiKey, secretKey, domain };
-    if (provider === 'digitalocean') return { token, domain };
-    if (provider === 'aliyun') return { accessKeyId, accessKeySecret, domain };
-    if (provider === 'dnspod') return { secretId, secretKey: dnspodSecretKey, domain };
-    return { token, zoneId, domain };
+  const values: DnsFormValues = {
+    token,
+    zoneId,
+    domain,
+    apiKey,
+    secretKey,
+    accessKeyId,
+    accessKeySecret,
+    secretId,
+    dnspodSecretKey,
   };
+  const savedCredentials = getSavedDnsCredentials(current);
 
   const mutation = useMutation({
-    mutationFn: () => api.settings.saveDns(provider, buildConfig()),
+    mutationFn: () => api.settings.saveDns(provider, buildDnsConfig(provider, values)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       onDone();
@@ -258,15 +270,6 @@ function useDnsForm(current: SettingsStatus['dns'] | null, onDone: () => void): 
   });
 
   const isConfigured = current?.configured ?? false;
-  const hasCredentials =
-    provider === 'porkbun'
-      ? apiKey || isConfigured
-      : provider === 'aliyun'
-        ? accessKeyId || isConfigured
-        : provider === 'dnspod'
-          ? secretId || isConfigured
-          : token || isConfigured;
-
   return {
     provider,
     token,
@@ -281,8 +284,9 @@ function useDnsForm(current: SettingsStatus['dns'] | null, onDone: () => void): 
     isConfigured,
     isPending: mutation.isPending,
     isError: mutation.isError,
+    error: mutation.error?.message ?? null,
     mutate: () => mutation.mutate(),
-    canSave: Boolean(hasCredentials && domain),
+    canSave: canSaveDnsConfig(provider, values, savedCredentials),
     setProvider,
     setToken,
     setZoneId,
@@ -293,10 +297,10 @@ function useDnsForm(current: SettingsStatus['dns'] | null, onDone: () => void): 
     setAccessKeySecret,
     setSecretId,
     setDnspodSecretKey,
-    hasToken: Boolean(current?.config?.token),
-    hasApiKey: Boolean(current?.config?.apiKey),
-    hasAccessKey: Boolean(current?.config?.accessKeyId),
-    hasSecretId: Boolean(current?.config?.secretId),
+    hasToken: savedCredentials.tokenProvider === provider,
+    hasApiKey: savedCredentials.porkbun,
+    hasAccessKey: savedCredentials.aliyun,
+    hasSecretId: savedCredentials.dnspod,
   };
 }
 
@@ -343,7 +347,9 @@ export function DnsEditForm({ current, onDone }: DnsEditFormProps): JSX.Element 
         onSave={form.mutate}
         onCancel={onDone}
       />
-      {form.isError && <p className="text-xs text-[#f85149]">Failed to save settings</p>}
+      {form.isError && (
+        <p className="text-xs text-[#f85149]">{form.error || 'Failed to save settings'}</p>
+      )}
     </div>
   );
 }

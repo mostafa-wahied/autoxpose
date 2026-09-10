@@ -1,5 +1,5 @@
-import { cleanErrorMessage } from '../../core/errors';
-import { createLogger } from '../../core/logger';
+import { cleanErrorMessage } from '../../core/errors/index.js';
+import { createLogger } from '../../core/logger/index.js';
 import type { DnsProviderConfig } from '../dns/dns.types.js';
 import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
@@ -15,15 +15,27 @@ const logger = createLogger('validation');
 const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
-type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
-type AliyunConfig = DnsProviderConfig & { accessKeyId: string; accessKeySecret: string };
-type DnspodConfig = DnsProviderConfig & { secretId: string; secretKey: string };
+
+const REQUIRED_DNS_FIELDS: Record<string, string[]> = {
+  cloudflare: ['token', 'zoneId', 'domain'],
+  netlify: ['token', 'zoneId', 'domain'],
+  digitalocean: ['token', 'domain'],
+  porkbun: ['apiKey', 'secretKey', 'domain'],
+  aliyun: ['accessKeyId', 'accessKeySecret', 'domain'],
+  dnspod: ['secretId', 'secretKey', 'domain'],
+};
 
 export async function testDnsProvider(
   provider: string,
-  config: DnsProviderConfig | PorkbunConfig
+  config: Record<string, string>
 ): Promise<TestResult> {
   try {
+    const missingFields = (REQUIRED_DNS_FIELDS[provider] || []).filter(
+      field => !config[field]?.trim()
+    );
+    if (missingFields.length > 0) {
+      return { ok: false, error: `Missing required settings: ${missingFields.join(', ')}` };
+    }
     const dns = createDnsProvider(provider, config);
     if (!dns) return { ok: false, error: 'Unknown provider' };
     await dns.listRecords();
@@ -97,36 +109,35 @@ type DnsProviderType =
   | DnspodDnsProvider
   | null;
 
-function createDnsProvider(
-  provider: string,
-  config: DnsProviderConfig | PorkbunConfig | AliyunConfig | DnspodConfig
-): DnsProviderType {
-  if (provider === 'netlify') return new NetlifyDnsProvider(config);
-  if (provider === 'cloudflare') return new CloudflareDnsProvider(config);
-  if (provider === 'digitalocean') return new DigitalOceanDnsProvider(config);
+function createDnsProvider(provider: string, config: Record<string, string>): DnsProviderType {
+  const tokenConfig: DnsProviderConfig = {
+    token: config.token,
+    zoneId: config.zoneId,
+    domain: config.domain,
+  };
+  if (provider === 'netlify') return new NetlifyDnsProvider(tokenConfig);
+  if (provider === 'cloudflare') return new CloudflareDnsProvider(tokenConfig);
+  if (provider === 'digitalocean') return new DigitalOceanDnsProvider(tokenConfig);
   if (provider === 'porkbun') {
-    const pbConfig = config as PorkbunConfig;
     return new PorkbunDnsProvider({
-      token: pbConfig.apiKey,
-      apiKey: pbConfig.apiKey,
-      secretKey: pbConfig.secretKey,
-      domain: pbConfig.domain,
+      token: config.apiKey,
+      apiKey: config.apiKey,
+      secretKey: config.secretKey,
+      domain: config.domain,
     });
   }
   if (provider === 'aliyun') {
-    const aliyunConfig = config as AliyunConfig;
     return new AliyunDnsProvider({
-      accessKeyId: aliyunConfig.accessKeyId,
-      accessKeySecret: aliyunConfig.accessKeySecret,
-      domain: aliyunConfig.domain,
+      accessKeyId: config.accessKeyId,
+      accessKeySecret: config.accessKeySecret,
+      domain: config.domain,
     });
   }
   if (provider === 'dnspod') {
-    const dnspodConfig = config as DnspodConfig;
     return new DnspodDnsProvider({
-      secretId: dnspodConfig.secretId,
-      secretKey: dnspodConfig.secretKey,
-      domain: dnspodConfig.domain,
+      secretId: config.secretId,
+      secretKey: config.secretKey,
+      domain: config.domain,
     });
   }
   return null;

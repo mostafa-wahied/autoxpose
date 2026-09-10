@@ -1,17 +1,14 @@
 import crypto from 'crypto';
-import { ProviderError } from '../../../core/errors';
+import { ProviderError } from '../../../core/errors/index.js';
 import type { CreateRecordInput, DnsProvider, DnsProviderConfig, DnsRecord } from '../dns.types.js';
 
 const API_BASE = 'https://alidns.aliyuncs.com';
 
 function popEncode(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/\*/g, '%2A')
-    .replace(/\+/g, '%20')
-    .replace(/%7E/g, '~');
+  return encodeURIComponent(str).replace(/\*/g, '%2A').replace(/\+/g, '%20').replace(/%7E/g, '~');
 }
 
-type AliyunConfig = Omit<DnsProviderConfig, 'token'> & {
+export type AliyunConfig = Omit<DnsProviderConfig, 'token'> & {
   accessKeyId: string;
   accessKeySecret: string;
 };
@@ -63,8 +60,9 @@ export class AliyunDnsProvider implements DnsProvider {
     const records: DnsRecord[] = [];
     let pageNumber = 1;
     const pageSize = 500;
+    let totalCount: number | null = null;
 
-    while (true) {
+    do {
       const params: Record<string, string> = {
         Action: 'DescribeDomainRecords',
         DomainName: this.domain,
@@ -77,12 +75,21 @@ export class AliyunDnsProvider implements DnsProvider {
         TotalCount: number;
       }>(params);
 
-      const recordList = response.DomainRecords?.Record || [];
+      const recordList = response.DomainRecords?.Record;
+      totalCount = Number(response.TotalCount);
+      if (!Array.isArray(recordList) || !Number.isFinite(totalCount)) {
+        throw new ProviderError('aliyun', 'DNS record list response was incomplete.');
+      }
       records.push(...recordList.map(r => this.mapRecord(r)));
 
-      if (recordList.length < pageSize) break;
+      if (recordList.length === 0 && records.length < totalCount) {
+        throw new ProviderError(
+          'aliyun',
+          'DNS record list ended before all records were returned.'
+        );
+      }
       pageNumber++;
-    }
+    } while (records.length < totalCount);
 
     return records;
   }
@@ -92,6 +99,7 @@ export class AliyunDnsProvider implements DnsProvider {
     return (
       records.find(
         r =>
+          r.active !== false &&
           (r.type === 'A' || r.type === 'CNAME') &&
           (r.hostname === hostname || r.hostname === this.buildFullHostname(hostname))
       ) ?? null
@@ -118,14 +126,18 @@ export class AliyunDnsProvider implements DnsProvider {
       Timestamp: timestamp,
       SignatureVersion: '1.0',
       SignatureNonce: nonce,
+      Lang: 'en',
     };
 
     const sortedParams = Object.keys(params)
       .sort()
-      .reduce((acc, key) => {
-        acc[key] = params[key];
-        return acc;
-      }, {} as Record<string, string>);
+      .reduce(
+        (acc, key) => {
+          acc[key] = params[key];
+          return acc;
+        },
+        {} as Record<string, string>
+      );
 
     const allParams = { ...commonParams, ...sortedParams };
 
@@ -143,16 +155,19 @@ export class AliyunDnsProvider implements DnsProvider {
     const url = `${API_BASE}/?${sortedAllParams}&Signature=${encodeURIComponent(signature)}`;
 
     const response = await fetch(url);
+    const data = (await response.json().catch(() => null)) as
+      | (AliyunApiResponse<T> & { Code?: string; Message?: string })
+      | null;
 
+    if (data?.Code) {
+      const msg = this.getErrorMessage(data.Code || '', data.Message || '');
+      throw new ProviderError('aliyun', msg);
+    }
     if (!response.ok) {
       throw new ProviderError('aliyun', `Connection failed (HTTP ${response.status})`);
     }
-
-    const data = (await response.json()) as AliyunApiResponse<T> & { Code?: string; Message?: string };
-
-    if (data.Code || data.Message) {
-      const msg = this.getErrorMessage(data.Code || '', data.Message || '');
-      throw new ProviderError('aliyun', msg);
+    if (!data) {
+      throw new ProviderError('aliyun', 'Invalid response from Aliyun DNS.');
     }
 
     return data as T;
@@ -164,7 +179,7 @@ export class AliyunDnsProvider implements DnsProvider {
       return 'Invalid API credentials. Check your AccessKey ID and Secret.';
     }
     if (lower.includes('domain') && lower.includes('not exist')) {
-      return 'Domain not found. Ensure the domain is registered with Aliyun DNS.';
+      return 'Domain not found. Confirm the domain is registered with Aliyun DNS.';
     }
     if (lower.includes('record') && lower.includes('exist')) {
       return 'Record already exists. Delete it first.';
@@ -183,6 +198,7 @@ export class AliyunDnsProvider implements DnsProvider {
       type: raw.Type,
       value: raw.Value,
       ttl: Number(raw.TTL),
+      active: raw.Status === 'Enable',
     };
   }
 }
@@ -193,6 +209,7 @@ type AliyunRecord = {
   Type: string;
   Value: string;
   TTL: number;
+  Status: string;
 };
 
 type AliyunApiResponse<T> = {
