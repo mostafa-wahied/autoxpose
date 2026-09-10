@@ -2,6 +2,17 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **DNS Providers**: Add Aliyun and Tencent Cloud DNSPod China support for automatic DNS record creation, discovery, and cleanup.
+
+### Changed
+
+- **DNS Settings**: Validate provider credentials before replacing a working DNS configuration.
+- **DNS Status**: Treat paused Aliyun and DNSPod records as inactive during exposure checks and reconciliation.
+
 ## [0.4.2] - 2026-07-17
 
 ### Security

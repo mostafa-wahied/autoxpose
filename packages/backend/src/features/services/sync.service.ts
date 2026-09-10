@@ -211,7 +211,9 @@ export class SyncService {
       const fullDomain = data.baseDomain
         ? `${exposedSubdomain}.${data.baseDomain}`
         : exposedSubdomain;
-      dnsRecord = data.dnsRecords.find(r => r.hostname === fullDomain && r.type === 'A');
+      dnsRecord = data.dnsRecords.find(
+        r => r.active !== false && r.hostname === fullDomain && r.type === 'A'
+      );
     }
 
     const updateData = await this.buildServiceUpdate(

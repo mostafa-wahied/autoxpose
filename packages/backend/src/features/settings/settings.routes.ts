@@ -45,6 +45,12 @@ function formatDnsConfig(cfg: ParsedConfig): DnsConfigResponse {
   } else if (cfg.provider === 'porkbun') {
     baseConfig.apiKey = maskSecret(cfg.config.apiKey);
     baseConfig.secretKey = maskSecret(cfg.config.secretKey);
+  } else if (cfg.provider === 'aliyun') {
+    baseConfig.accessKeyId = maskSecret(cfg.config.accessKeyId);
+    baseConfig.accessKeySecret = maskSecret(cfg.config.accessKeySecret);
+  } else if (cfg.provider === 'dnspod') {
+    baseConfig.secretId = maskSecret(cfg.config.secretId);
+    baseConfig.secretKey = maskSecret(cfg.config.secretKey);
   }
 
   return {
@@ -119,13 +125,13 @@ function registerDnsRoutes(
       reply.code(400);
       return { success: false, error: 'Invalid DNS config payload' };
     }
-    await settings.saveDnsConfig(request.body.provider, request.body.config);
-    const cfg = await settings.getDnsConfig();
-    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
-    const validation = await testDnsProvider(
-      cfg.provider,
-      cfg.config as Parameters<typeof testDnsProvider>[1]
-    );
+    const config = await settings.getMergedDnsConfig(request.body.provider, request.body.config);
+    const validation = await testDnsProvider(request.body.provider, config);
+    if (!validation.ok) {
+      reply.code(400);
+      return { success: false, error: validation.error || 'DNS validation failed' };
+    }
+    await settings.saveDnsConfig(request.body.provider, config);
     return { success: true, validation };
   });
 }
@@ -268,7 +274,7 @@ function registerTestRoutes(
   server.post('/dns/test', async () => {
     const cfg = await settings.getDnsConfig();
     if (!cfg) return { ok: false, error: 'DNS not configured' };
-    return testDnsProvider(cfg.provider, cfg.config as Parameters<typeof testDnsProvider>[1]);
+    return testDnsProvider(cfg.provider, cfg.config);
   });
 
   server.post('/proxy/test', async () => {

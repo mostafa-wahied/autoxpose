@@ -35,7 +35,7 @@
 
 ## Supported Providers
 
-- **DNS**: Cloudflare, Netlify, DigitalOcean, Porkbun
+- **DNS**: Cloudflare, Netlify, DigitalOcean, Porkbun, Aliyun, Tencent Cloud DNSPod (China)
 - **Proxy**: Nginx Proxy Manager, Caddy
 
 ## Quick Start
@@ -92,9 +92,7 @@ docker run -d \
 
 2. **Access UI:** Open `http://your-server:4949` → Settings
 
-3. **Configure providers:**
-   - Add DNS provider (Cloudflare, Netlify, DigitalOcean, or Porkbun)
-   - Add Proxy provider (Nginx Proxy Manager or Caddy)
+3. **Configure providers:** Add a supported DNS provider, then add Nginx Proxy Manager or Caddy as the proxy provider.
 
 4. **Label your containers:**
 
@@ -166,6 +164,29 @@ See the production template at [docker-compose.yaml](./docker-compose.yaml).
 4. Click "Domain Management" → Find your domain → Click "Details"
 5. Scroll to "API Access" → Toggle to enable
 6. In autoxpose: Settings → DNS Provider → Porkbun → Paste API key and secret key, enter domain
+
+</details>
+
+<details style="margin-left: 20px;">
+<summary>Aliyun</summary>
+
+1. In Alibaba Cloud RAM, create a dedicated user with OpenAPI access
+2. Grant the user permission to list, add, and delete DNS records for the domain
+3. Create an **AccessKey ID** and **AccessKey Secret** for that RAM user
+4. Copy both values when they are shown
+5. In autoxpose: Settings → DNS Provider → Aliyun → Paste both keys and enter the base domain
+
+</details>
+
+<details style="margin-left: 20px;">
+<summary>Tencent Cloud DNSPod (China)</summary>
+
+1. Sign in to the Tencent Cloud China console and open Cloud Access Management
+2. Create a dedicated API key with permission to list, create, and delete DNSPod records
+3. Copy the **SecretId** and **SecretKey** when they are shown
+4. In autoxpose: Settings → DNS Provider → Tencent Cloud DNSPod (China) → Paste both values and enter the base domain
+
+This integration uses the Tencent Cloud China DNSPod API. International Tencent Cloud DNSPod accounts use a different API endpoint and are not supported by this option yet.
 
 </details>
 
