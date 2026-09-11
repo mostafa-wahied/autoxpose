@@ -2,6 +2,12 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Caddy Configuration**: Preserve existing admin, TLS, listener, and unrelated server settings when exposing a service.
+
 ## [0.5.0] - 2026-09-10
 
 ### Added

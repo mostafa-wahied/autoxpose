@@ -47,25 +47,34 @@ export class CaddyProxyProvider implements ProxyProvider {
     };
   }
 
-  private buildConfig(serverName: string, server: CaddyServer, routes: CaddyRoute[]): object {
+  private buildConfig(config: CaddyConfig, serverName: string, routes: CaddyRoute[]): object {
+    const servers = config.apps?.http?.servers || {};
+    const server = servers[serverName] || {};
     return {
+      ...config,
       apps: {
-        http: { servers: { [serverName]: { ...server, listen: [':80', ':443'], routes } } },
-        tls: { automation: { policies: [{ issuers: [{ module: 'acme' }] }] } },
+        ...config.apps,
+        http: {
+          ...config.apps?.http,
+          servers: {
+            ...servers,
+            [serverName]: { ...server, listen: server.listen ?? [':80', ':443'], routes },
+          },
+        },
       },
     };
   }
 
   async createHost(input: CreateProxyHostInput): Promise<ProxyHost> {
     const route = this.buildRoute(input.domain, input.targetHost, input.targetPort);
-    const serverName = await this.getServerName();
     const config = await this.request<CaddyConfig>('/config/');
+    const serverName = this.getServerName(config);
     const existingServer = config?.apps?.http?.servers?.[serverName] || {};
     const newRoutes = [route, ...(existingServer.routes || [])];
 
     await this.request(`/load`, {
       method: 'POST',
-      body: JSON.stringify(this.buildConfig(serverName, existingServer, newRoutes)),
+      body: JSON.stringify(this.buildConfig(config, serverName, newRoutes)),
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -128,8 +137,7 @@ export class CaddyProxyProvider implements ProxyProvider {
     return { success: true };
   }
 
-  private async getServerName(): Promise<string> {
-    const config = await this.request<CaddyConfig>('/config/');
+  private getServerName(config: CaddyConfig): string {
     const servers = config?.apps?.http?.servers || {};
     const serverNames = Object.keys(servers);
     if (serverNames.length === 0) {
