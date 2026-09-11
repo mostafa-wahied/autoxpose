@@ -2,6 +2,13 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Caddy Configuration**: Preserve existing admin, TLS, listener, and unrelated server settings when exposing a service.
+- **Mobile Layout**: Use a collapsible service drawer on phones so service cards and configuration controls have room to display.
+
 ## [0.5.0] - 2026-09-10
 
 ### Added

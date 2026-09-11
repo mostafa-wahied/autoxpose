@@ -7,6 +7,7 @@ import { CommandConsole } from './command-console';
 import { type useTerminalActions } from './use-terminal-actions';
 import type { ExposeStreamState } from '../../hooks/use-expose-stream';
 import { WildcardModeHint } from './wildcard-mode-hint';
+import { MobileServices } from '../../components/terminal/mobile-services';
 
 interface ContentAreaProps {
   services: ServiceRecord[];
@@ -20,6 +21,7 @@ interface ContentAreaProps {
   settingsData: Awaited<ReturnType<typeof import('../../lib/api').api.settings.status>> | undefined;
   onScan: () => void;
   isWildcardMode: boolean;
+  onHelp: () => void;
 }
 
 export function ContentArea(props: ContentAreaProps): JSX.Element {
@@ -41,7 +43,12 @@ export function ContentArea(props: ContentAreaProps): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <CommandPrompt command={`autoxpose status --services ${services.length}`} />
+      <div className="flex min-w-0 items-center gap-3">
+        <MobileServices services={filteredServices} onHelp={props.onHelp} />
+        <div className="min-w-0 break-words">
+          <CommandPrompt command={`autoxpose status --services ${services.length}`} />
+        </div>
+      </div>
       {state.scanMutation.isSuccess && <ScanSuccessNotice data={state.scanMutation.data} />}
       <WildcardModeHint
         services={services}

@@ -27,7 +27,7 @@ export function TerminalSidebar({
   };
 
   return (
-    <div className="flex w-56 flex-col border-r border-[#30363d] bg-[#0d1117]">
+    <div className="flex min-h-0 w-full flex-1 flex-col border-r border-[#30363d] bg-[#0d1117] md:w-56">
       <div className="flex-1 overflow-auto p-4">
         <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#8b949e]">
           Services
