@@ -202,7 +202,7 @@ function TerminalDashboardContent({
   });
 
   return (
-    <div className="flex h-screen flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
+    <div className="flex h-dvh flex-col bg-[#0d1117] font-mono text-sm text-[#c9d1d9]">
       <TerminalHeader
         serviceCount={stableServices.length}
         exposedCount={dashboardState.exposedCount}
@@ -326,14 +326,16 @@ function MainContent({
   isWildcardMode,
 }: MainContentProps): JSX.Element {
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <TerminalSidebar
-        services={services}
-        activeServiceId={state.streamState.serviceId}
-        onHelp={() => setShortcutsOpen(true)}
-      />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto p-6">
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="hidden shrink-0 md:flex">
+        <TerminalSidebar
+          services={services}
+          activeServiceId={state.streamState.serviceId}
+          onHelp={() => setShortcutsOpen(true)}
+        />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-auto p-3 md:p-6">
           <ContentArea
             services={services}
             state={state}
@@ -346,6 +348,7 @@ function MainContent({
             canExposeReason={canExposeReason}
             onScan={actions.handleScan}
             isWildcardMode={isWildcardMode}
+            onHelp={() => setShortcutsOpen(true)}
           />
         </div>
         <SettingsPanel

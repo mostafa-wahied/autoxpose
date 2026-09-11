@@ -48,6 +48,8 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
 
   return (
     <div
+      id={`service-${service.id}`}
+      tabIndex={-1}
       className={`group relative border bg-[#161b22] p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg ${borderClass}`}
       onMouseEnter={() => setShowDelete(true)}
       onMouseLeave={() => setShowDelete(false)}
