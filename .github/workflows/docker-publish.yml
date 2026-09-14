@@ -2,20 +2,29 @@ name: Build and Publish Docker Image
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*.*.*" ]
+    branches: ['main']
+    tags: ['v*.*.*']
   pull_request:
-    branches: [ "main" ]
+    branches: ['main']
 
 env:
   IMAGE_NAME: autoxpose
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.architecture }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -43,46 +52,143 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: autoxpose:test
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.architecture }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.architecture }}
+          platforms: linux/${{ matrix.architecture }}
 
       - name: Test Docker image
-        if: github.event_name != 'pull_request'
+        env:
+          EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          mkdir -p $RUNNER_TEMP/autoxpose-test-data
-          chmod 777 $RUNNER_TEMP/autoxpose-test-data
+          test "$(docker image inspect autoxpose:test --format '{{.Id}}')" = "$EXPECTED_IMAGE"
+          test "$(docker image inspect autoxpose:test --format '{{.Architecture}}')" = "$EXPECTED_ARCHITECTURE"
+          expected_version=$(jq -r '.version' package.json)
+          test "$(docker run --rm --entrypoint node "$EXPECTED_IMAGE" -p "require('/app/package.json').version")" = "$expected_version"
 
-          docker run -d --name test-autoxpose --user root \
-            -p 3000:3000 \
+          docker run -d --name test-autoxpose \
+            -p 127.0.0.1:3000:3000 \
             -v /var/run/docker.sock:/var/run/docker.sock:ro \
-            -v $RUNNER_TEMP/autoxpose-test-data:/app/packages/backend/data \
             -e SERVER_IP=127.0.0.1 \
             -e LAN_IP=127.0.0.1 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            "$EXPECTED_IMAGE"
 
-          sleep 20
+          curl --fail --silent --show-error --retry 30 --retry-delay 1 \
+            --retry-connrefused --max-time 5 --retry-max-time 60 \
+            http://127.0.0.1:3000/health | jq -e '.status == "ok"'
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3000/ > /dev/null
+          test "$(docker inspect test-autoxpose --format '{{.Image}}')" = "$EXPECTED_IMAGE"
+          docker exec test-autoxpose node -e "const assert = require('node:assert/strict'); const fs = require('node:fs'); assert.match(fs.readFileSync('/proc/1/status', 'utf8'), /^Uid:\\s+1001\\s+1001\\s+1001\\s+1001$/m);"
 
-          if ! docker ps | grep test-autoxpose; then
-            echo "Container failed to start or crashed"
-            docker logs test-autoxpose || true
-            exit 1
+      - name: Push tested platform image
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.architecture }}
+          outputs: type=image,name=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Verify and record platform digest
+        if: github.event_name != 'pull_request'
+        env:
+          TESTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          PUSHED_IMAGE: ${{ steps.push.outputs.imageid }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          test "$PUSHED_IMAGE" = "$TESTED_IMAGE"
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/digests"
+          printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/$ARCHITECTURE"
+
+      - name: Upload platform digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/digests/${{ matrix.architecture }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Clean up test container
+        if: always()
+        run: |
+          if docker container inspect test-autoxpose > /dev/null 2>&1; then
+            docker logs test-autoxpose
+            docker rm --force test-autoxpose
           fi
 
-          if curl -f http://localhost:3000; then
-            echo "Health check passed"
-          else
-            echo "Health check failed"
-            docker logs test-autoxpose || true
-            exit 1
-          fi
+  publish:
+    name: Publish multi-platform image
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          docker stop test-autoxpose
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Download platform digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Publish verified platform manifests
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          METADATA: ${{ steps.meta.outputs.json }}
+        run: |
+          sources=()
+          for architecture in amd64 arm64; do
+            digest=$(cat "$RUNNER_TEMP/digests/$architecture")
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            sources+=("$IMAGE@$digest")
+          done
+          docker buildx imagetools create --dry-run "${sources[@]}" > "$RUNNER_TEMP/manifest.json"
+          jq -e '([.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort) == ["amd64", "arm64"]' "$RUNNER_TEMP/manifest.json"
+          mapfile -t tags < <(jq -er '.tags[]' <<< "$METADATA")
+          test "${#tags[@]}" -gt 0
+          tag_arguments=()
+          for tag in "${tags[@]}"; do
+            [[ "$tag" == "$IMAGE:"* ]]
+            tag_arguments+=(--tag "$tag")
+          done
+          docker buildx imagetools create "${tag_arguments[@]}" "${sources[@]}"
