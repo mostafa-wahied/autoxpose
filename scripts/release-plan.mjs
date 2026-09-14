@@ -11,6 +11,18 @@ export function compareVersions(left, right) {
   return 0;
 }
 
+function versionNotes(changelog, version) {
+  assert.equal(typeof changelog, 'string', 'Versioned release requires a changelog');
+  const headings = [...changelog.matchAll(/^## \[([^\]\r\n]+)\][^\r\n]*$/gm)];
+  const matches = headings.filter(heading => heading[1] === version);
+  assert.equal(matches.length, 1, 'Expected exactly one changelog section for the release');
+  const heading = matches[0];
+  const next = headings[headings.indexOf(heading) + 1];
+  const notes = changelog.slice(heading.index + heading[0].length, next?.index).trim();
+  assert.match(notes, /^- \S/m, 'Release notes must contain at least one change');
+  return notes;
+}
+
 export function planRelease(input) {
   assert.match(input.sha, /^[a-f0-9]{40}$/, 'Invalid source revision');
   assert.equal(input.sha, input.mainSha, 'Source is no longer current main');
@@ -18,13 +30,17 @@ export function planRelease(input) {
   const comparison = compareVersions(input.version, input.previous);
   assert.ok(comparison >= 0, 'Version must not decrease');
   const changed = comparison > 0;
+  const { changelog, ...source } = input;
+  const body = changed
+    ? `${versionNotes(changelog, input.version)}\n\n**Full Changelog**: https://github.com/${input.repository}/compare/v${input.previous}...v${input.version}`
+    : '';
   return {
-    ...input,
+    ...source,
     changed,
     tag: `v${input.version}`,
     series: input.version.split('.').slice(0, 2).join('.'),
     title: `Release ${input.version}`,
-    body: `## What's Changed\n\nAutomatic release for version ${input.version}\n\n### Changes\n- See commit history for detailed changes\n\n**Full Changelog**: https://github.com/${input.repository}/compare/v${input.previous}...v${input.version}`,
+    body,
   };
 }
 
