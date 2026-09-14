@@ -71,7 +71,7 @@ function createCoreServices(options: CoreServicesOptions): CoreServices {
   const settings = new SettingsService(settingsRepo, { serverIp: publicIp, lanIp, lanProvided });
   const metadataLoader = new MetadataLoader();
   const tagDetector = new TagDetector(metadataLoader);
-  const services = new ServicesService(servicesRepo, settings, tagDetector);
+  const services = new ServicesService(servicesRepo, settings, tagDetector, discovery ?? undefined);
   const metadataUpdater = new MetadataUpdater(metadataLoader, services);
   const sync = new SyncService(servicesRepo, settings, discovery ?? undefined);
   const exposeContext = { servicesRepo, settings, publicIp, lanIp, sync };
@@ -165,7 +165,8 @@ async function handleDockerEvent(
     const svc = await deps.services.upsertService(service);
     await deps.sync.detectExistingConfigurations([svc]);
     await fullReconcile(deps);
-    const isNewService = !svc.enabled && !svc.dnsRecordId && !svc.proxyHostId;
+    const isNewService =
+      !svc.enabled && !svc.dnsRecordId && !svc.proxyHostId && svc.exposureSource !== 'paused';
     if (isNewService && service.autoExpose) {
       const hasConfig = await checkProvidersConfigured(deps.settings);
       if (!hasConfig) {

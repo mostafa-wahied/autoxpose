@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { BetterSQLite3Database, drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import * as schema from './schema.js';
 import { createLogger } from '../logger/index.js';
 import { existsSync } from 'fs';
@@ -46,12 +47,11 @@ function initializeMigrationTracking(): void {
     .get() as { count: number };
 
   if (existingCount.count === 0) {
-    const migrations = ['0000_sticky_shocker', '0001_real_zzzax'];
-    const now = Date.now();
-    for (const hash of migrations) {
+    const migrations = readMigrationFiles({ migrationsFolder: getMigrationsPath() }).slice(0, 2);
+    for (const migration of migrations) {
       sqliteConnection
         .prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)')
-        .run(hash, now);
+        .run(migration.hash, migration.folderMillis);
     }
     logger.info(`Marked ${migrations.length} existing migrations as applied`);
   }
@@ -85,6 +85,7 @@ function runMigrations(database: AppDatabase): void {
       logger.info('Initializing migration tracking for existing database...');
       try {
         initializeMigrationTracking();
+        migrate(database, { migrationsFolder: migrationsPath });
         logger.info('Migration tracking initialized successfully');
         return;
       } catch (recoveryError) {

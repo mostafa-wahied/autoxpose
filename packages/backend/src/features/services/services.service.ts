@@ -18,7 +18,8 @@ export class ServicesService {
   constructor(
     private repository: ServicesRepository,
     private settings?: SettingsService,
-    private tagDetector?: TagDetector
+    private tagDetector?: TagDetector,
+    private discovery?: { containerExists(containerId: string): Promise<boolean> }
   ) {}
 
   async getAllServices(): Promise<ServiceRecord[]> {
@@ -54,9 +55,13 @@ export class ServicesService {
     const dns = await this.settings!.getDnsProvider();
     const proxy = await this.settings!.getProxyProvider();
 
+    if (service.dnsRecordId && !dns) throw new Error('DNS provider is unavailable');
+    if (service.proxyHostId && !proxy) throw new Error('Proxy provider is unavailable');
+
     if (service.dnsRecordId && dns) {
       try {
         await dns.deleteRecord(service.dnsRecordId);
+        await this.repository.update(service.id, { dnsRecordId: null, dnsExists: false });
       } catch (err) {
         throw new Error(`Failed to delete DNS: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
@@ -65,6 +70,7 @@ export class ServicesService {
     if (service.proxyHostId && proxy) {
       try {
         await proxy.deleteHost(service.proxyHostId);
+        await this.repository.update(service.id, { proxyHostId: null, proxyExists: false });
       } catch (err) {
         throw new Error(
           `Failed to delete proxy: ${err instanceof Error ? err.message : 'Unknown'}`
@@ -120,8 +126,8 @@ export class ServicesService {
   }
 
   async upsertService(discovered: DiscoveredService): Promise<ServiceRecord> {
-    const existing = await this.repository.findBySourceId(discovered.id);
-    const tags = this.detectServiceTags(discovered);
+    const existing = await this.findDiscoveredService(discovered);
+    const tags = this.detectServiceTags(discovered, existing);
 
     if (existing) {
       const needsUpdate = this.serviceNeedsUpdate(existing, discovered);
@@ -129,6 +135,8 @@ export class ServicesService {
       const hasExplicitSubdomain = discovered.labels[`autoxpose.subdomain`] !== undefined;
       const subdomainToUse = hasExplicitSubdomain ? discovered.subdomain : existing.subdomain;
       const updated = await this.repository.update(existing.id, {
+        sourceId: discovered.id,
+        sourceName: discovered.sourceName,
         name: discovered.name,
         subdomain: subdomainToUse,
         port: discovered.port,
@@ -145,12 +153,19 @@ export class ServicesService {
       scheme: discovered.scheme,
       source: discovered.source,
       sourceId: discovered.id,
+      sourceName: discovered.sourceName,
       tags,
       hasExplicitSubdomainLabel: !!discovered.labels['autoxpose.subdomain'],
     });
   }
 
-  private detectServiceTags(discovered: DiscoveredService): string {
+  private detectServiceTags(discovered: DiscoveredService, existing?: ServiceRecord): string {
+    const identityChanged =
+      existing &&
+      (existing.sourceId !== discovered.id ||
+        (!!discovered.sourceName && existing.sourceName !== discovered.sourceName));
+    if (identityChanged && existing.tags !== null && existing.tags !== undefined)
+      return existing.tags;
     if (!this.tagDetector) return JSON.stringify(['utility']);
 
     const tags = this.tagDetector.detectTags({
@@ -161,6 +176,21 @@ export class ServicesService {
     });
 
     return JSON.stringify(tags);
+  }
+
+  private async findDiscoveredService(
+    discovered: DiscoveredService
+  ): Promise<ServiceRecord | undefined> {
+    const exact = await this.repository.findBySourceId(discovered.id);
+    if (exact || discovered.source !== 'docker' || !discovered.sourceName || !this.discovery) {
+      return exact;
+    }
+    const matches = (await this.repository.findAll()).filter(
+      record => record.source === 'docker' && record.sourceName === discovered.sourceName
+    );
+    if (matches.length !== 1 || !matches[0].sourceId) return undefined;
+    if (await this.discovery.containerExists(matches[0].sourceId)) return undefined;
+    return matches[0];
   }
 
   async syncFromDiscovery(discovered: DiscoveredService[]): Promise<SyncResult> {
@@ -186,6 +216,15 @@ export class ServicesService {
     for (const disc of discovered) {
       seenIds.add(disc.id);
       if (existingMap.has(disc.id)) continue;
+      const matchingIds = new Set(
+        discovered.filter(item => item.sourceName === disc.sourceName).map(item => item.id)
+      );
+      const reused = matchingIds.size === 1 ? await this.findDiscoveredService(disc) : undefined;
+      if (reused) {
+        if (reused.sourceId) seenIds.add(reused.sourceId);
+        existingMap.set(disc.id, reused);
+        continue;
+      }
       const tags = this.detectServiceTags(disc);
       const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const svc = await this.repository.create({
@@ -195,10 +234,12 @@ export class ServicesService {
         scheme: disc.scheme,
         source: disc.source,
         sourceId: disc.id,
+        sourceName: disc.sourceName,
         tags,
         hasExplicitSubdomainLabel: hasExplicitSubdomain,
       });
       created.push(svc);
+      existingMap.set(disc.id, svc);
     }
     return created;
   }
@@ -215,8 +256,10 @@ export class ServicesService {
       if (!needsUpdate) continue;
       const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const subdomainToUse = hasExplicitSubdomain ? disc.subdomain : existing.subdomain;
-      const tags = this.detectServiceTags(disc);
+      const tags = this.detectServiceTags(disc, existing);
       const upd = await this.repository.update(existing.id, {
+        sourceId: disc.id,
+        sourceName: disc.sourceName,
         name: disc.name,
         subdomain: subdomainToUse,
         port: disc.port,
@@ -232,7 +275,14 @@ export class ServicesService {
   private serviceNeedsUpdate(existing: ServiceRecord, disc: DiscoveredService): boolean {
     const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
     const subdomainChanged = hasExplicitSubdomain && existing.subdomain !== disc.subdomain;
-    return existing.name !== disc.name || subdomainChanged || existing.port !== disc.port;
+    return (
+      existing.sourceId !== disc.id ||
+      (!!disc.sourceName && existing.sourceName !== disc.sourceName) ||
+      existing.name !== disc.name ||
+      subdomainChanged ||
+      existing.port !== disc.port ||
+      existing.scheme !== disc.scheme
+    );
   }
 
   private async removeStaleServices(
@@ -243,6 +293,8 @@ export class ServicesService {
     for (const svc of existing) {
       const isStale = svc.source === 'docker' && svc.sourceId && !seenIds.has(svc.sourceId);
       if (!isStale) continue;
+      if (svc.enabled || svc.dnsRecordId || svc.proxyHostId || svc.exposureSource === 'paused')
+        continue;
       await this.repository.delete(svc.id);
       removed.push(svc.id);
     }

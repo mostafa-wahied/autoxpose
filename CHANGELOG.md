@@ -2,35 +2,50 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- **Safer Settings**: Block changes from untrusted websites and hide credentials in setup errors.
+
+### Fixed
+
+- **Service Controls**: Keep stopped services stopped after scans and restarts.
+- **Setup**: Fix first-time setup and prevent invalid changes from replacing working settings.
+- **Recovery**: Improve retries after failed DNS or proxy changes.
+- **DNS Discovery**: Find records that were previously missed.
+
 ## [0.5.1] - 2026-09-11
 
 ### Fixed
 
-- **Caddy Configuration**: Preserve existing admin, TLS, listener, and unrelated server settings when exposing a service.
-- **Mobile Layout**: Use a collapsible service drawer on phones so service cards and configuration controls have room to display.
+- **Caddy Configuration**: Keep your existing Caddy settings and other sites unchanged when exposing a service.
+- **Mobile Layout**: Give service cards more room on phones with a collapsible service list.
 
 ## [0.5.0] - 2026-09-10
 
 ### Added
 
-- **DNS Providers**: Add Aliyun and Tencent Cloud DNSPod China support for automatic DNS record creation, discovery, and cleanup.
+- **DNS Providers**: Add support for Aliyun and Tencent Cloud DNSPod China.
 
 ### Changed
 
-- **DNS Settings**: Validate provider credentials before replacing a working DNS configuration.
-- **DNS Status**: Treat paused Aliyun and DNSPod records as inactive during exposure checks and reconciliation.
+- **DNS Settings**: Check credentials before replacing working DNS settings.
+- **DNS Status**: Recognize paused Aliyun and DNSPod records as inactive.
 
 ## [0.4.2] - 2026-07-17
 
 ### Security
 
-- **CORS**: Restrict cross-origin requests to same-origin by default so other websites cannot read your settings or provider credentials. Set `CORS_ORIGIN` to allow specific origins if needed.
+- **Website Access**: Prevent other websites from reading your settings or provider credentials.
+  - **[sub]** Set `CORS_ORIGIN` to allow specific origins if needed.
 
 ### Fixed
 
-- **Docker Discovery**: Automatically grant the container access to the Docker socket at startup, so container discovery works without manually adding `group_add` to your compose file. The app still runs as a non-root user.
+- **Docker Discovery**: Discover containers without extra Docker permission setup, while keeping the app running as a non-root user.
+  - **[sub]** Manually adding `group_add` to your compose file is no longer required.
 
-- **Discovery**: Detect containers that are already running when autoxpose starts, instead of only picking them up on later Docker events.
+- **Startup Discovery**: Find containers that are already running when autoxpose starts.
 
 ## [0.4.1] - 2026-03-18
 
