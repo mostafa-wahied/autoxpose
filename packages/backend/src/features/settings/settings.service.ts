@@ -10,6 +10,7 @@ import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProvider } from '../proxy/proxy.types.js';
 import type {
   ProviderConfigRecord,
+  SaveProviderInput,
   SettingsRepository,
   WildcardConfig,
 } from './settings.repository.js';
@@ -45,11 +46,21 @@ export class SettingsService {
     return this.mergeExistingConfig(existing, provider, config);
   }
 
-  async saveProxyConfig(provider: string, config: Record<string, string>): Promise<void> {
+  async getMergedProxyConfig(
+    provider: string,
+    config: Record<string, string>
+  ): Promise<Record<string, string>> {
     const existing = await this.getProxyConfig();
-    const newConfig = this.mergeExistingConfig(existing, provider, config);
+    return this.mergeExistingConfig(existing, provider, config);
+  }
 
+  async saveProxyConfig(provider: string, config: Record<string, string>): Promise<void> {
+    const newConfig = await this.getMergedProxyConfig(provider, config);
     await this.repository.save({ type: 'proxy', provider, config: newConfig });
+  }
+
+  async importProviderConfigs(configs: SaveProviderInput[]): Promise<void> {
+    await this.repository.saveAll(configs);
   }
 
   async getDnsProvider(): Promise<DnsProvider | null> {

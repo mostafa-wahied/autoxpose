@@ -51,8 +51,13 @@ export class PorkbunDnsProvider implements DnsProvider {
 
   async findByHostname(hostname: string): Promise<DnsRecord | null> {
     const records = await this.listRecords();
+    const target = hostname.includes('.') ? hostname : `${hostname}.${this.domain}`;
     return (
-      records.find(r => r.hostname === hostname && (r.type === 'A' || r.type === 'CNAME')) ?? null
+      records.find(
+        r =>
+          r.hostname.toLowerCase().replace(/\.$/, '') === target.toLowerCase().replace(/\.$/, '') &&
+          (r.type === 'A' || r.type === 'CNAME')
+      ) ?? null
     );
   }
 

@@ -16,6 +16,16 @@ const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
 
+function safeProviderError(error: unknown, config: Record<string, unknown>): string {
+  let message = error instanceof Error ? error.message : 'Unknown error';
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== 'string' || !value || !/token|secret|password|key/i.test(key)) continue;
+    message = message.split(value).join('[redacted]');
+    message = message.split(encodeURIComponent(value)).join('[redacted]');
+  }
+  return cleanErrorMessage(message);
+}
+
 const REQUIRED_DNS_FIELDS: Record<string, string[]> = {
   cloudflare: ['token', 'zoneId', 'domain'],
   netlify: ['token', 'zoneId', 'domain'],
@@ -41,9 +51,9 @@ export async function testDnsProvider(
     await dns.listRecords();
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    logger.warn({ provider, err }, 'DNS provider test failed');
-    return { ok: false, error: cleanErrorMessage(message) };
+    const message = safeProviderError(err, config);
+    logger.warn({ provider, error: message }, 'DNS provider test failed');
+    return { ok: false, error: message };
   }
 }
 
@@ -52,14 +62,27 @@ export async function testProxyProvider(
   config: ProxyProviderConfig
 ): Promise<TestResult> {
   try {
+    if (!['npm', 'caddy'].includes(provider)) return { ok: false, error: 'Unknown provider' };
+    if (!config.url?.trim()) return { ok: false, error: 'Missing proxy URL' };
+    const endpoint = new URL(config.url);
+    if (
+      !['http:', 'https:'].includes(endpoint.protocol) ||
+      endpoint.username ||
+      endpoint.password
+    ) {
+      return { ok: false, error: 'Proxy URL must use HTTP or HTTPS without embedded credentials' };
+    }
+    if (provider === 'npm' && (!config.username?.trim() || !config.password?.trim())) {
+      return { ok: false, error: 'Missing proxy username or password' };
+    }
     const proxy = createProxyProvider(provider, config);
     if (!proxy) return { ok: false, error: 'Unknown provider' };
     await proxy.listHosts();
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    logger.warn({ provider, err }, 'Proxy provider test failed');
-    return { ok: false, error: cleanErrorMessage(message) };
+    const message = safeProviderError(err, { ...config });
+    logger.warn({ provider, error: message }, 'Proxy provider test failed');
+    return { ok: false, error: message };
   }
 }
 

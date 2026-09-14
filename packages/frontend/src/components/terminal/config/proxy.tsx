@@ -105,8 +105,9 @@ function useProxyForm(current: SettingsStatus['proxy'] | null, onDone: () => voi
         provider === 'caddy' ? { url } : { url, username, password };
       return api.settings.saveProxy(provider, config);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    onSuccess: async () => {
+      await queryClient.cancelQueries({ queryKey: ['settings'] });
+      await queryClient.invalidateQueries({ queryKey: ['settings'] });
       onDone();
     },
   });

@@ -21,8 +21,26 @@ export async function createServer(_config: AppConfig, ctx: AppContext): Promise
   const server = Fastify({ logger: false });
 
   const corsOrigin = process.env.CORS_ORIGIN;
+  const allowedOrigins = corsOrigin?.split(',').map(value => value.trim()) ?? [];
+  server.addHook('onRequest', async (request, reply) => {
+    const origin = request.headers.origin;
+    if (!origin || ['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+    const forwardedProtocol = request.headers['x-forwarded-proto'];
+    const protocol = forwardedProtocol === 'https' ? 'https' : request.protocol;
+    let trusted = false;
+    try {
+      const parsed = new URL(origin);
+      trusted =
+        ['http:', 'https:'].includes(parsed.protocol) &&
+        parsed.origin === origin &&
+        (origin === `${protocol}://${request.headers.host}` || allowedOrigins.includes(origin));
+    } catch {
+      trusted = false;
+    }
+    if (!trusted) return reply.code(403).send({ error: 'Untrusted request origin' });
+  });
   await server.register(cors, {
-    origin: corsOrigin ? corsOrigin.split(',').map(value => value.trim()) : false,
+    origin: corsOrigin ? allowedOrigins : false,
   });
 
   server.addContentTypeParser(

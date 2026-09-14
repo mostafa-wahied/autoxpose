@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { detectPlatform } from '../../core/platform.js';
 import type { ServicesRepository } from '../services/services.repository.js';
+import type { SaveProviderInput } from './settings.repository.js';
 import type { SettingsService } from './settings.service.js';
 import { testDnsProvider, testProxyProvider } from './validation.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
@@ -11,7 +12,13 @@ type ParsedConfig = { provider: string; config: Record<string, string> } | null;
 function hasProviderConfig(body: unknown): body is ProviderBody {
   if (!body || typeof body !== 'object') return false;
   const value = body as { provider?: unknown; config?: unknown };
-  return typeof value.provider === 'string' && !!value.config && typeof value.config === 'object';
+  return (
+    typeof value.provider === 'string' &&
+    !!value.config &&
+    typeof value.config === 'object' &&
+    !Array.isArray(value.config) &&
+    Object.values(value.config).every(item => typeof item === 'string')
+  );
 }
 
 function maskSecret(value: string | undefined): string {
@@ -147,17 +154,19 @@ function registerProxyRoutes(
       reply.code(400);
       return { success: false, error: 'Invalid proxy config payload' };
     }
-    const config = { ...request.body.config };
-    if (config.url && !config.url.startsWith('http')) {
+    const config = await settings.getMergedProxyConfig(request.body.provider, request.body.config);
+    if (config.url && !/^[a-z][a-z\d+.-]*:\/\//i.test(config.url)) {
       config.url = `http://${config.url}`;
     }
-    await settings.saveProxyConfig(request.body.provider, config);
-    const cfg = await settings.getProxyConfig();
-    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
     const validation = await testProxyProvider(
-      cfg.provider,
-      cfg.config as Parameters<typeof testProxyProvider>[1]
+      request.body.provider,
+      config as Parameters<typeof testProxyProvider>[1]
     );
+    if (!validation.ok) {
+      reply.code(400);
+      return { success: false, error: validation.error || 'Proxy validation failed' };
+    }
+    await settings.saveProxyConfig(request.body.provider, config);
     return { success: true, validation };
   });
 }
@@ -297,14 +306,36 @@ function registerExportImportRoutes(
     };
   });
 
-  server.post<{ Body: { dns: ParsedConfig; proxy: ParsedConfig } }>('/import', async request => {
-    const { dns, proxy } = request.body;
-    if (dns?.provider && dns.config) {
-      await settings.saveDnsConfig(dns.provider, dns.config);
+  server.post<{ Body: { dns: ParsedConfig; proxy: ParsedConfig } }>(
+    '/import',
+    async (request, reply) => {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) {
+        return reply.code(400).send({ success: false, error: 'Invalid settings import' });
+      }
+      const candidates: SaveProviderInput[] = [];
+      for (const type of ['dns', 'proxy'] as const) {
+        const value = request.body[type];
+        if (value === null || value === undefined) continue;
+        if (!hasProviderConfig(value)) {
+          return reply.code(400).send({ success: false, error: 'Invalid provider configuration' });
+        }
+        const config =
+          type === 'dns'
+            ? await settings.getMergedDnsConfig(value.provider, value.config)
+            : await settings.getMergedProxyConfig(value.provider, value.config);
+        const validation =
+          type === 'dns'
+            ? await testDnsProvider(value.provider, config)
+            : await testProxyProvider(
+                value.provider,
+                config as Parameters<typeof testProxyProvider>[1]
+              );
+        if (!validation.ok)
+          return reply.code(400).send({ success: false, error: validation.error });
+        candidates.push({ type, provider: value.provider, config });
+      }
+      await settings.importProviderConfigs(candidates);
+      return { success: true };
     }
-    if (proxy?.provider && proxy.config) {
-      await settings.saveProxyConfig(proxy.provider, proxy.config);
-    }
-    return { success: true };
-  });
+  );
 }

@@ -70,7 +70,7 @@ export class SyncService {
       exposedSubdomain
     );
     await this.servicesRepo.update(service.id, {
-      enabled: isExposed,
+      enabled: service.exposureSource !== 'paused' && isExposed,
       dnsRecordId: dnsRecord?.id ?? null,
       proxyHostId: proxyHost?.id ?? null,
       configWarnings: warnings.length > 0 ? JSON.stringify(warnings) : null,
@@ -107,7 +107,7 @@ export class SyncService {
       );
       if (!needsSync) return false;
       await this.servicesRepo.update(service.id, {
-        enabled: Boolean(dnsRecord) || Boolean(proxyHost),
+        enabled: service.exposureSource !== 'paused' && (Boolean(dnsRecord) || Boolean(proxyHost)),
         dnsRecordId: dnsRecord?.id ?? null,
         proxyHostId: proxyHost?.id ?? null,
       });
@@ -129,7 +129,7 @@ export class SyncService {
     const proxyHost = proxy ? await proxy.findByDomain(fullDomain) : null;
     const isExposed = Boolean(dnsRecord) || Boolean(proxyHost);
     const needsSync =
-      service.enabled !== isExposed ||
+      service.enabled !== (service.exposureSource !== 'paused' && isExposed) ||
       service.dnsRecordId !== (dnsRecord?.id ?? null) ||
       service.proxyHostId !== (proxyHost?.id ?? null);
     return { dnsRecord, proxyHost, needsSync };
@@ -140,20 +140,8 @@ export class SyncService {
     const proxy = await this.settings.getProxyProvider();
     const baseDomain = await this.getBaseDomain();
 
-    let dnsRecords: DnsRecord[] = [];
-    let proxyHosts: ProxyHost[] = [];
-
-    try {
-      dnsRecords = dns ? await dns.listRecords() : [];
-    } catch (error) {
-      logger.error({ error }, 'Failed to fetch DNS records');
-    }
-
-    try {
-      proxyHosts = proxy ? await proxy.listHosts() : [];
-    } catch (error) {
-      logger.error({ error }, 'Failed to fetch proxy hosts');
-    }
+    const dnsRecords = dns ? await dns.listRecords() : [];
+    const proxyHosts = proxy ? await proxy.listHosts() : [];
 
     return {
       dnsRecords,
@@ -283,7 +271,7 @@ export class SyncService {
       exposedSubdomain: config.exposedSubdomain,
       dnsRecordId: config.dnsRecord?.id ?? (config.dnsExists ? config.service.dnsRecordId : null),
       proxyHostId: config.proxyHost?.id ?? (config.proxyExists ? config.service.proxyHostId : null),
-      enabled,
+      enabled: config.service.exposureSource !== 'paused' && enabled,
       sslPending: config.proxyHost?.sslPending ?? null,
       sslError: config.proxyHost?.sslError ?? null,
     };
@@ -350,6 +338,7 @@ export class SyncService {
     dnsExists: boolean,
     proxyExists: boolean
   ): string | null {
+    if (service.exposureSource === 'paused') return 'paused';
     if (!service.enabled && (dnsExists || proxyExists)) return 'discovered';
     if (service.enabled) return service.exposureSource || 'manual';
     return null;

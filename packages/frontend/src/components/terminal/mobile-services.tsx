@@ -10,6 +10,12 @@ interface MobileServicesProps {
 }
 
 function keepFocusInside(event: KeyboardEvent<HTMLDialogElement>): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.close();
+    return;
+  }
   if (event.key !== 'Tab') return;
   const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
   const first = buttons[0];
@@ -100,7 +106,7 @@ export function MobileServices({ services, onHelp }: MobileServicesProps): JSX.E
         ref={drawer.dialog}
         id="mobile-services"
         aria-label="Services"
-        onKeyDown={keepFocusInside}
+        onKeyDownCapture={keepFocusInside}
         onClose={drawer.restoreFocus}
         onClick={event => {
           if (event.target === event.currentTarget) drawer.close();
