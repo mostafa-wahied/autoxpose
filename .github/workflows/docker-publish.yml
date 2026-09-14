@@ -127,12 +127,23 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           TESTED_IMAGE: ${{ steps.build.outputs.imageid }}
-          PUSHED_IMAGE: ${{ steps.push.outputs.imageid }}
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
           ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          test "$PUSHED_IMAGE" = "$TESTED_IMAGE"
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          manifest_file="$RUNNER_TEMP/pushed-platform.json"
+          docker buildx imagetools inspect --raw "$IMAGE@$IMAGE_DIGEST" > "$manifest_file"
+          if jq -e 'has("manifests")' "$manifest_file" > /dev/null; then
+            platform_digest=$(jq -er --arg architecture "$ARCHITECTURE" '
+              [.manifests[] | select(.platform.os == "linux" and .platform.architecture == $architecture)]
+              | if length == 1 then .[0].digest else error("Expected one matching platform") end
+            ' "$manifest_file")
+            [[ "$platform_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker buildx imagetools inspect --raw "$IMAGE@$platform_digest" > "$manifest_file"
+          fi
+          config_digest=$(jq -er '.config.digest' "$manifest_file")
+          test "$config_digest" = "$TESTED_IMAGE"
           mkdir -p "$RUNNER_TEMP/digests"
           printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/$ARCHITECTURE"
 
