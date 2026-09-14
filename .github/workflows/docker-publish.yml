@@ -65,6 +65,27 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.architecture }}
           platforms: linux/${{ matrix.architecture }}
 
+      - name: Verify native database binding
+        env:
+          EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          docker run --rm --network none --entrypoint node \
+            --env EXPECTED_ARCHITECTURE "$EXPECTED_IMAGE" -e "
+              const assert = require('node:assert/strict');
+              const expectedArchitecture = { amd64: 'x64', arm64: 'arm64' }[process.env.EXPECTED_ARCHITECTURE];
+              assert.equal(process.platform, 'linux');
+              assert.equal(process.arch, expectedArchitecture);
+              const Database = require('better-sqlite3');
+              const database = new Database(':memory:');
+              try {
+                assert.equal(database.prepare('SELECT 1 AS value').get().value, 1);
+                assert.equal(database.pragma('quick_check', { simple: true }), 'ok');
+              } finally {
+                database.close();
+              }
+            "
+
       - name: Test Docker image
         env:
           EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
