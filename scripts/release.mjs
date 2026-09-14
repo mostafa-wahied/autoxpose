@@ -78,7 +78,8 @@ class ReleaseRunner {
     assert.ok(main, 'Main reference is missing');
     const version = JSON.parse(this.git('show', `${sha}:package.json`)).version;
     const previous = JSON.parse(this.git('show', `${sha}^:package.json`)).version;
-    return planRelease({ repository, sha, mainSha: main.object.sha, version, previous });
+    const changelog = version === previous ? undefined : this.git('show', `${sha}:CHANGELOG.md`);
+    return planRelease({ repository, sha, mainSha: main.object.sha, version, previous, changelog });
   }
 
   existingRelease(plan) {

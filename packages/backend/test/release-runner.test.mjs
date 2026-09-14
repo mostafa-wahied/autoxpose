@@ -11,6 +11,8 @@ class ReleaseFixture {
   image = 'owner/autoxpose';
   version = '0.5.2';
   previous = '0.5.1';
+  notes = '### Fixed\n\n- **Setup**: Keep working settings.';
+  changelog = `# Changelog\n\n## [0.5.2] - 2026-09-14\n\n${this.notes}\n\n## [0.5.1] - 2026-09-11\n\n- Older change`;
   tagSha = null;
   release = null;
   writes = [];
@@ -99,6 +101,10 @@ class ReleaseFixture {
     assert.equal(command, 'git');
     if (args[0] === 'rev-parse') return this.sha;
     assert.equal(args[0], 'show');
+    if (args[1].endsWith(':CHANGELOG.md')) {
+      assert.equal(args[1], `${this.sha}:CHANGELOG.md`);
+      return this.changelog;
+    }
     return JSON.stringify({ version: args[1].includes('^:') ? this.previous : this.version });
   }
 }
@@ -117,9 +123,25 @@ test('qualified release promotes exact platforms before creating tag and announc
     ['promote', 'git/tags', 'git/refs', 'releases']
   );
   assert.equal(fixture.release.target_commitish, fixture.sha);
+  assert.equal(
+    fixture.release.body,
+    `${fixture.notes}\n\n**Full Changelog**: https://github.com/owner/autoxpose/compare/v0.5.1...v0.5.2`
+  );
   const count = fixture.writes.length;
   fixture.runner.announce();
   assert.equal(fixture.writes.length, count);
+});
+
+test('missing or changed source release notes stop publication without side effects', context => {
+  const missing = new ReleaseFixture(context);
+  missing.changelog = '# Changelog\n\n## [Unreleased]\n- Future change';
+  assert.throws(() => missing.runner.prepare(), /changelog|notes/i);
+  assert.deepEqual(missing.writes, []);
+  const changed = new ReleaseFixture(context);
+  changed.runner.prepare();
+  changed.changelog = changed.changelog.replace('Keep working settings.', 'Different wording.');
+  assert.throws(() => changed.runner.promote(), /Release plan changed/);
+  assert.deepEqual(changed.writes, []);
 });
 
 test('wrong artifacts and stale source stop promotion before any write', context => {
