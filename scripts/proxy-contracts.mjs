@@ -33,6 +33,20 @@ function startNpm(lab) {
   return name;
 }
 
+export async function waitForNpmRoute(lab, port, route, hostname, expected, timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const response = await lab.request(port, route, { headers: { Host: hostname } });
+    if (response.status === 200 && response.text === expected) return;
+    await new Promise(resolve =>
+      setTimeout(resolve, Math.min(250, Math.max(0, deadline - Date.now())))
+    );
+  }
+  assert.fail(
+    `NPM route ${hostname}${route} did not return the expected response before the reload deadline`
+  );
+}
+
 export async function proxyContracts(lab, app) {
   const name = startNpm(lab);
   await lab.ready(lab.port(name, 81), '/api/', 120000);
@@ -50,19 +64,13 @@ export async function proxyContracts(lab, app) {
     const target=await provider.createHost({domain:'route-npm.example.test',targetHost:'fixture',targetPort:8080,ssl:false});
     console.log(JSON.stringify({keep,target}));`);
   const port = lab.port(name, 80);
-  assert.equal(
-    (await lab.request(port, '/', { headers: { Host: 'route-npm.example.test' } })).text,
-    'AUTOXPOSE_CONTRACT_UPSTREAM'
-  );
+  await waitForNpmRoute(lab, port, '/', 'route-npm.example.test', 'AUTOXPOSE_CONTRACT_UPSTREAM');
   const edited = run(`const keep=await provider.findByDomain('keep-npm.example.test');
     const updated=await provider.updateHost(${JSON.stringify(created.target.id)},{targetPort:2375});
     const unchanged=await provider.findByDomain('keep-npm.example.test');
     console.log(JSON.stringify({keep,updated,unchanged}));`);
   assert.deepEqual(edited.keep, edited.unchanged);
-  assert.equal(
-    (await lab.request(port, '/_ping', { headers: { Host: 'route-npm.example.test' } })).text,
-    'OK'
-  );
+  await waitForNpmRoute(lab, port, '/_ping', 'route-npm.example.test', 'OK');
   run(
     `await provider.deleteHost(${JSON.stringify(created.target.id)});console.log(JSON.stringify({hosts:await provider.listHosts()}));`
   );

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { NpmProxyProvider } from '../dist/features/proxy/providers/npm.js';
+import { waitForNpmRoute } from '../../../scripts/proxy-contracts.mjs';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -70,5 +71,32 @@ test('NPM provider failure does not become a successful edit or delete', async (
     await assert.rejects(provider.listHosts());
     await assert.rejects(provider.updateHost('71', { targetPort: 9090 }));
     await assert.rejects(provider.deleteHost('71'));
+  }
+});
+
+test('NPM routing waits for reload while requiring the exact response and virtual host', async () => {
+  let requests = 0;
+  const lab = {
+    request: async (port, route, options) => {
+      assert.equal(port, 80);
+      assert.equal(route, '/_ping');
+      assert.equal(options.headers.Host, 'route.example.test');
+      requests += 1;
+      return { status: 200, text: requests === 1 ? 'Default Site' : 'OK' };
+    },
+  };
+  await waitForNpmRoute(lab, 80, '/_ping', 'route.example.test', 'OK', 1000);
+  assert.equal(requests, 2);
+});
+
+test('NPM routing rejects a permanently incorrect response or failed HTTP status', async () => {
+  for (const response of [
+    { status: 200, text: 'Default Site' },
+    { status: 502, text: 'OK' },
+  ]) {
+    await assert.rejects(
+      waitForNpmRoute({ request: async () => response }, 80, '/', 'route.example.test', 'OK', 20),
+      /did not return the expected response before the reload deadline/
+    );
   }
 });
