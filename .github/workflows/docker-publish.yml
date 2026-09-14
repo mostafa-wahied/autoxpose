@@ -104,8 +104,10 @@ jobs:
             "$EXPECTED_IMAGE"
 
           curl --fail --silent --show-error --retry 30 --retry-delay 1 \
-            --retry-connrefused --max-time 5 --retry-max-time 60 \
-            http://127.0.0.1:3000/health | jq -e '.status == "ok"'
+            --retry-all-errors --max-time 5 --retry-max-time 60 \
+            --output "$RUNNER_TEMP/autoxpose-health.json" \
+            http://127.0.0.1:3000/health
+          jq -e '.status == "ok"' "$RUNNER_TEMP/autoxpose-health.json"
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3000/ > /dev/null
           test "$(docker inspect test-autoxpose --format '{{.Image}}')" = "$EXPECTED_IMAGE"
           docker exec test-autoxpose node -e "const assert = require('node:assert/strict'); const fs = require('node:fs'); assert.match(fs.readFileSync('/proc/1/status', 'utf8'), /^Uid:\\s+1001\\s+1001\\s+1001\\s+1001$/m);"
