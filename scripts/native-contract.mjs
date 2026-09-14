@@ -47,19 +47,32 @@ const expectedMachine = architecture === 'arm64' ? 183 : 62;
 assert.equal(binding.readUInt16LE(18), expectedMachine, 'Binding machine differs from runtime');
 const directory = mkdtempSync(path.join(os.tmpdir(), 'autoxpose-binding-'));
 try {
-  const invalid = Buffer.from(binding);
-  invalid.writeUInt16LE(expectedMachine === 183 ? 62 : 183, 18);
-  const target = path.join(directory, 'wrong-machine.node');
-  writeFileSync(target, invalid);
-  const code = `const Database = require('better-sqlite3');
-    try { new Database(':memory:', { nativeBinding: process.argv[1] }); process.exitCode = 2; }
-    catch (error) { if (error.code !== 'ERR_DLOPEN_FAILED') throw error; }`;
-  const negative = spawnSync(process.execPath, ['-e', code, target], {
-    cwd: '/app/packages/backend',
-    encoding: 'utf8',
-    timeout: 10000,
-  });
-  assert.equal(negative.status, 0, 'Corrupted binding was not rejected by the real loader');
+  for (const corrupted of [false, true]) {
+    const candidate = corrupted ? binding.subarray(0, 16) : binding;
+    const target = path.join(directory, corrupted ? 'corrupted.node' : 'copied.node');
+    writeFileSync(target, candidate);
+    const code = `const assert = require('node:assert/strict');
+      const Database = require('better-sqlite3');
+      const corrupted = process.argv[2] === 'true';
+      try {
+        const database = new Database(':memory:', { nativeBinding: process.argv[1] });
+        assert.equal(database.prepare('SELECT 42 AS value').get().value, 42);
+        database.close();
+        if (corrupted) process.exitCode = 2;
+      } catch (error) { if (!corrupted || error.code !== 'ERR_DLOPEN_FAILED') throw error; }`;
+    const loaded = spawnSync(process.execPath, ['-e', code, target, String(corrupted)], {
+      cwd: '/app/packages/backend',
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+    assert.equal(
+      loaded.status,
+      0,
+      corrupted
+        ? 'Corrupted binding was not rejected by the real loader'
+        : 'Copied binding must load before testing corruption'
+    );
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
@@ -71,6 +84,7 @@ console.log(
     machine: expectedMachine,
     databaseWriteRead: true,
     transactionRollback: true,
+    copiedBindingLoaded: true,
     corruptedBindingRejected: true,
   })
 );
