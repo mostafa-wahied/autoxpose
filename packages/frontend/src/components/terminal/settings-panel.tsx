@@ -92,7 +92,7 @@ export function SettingsPanel({ settings, isOpen, onClose }: SettingsPanelProps)
     <div
       className={`overflow-y-auto border-t border-[#30363d] bg-[#0d1117] transition-all duration-300 ease-in-out ${visClass}`}
     >
-      <div className="p-6 pb-8">
+      <div className="p-3 pb-4 md:p-6 md:pb-8">
         <PanelHeader
           onClose={onClose}
           onReset={() => resetMutation.mutate()}
@@ -293,7 +293,7 @@ function PanelHeader({ onClose, onReset, isResetting }: PanelHeaderProps): JSX.E
         onCloseExport={() => setShowWarning(false)}
         onCloseReset={() => setShowReset(false)}
       />
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-bold text-[#c9d1d9]">Configuration</h3>
         <HeaderActions
           onExport={handleExport}

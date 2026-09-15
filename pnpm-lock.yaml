@@ -7,6 +7,10 @@ settings:
 importers:
   .:
     devDependencies:
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
+
       '@types/node':
         specifier: ^20.19.26
         version: 20.19.26
@@ -92,6 +96,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.17.0
         version: 5.90.12(react@18.3.1)
+      lucide-react:
+        specifier: ^1.45.0
+        version: 1.45.0(react@18.3.1)
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -140,6 +147,30 @@ importers:
         version: 5.4.21(@types/node@20.19.26)
 
 packages:
+  '@playwright/test@1.63.0':
+    resolution:
+      {
+        integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
+  playwright-core@1.63.0:
+    resolution:
+      {
+        integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution:
+      {
+        integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
   '@alloc/quick-lru@5.2.0':
     resolution:
       {
@@ -3581,6 +3612,14 @@ packages:
         integrity: sha512-BpdYkt9EvGl8OfWHDQPISVpcl5xZthb+XPsbELj5AQXxIC8IriDZIQYjBJPEm5rS420sjZ0TLEzRcq5KdBhYrQ==,
       }
 
+  lucide-react@1.45.0:
+    resolution:
+      {
+        integrity: sha512-yH1ubCAduho9UR7oJhRXIQXogksRILBiTuZC4/bQIGeB9JOkxMlSuEHyyZpo1Z3S0yWJO2KTSUZbjiNvVxeOUw==,
+      }
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   memoizee@0.4.17:
     resolution:
       {
@@ -4835,6 +4874,16 @@ packages:
       }
 
 snapshots:
+  '@playwright/test@1.63.0':
+    dependencies:
+      playwright: 1.63.0
+
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
+
   '@alloc/quick-lru@5.2.0': {}
 
   '@babel/code-frame@7.27.1':
@@ -6755,6 +6804,10 @@ snapshots:
   lru-queue@0.1.0:
     dependencies:
       es5-ext: 0.10.64
+
+  lucide-react@1.45.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   memoizee@0.4.17:
     dependencies:

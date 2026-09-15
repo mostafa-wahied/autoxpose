@@ -7,7 +7,7 @@ const logger = createLogger('dns-routes');
 export function createDnsRoutes(settings: SettingsService): FastifyPluginAsync {
   return async server => {
     server.get('/providers', async () => {
-      return { providers: ['netlify', 'cloudflare', 'digitalocean'] };
+      return { providers: ['netlify', 'cloudflare', 'digitalocean', 'aliyun', 'dnspod'] };
     });
 
     server.get('/records', async () => {

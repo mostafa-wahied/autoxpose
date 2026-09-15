@@ -124,7 +124,7 @@ export function TerminalHeader(props: TerminalHeaderProps): JSX.Element {
   };
 
   return (
-    <div className="relative flex items-center justify-between border-b border-[#30363d] bg-[#161b22] px-4 py-2">
+    <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#30363d] bg-[#161b22] px-3 py-2 md:px-4">
       <HeaderLeftSection
         {...props}
         serviceCount={serviceCount}
@@ -168,7 +168,7 @@ function HeaderLeftSection(props: HeaderLeftSectionProps): JSX.Element {
   const { showTags, setShowTags } = useTagPreferences();
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 md:flex-none md:gap-3">
       <button
         type="button"
         onClick={props.onLogoClick}

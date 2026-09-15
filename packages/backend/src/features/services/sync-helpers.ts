@@ -37,7 +37,9 @@ export function findMatchingDnsRecord(
   baseDomain: string
 ): DnsRecord | undefined {
   const exactDomain = baseDomain ? `${service.subdomain}.${baseDomain}` : service.subdomain;
-  const exactMatch = records.find(r => r.hostname === exactDomain && r.type === 'A');
+  const exactMatch = records.find(
+    r => r.active !== false && r.hostname === exactDomain && r.type === 'A'
+  );
   if (exactMatch) return exactMatch;
 
   const recordsOnDomain = baseDomain
@@ -45,7 +47,7 @@ export function findMatchingDnsRecord(
     : records;
 
   return recordsOnDomain.find(r => {
-    if (r.type !== 'A') return false;
+    if (r.active === false || r.type !== 'A') return false;
     const recordSub = baseDomain ? r.hostname.replace(`.${baseDomain}`, '') : r.hostname;
     return recordSub && fuzzyMatchSubdomain(recordSub, service.name);
   });

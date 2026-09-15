@@ -3,11 +3,14 @@ import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
 import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
+import { AliyunDnsProvider } from '../dns/providers/aliyun.js';
+import { DnspodDnsProvider } from '../dns/providers/dnspod.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProvider } from '../proxy/proxy.types.js';
 import type {
   ProviderConfigRecord,
+  SaveProviderInput,
   SettingsRepository,
   WildcardConfig,
 } from './settings.repository.js';
@@ -32,17 +35,32 @@ export class SettingsService {
   }
 
   async saveDnsConfig(provider: string, config: Record<string, string>): Promise<void> {
-    const existing = await this.getDnsConfig();
-    const newConfig = this.mergeExistingConfig(existing, provider, config);
+    await this.repository.save({ type: 'dns', provider, config });
+  }
 
-    await this.repository.save({ type: 'dns', provider, config: newConfig });
+  async getMergedDnsConfig(
+    provider: string,
+    config: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const existing = await this.getDnsConfig();
+    return this.mergeExistingConfig(existing, provider, config);
+  }
+
+  async getMergedProxyConfig(
+    provider: string,
+    config: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const existing = await this.getProxyConfig();
+    return this.mergeExistingConfig(existing, provider, config);
   }
 
   async saveProxyConfig(provider: string, config: Record<string, string>): Promise<void> {
-    const existing = await this.getProxyConfig();
-    const newConfig = this.mergeExistingConfig(existing, provider, config);
-
+    const newConfig = await this.getMergedProxyConfig(provider, config);
     await this.repository.save({ type: 'proxy', provider, config: newConfig });
+  }
+
+  async importProviderConfigs(configs: SaveProviderInput[]): Promise<void> {
+    await this.repository.saveAll(configs);
   }
 
   async getDnsProvider(): Promise<DnsProvider | null> {
@@ -105,6 +123,20 @@ export class SettingsService {
       return new PorkbunDnsProvider({
         token: cfg.apiKey,
         apiKey: cfg.apiKey,
+        secretKey: cfg.secretKey,
+        domain: cfg.domain,
+      });
+    }
+    if (provider === 'aliyun') {
+      return new AliyunDnsProvider({
+        accessKeyId: cfg.accessKeyId,
+        accessKeySecret: cfg.accessKeySecret,
+        domain: cfg.domain,
+      });
+    }
+    if (provider === 'dnspod') {
+      return new DnspodDnsProvider({
+        secretId: cfg.secretId,
         secretKey: cfg.secretKey,
         domain: cfg.domain,
       });

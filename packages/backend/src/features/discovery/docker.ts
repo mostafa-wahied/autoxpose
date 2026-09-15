@@ -1,28 +1,13 @@
-import type { FastifyPluginAsync } from 'fastify';
 import Docker from 'dockerode';
-import type { AppContext } from '../../core/context.js';
-import type { ProgressCallback } from '../expose/expose-handlers.js';
 import { createLogger } from '../../core/logger/index.js';
 import { getContainerExposedPorts } from './port-inspector.js';
+export { createDiscoveryRoutes } from './discovery.routes.js';
 
 const logger = createLogger('docker-provider');
-const routesLogger = createLogger('discovery-routes');
-
-function createNoopProgressCallback(): ProgressCallback {
-  return event => {
-    routesLogger.debug(
-      {
-        serviceId: event.serviceId,
-        action: event.action,
-        type: event.type,
-      },
-      'Auto-expose progress'
-    );
-  };
-}
 
 export type DiscoveredService = {
   id: string;
+  sourceName?: string;
   name: string;
   subdomain: string;
   port: number;
@@ -78,7 +63,17 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
         .filter((s: DiscoveredService | null): s is DiscoveredService => s !== null);
     } catch (err) {
       logger.error({ err }, 'Failed to list Docker containers');
-      return [];
+      throw err;
+    }
+  }
+
+  async containerExists(containerId: string): Promise<boolean> {
+    try {
+      await this.docker.getContainer(containerId).inspect();
+      return true;
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) return false;
+      throw error;
     }
   }
 
@@ -192,6 +187,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
 
     return {
       id: container.Id,
+      sourceName: name,
       name: labels[`${this.labelPrefix}.name`] || name,
       subdomain,
       port: resolved.port,
@@ -270,6 +266,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
 
     return {
       id: info.Id,
+      sourceName: name,
       name: labels[`${this.labelPrefix}.name`] || name,
       subdomain,
       port: resolved.port,
@@ -361,53 +358,3 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     return { protocol, host: url.hostname, port };
   }
 }
-
-export const createDiscoveryRoutes = (ctx: AppContext): FastifyPluginAsync => {
-  return async server => {
-    server.get('/containers', async (_request, reply) => {
-      if (!ctx.discovery) {
-        return reply.status(503).send({ error: 'Docker discovery not available' });
-      }
-      const containers = await ctx.discovery.discover();
-      return { containers };
-    });
-
-    server.post('/scan', async (_request, reply) => {
-      if (!ctx.discovery) {
-        return reply.status(503).send({ error: 'Docker discovery not available' });
-      }
-      const discovered = await ctx.discovery.discover();
-      const result = await ctx.services.syncFromDiscovery(discovered);
-
-      const allServices = await ctx.services.getAllServices();
-      await ctx.sync.detectExistingConfigurations(allServices);
-
-      const autoExposeSourceIds = new Set(discovered.filter(d => d.autoExpose).map(d => d.id));
-      const servicesToAutoExpose = allServices.filter(
-        s => s.sourceId && autoExposeSourceIds.has(s.sourceId) && !s.enabled
-      );
-
-      for (const svc of servicesToAutoExpose) {
-        routesLogger.info({ serviceId: svc.id, name: svc.name }, 'Auto-exposing service');
-        ctx.streamingExpose
-          .exposeWithProgress(svc.id, createNoopProgressCallback(), true)
-          .catch(err => {
-            routesLogger.error({ err, serviceId: svc.id }, 'Auto-expose failed');
-          });
-      }
-
-      return {
-        discovered: discovered.length,
-        created: result.created.length,
-        updated: result.updated.length,
-        removed: result.removed.length,
-        autoExposed: servicesToAutoExpose.length,
-        autoExposingServices: servicesToAutoExpose.map(s => ({
-          id: s.id,
-          name: s.name,
-          subdomain: s.subdomain,
-        })),
-      };
-    });
-  };
-};

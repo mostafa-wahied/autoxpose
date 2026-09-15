@@ -45,6 +45,44 @@ function CaddyIcon({
   );
 }
 
+function AliyunIcon({
+  size = 24,
+  color = '#8b949e',
+}: {
+  size?: number;
+  color?: string;
+}): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 1608 1024" fill="none">
+      <path fill={color} d="M537.6,445.44h537.6V568.32H537.6Z" />
+      <path
+        fill={color}
+        d="M1341.44,5.12H988.16l87.04,122.88,256,81.92c46.08,15.36,76.8,61.44,76.8,107.52v389.12c0,46.08-30.72,92.16-76.8,107.52l-256,81.92-87.04,122.88h353.28c148.48,0,266.24-117.76,266.24-266.24V276.48C1607.68,128,1489.92,5.12,1341.44,5.12ZM276.48,814.08C230.4,798.72,199.68,752.64,199.68,706.56V317.44c0-46.08,30.72-92.16,76.8-107.52L532.48,128,619.52,5.12H266.24C117.76,5.12,0,128,0,276.48V747.52C0,896,117.76,1013.76,266.24,1013.76H619.52L532.48,890.88Z"
+      />
+    </svg>
+  );
+}
+
+function TencentCloudIcon({
+  size = 24,
+  color = '#8b949e',
+}: {
+  size?: number;
+  color?: string;
+}): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="16" r="11" stroke={color} strokeWidth="2" />
+      <circle cx="16" cy="16" r="3" fill={color} />
+      <circle cx="9" cy="10" r="2" fill={color} />
+      <circle cx="23" cy="10" r="2" fill={color} />
+      <circle cx="9" cy="22" r="2" fill={color} />
+      <circle cx="23" cy="22" r="2" fill={color} />
+      <path d="m11 12 3 3m7-3-3 3m-7 5 3-3m7 3-3-3" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 export function ProviderIcon({
   provider,
   size = 24,
@@ -76,6 +114,14 @@ export function ProviderIcon({
     return <CaddyIcon size={size} color={color} />;
   }
 
+  if (normalizedProvider === 'aliyun') {
+    return <AliyunIcon size={size} color={color} />;
+  }
+
+  if (normalizedProvider === 'dnspod') {
+    return <TencentCloudIcon size={size} color={color} />;
+  }
+
   return (
     <div
       style={{
@@ -103,6 +149,8 @@ export function getProviderDisplayName(provider: string): string {
     npm: 'Nginx Proxy Manager',
     porkbun: 'Porkbun',
     caddy: 'Caddy',
+    aliyun: 'Aliyun',
+    dnspod: 'Tencent Cloud DNSPod (China)',
   };
 
   return displayNames[provider.toLowerCase()] || provider;

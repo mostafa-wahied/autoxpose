@@ -18,7 +18,7 @@ export const appConfigSchema = z.object({
     .default({}),
   dns: z
     .object({
-      provider: z.enum(['netlify', 'cloudflare', 'digitalocean']).optional(),
+      provider: z.enum(['netlify', 'cloudflare', 'digitalocean', 'aliyun', 'dnspod']).optional(),
       domain: z.string().optional(),
       token: z.string().optional(),
       zoneId: z.string().optional(),

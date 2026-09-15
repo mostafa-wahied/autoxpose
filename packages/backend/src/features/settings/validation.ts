@@ -5,6 +5,8 @@ import { CloudflareDnsProvider } from '../dns/providers/cloudflare.js';
 import { DigitalOceanDnsProvider } from '../dns/providers/digitalocean.js';
 import { NetlifyDnsProvider } from '../dns/providers/netlify.js';
 import { PorkbunDnsProvider } from '../dns/providers/porkbun.js';
+import { AliyunDnsProvider } from '../dns/providers/aliyun.js';
+import { DnspodDnsProvider } from '../dns/providers/dnspod.js';
 import { CaddyProxyProvider } from '../proxy/providers/caddy.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 import type { ProxyProviderConfig } from '../proxy/proxy.types.js';
@@ -13,21 +15,45 @@ const logger = createLogger('validation');
 const DOMAIN_CHECK_TIMEOUT = 8000;
 
 type TestResult = { ok: boolean; error?: string };
-type PorkbunConfig = DnsProviderConfig & { apiKey: string; secretKey: string };
+
+function safeProviderError(error: unknown, config: Record<string, unknown>): string {
+  let message = error instanceof Error ? error.message : 'Unknown error';
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== 'string' || !value || !/token|secret|password|key/i.test(key)) continue;
+    message = message.split(value).join('[redacted]');
+    message = message.split(encodeURIComponent(value)).join('[redacted]');
+  }
+  return cleanErrorMessage(message);
+}
+
+const REQUIRED_DNS_FIELDS: Record<string, string[]> = {
+  cloudflare: ['token', 'zoneId', 'domain'],
+  netlify: ['token', 'zoneId', 'domain'],
+  digitalocean: ['token', 'domain'],
+  porkbun: ['apiKey', 'secretKey', 'domain'],
+  aliyun: ['accessKeyId', 'accessKeySecret', 'domain'],
+  dnspod: ['secretId', 'secretKey', 'domain'],
+};
 
 export async function testDnsProvider(
   provider: string,
-  config: DnsProviderConfig | PorkbunConfig
+  config: Record<string, string>
 ): Promise<TestResult> {
   try {
+    const missingFields = (REQUIRED_DNS_FIELDS[provider] || []).filter(
+      field => !config[field]?.trim()
+    );
+    if (missingFields.length > 0) {
+      return { ok: false, error: `Missing required settings: ${missingFields.join(', ')}` };
+    }
     const dns = createDnsProvider(provider, config);
     if (!dns) return { ok: false, error: 'Unknown provider' };
     await dns.listRecords();
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    logger.warn({ provider, err }, 'DNS provider test failed');
-    return { ok: false, error: cleanErrorMessage(message) };
+    const message = safeProviderError(err, config);
+    logger.warn({ provider, error: message }, 'DNS provider test failed');
+    return { ok: false, error: message };
   }
 }
 
@@ -36,14 +62,27 @@ export async function testProxyProvider(
   config: ProxyProviderConfig
 ): Promise<TestResult> {
   try {
+    if (!['npm', 'caddy'].includes(provider)) return { ok: false, error: 'Unknown provider' };
+    if (!config.url?.trim()) return { ok: false, error: 'Missing proxy URL' };
+    const endpoint = new URL(config.url);
+    if (
+      !['http:', 'https:'].includes(endpoint.protocol) ||
+      endpoint.username ||
+      endpoint.password
+    ) {
+      return { ok: false, error: 'Proxy URL must use HTTP or HTTPS without embedded credentials' };
+    }
+    if (provider === 'npm' && (!config.username?.trim() || !config.password?.trim())) {
+      return { ok: false, error: 'Missing proxy username or password' };
+    }
     const proxy = createProxyProvider(provider, config);
     if (!proxy) return { ok: false, error: 'Unknown provider' };
     await proxy.listHosts();
     return { ok: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    logger.warn({ provider, err }, 'Proxy provider test failed');
-    return { ok: false, error: cleanErrorMessage(message) };
+    const message = safeProviderError(err, { ...config });
+    logger.warn({ provider, error: message }, 'Proxy provider test failed');
+    return { ok: false, error: message };
   }
 }
 
@@ -89,22 +128,39 @@ type DnsProviderType =
   | CloudflareDnsProvider
   | DigitalOceanDnsProvider
   | PorkbunDnsProvider
+  | AliyunDnsProvider
+  | DnspodDnsProvider
   | null;
 
-function createDnsProvider(
-  provider: string,
-  config: DnsProviderConfig | PorkbunConfig
-): DnsProviderType {
-  if (provider === 'netlify') return new NetlifyDnsProvider(config);
-  if (provider === 'cloudflare') return new CloudflareDnsProvider(config);
-  if (provider === 'digitalocean') return new DigitalOceanDnsProvider(config);
+function createDnsProvider(provider: string, config: Record<string, string>): DnsProviderType {
+  const tokenConfig: DnsProviderConfig = {
+    token: config.token,
+    zoneId: config.zoneId,
+    domain: config.domain,
+  };
+  if (provider === 'netlify') return new NetlifyDnsProvider(tokenConfig);
+  if (provider === 'cloudflare') return new CloudflareDnsProvider(tokenConfig);
+  if (provider === 'digitalocean') return new DigitalOceanDnsProvider(tokenConfig);
   if (provider === 'porkbun') {
-    const pbConfig = config as PorkbunConfig;
     return new PorkbunDnsProvider({
-      token: pbConfig.apiKey,
-      apiKey: pbConfig.apiKey,
-      secretKey: pbConfig.secretKey,
-      domain: pbConfig.domain,
+      token: config.apiKey,
+      apiKey: config.apiKey,
+      secretKey: config.secretKey,
+      domain: config.domain,
+    });
+  }
+  if (provider === 'aliyun') {
+    return new AliyunDnsProvider({
+      accessKeyId: config.accessKeyId,
+      accessKeySecret: config.accessKeySecret,
+      domain: config.domain,
+    });
+  }
+  if (provider === 'dnspod') {
+    return new DnspodDnsProvider({
+      secretId: config.secretId,
+      secretKey: config.secretKey,
+      domain: config.domain,
     });
   }
   return null;

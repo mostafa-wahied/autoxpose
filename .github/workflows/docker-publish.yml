@@ -2,20 +2,32 @@ name: Build and Publish Docker Image
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*.*.*" ]
+    branches: ['main']
   pull_request:
-    branches: [ "main" ]
+    branches: ['main']
 
 env:
   IMAGE_NAME: autoxpose
 
 jobs:
+  source:
+    uses: ./.github/workflows/lint.yml
+
   build-and-push:
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.architecture }})
+    needs: source
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -24,8 +36,215 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.10.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install contract dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify Docker build context
+        run: node scripts/check-build-context.mjs
+
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ github.event_name == 'pull_request' && env.IMAGE_NAME || format('{0}/{1}', secrets.DOCKERHUB_USERNAME, env.IMAGE_NAME) }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: autoxpose:test
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.architecture }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.architecture }}
+          platforms: linux/${{ matrix.architecture }}
+
+      - name: Verify native database binding
+        env:
+          EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          docker run --rm --network none --entrypoint node \
+            --volume "$PWD/scripts/native-contract.mjs:/contracts/native-contract.mjs:ro" \
+            --env EXPECTED_ARCHITECTURE "$EXPECTED_IMAGE" /contracts/native-contract.mjs
+
+      - name: Test Docker image
+        env:
+          EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          test "$(docker image inspect autoxpose:test --format '{{.Id}}')" = "$EXPECTED_IMAGE"
+          test "$(docker image inspect autoxpose:test --format '{{.Architecture}}')" = "$EXPECTED_ARCHITECTURE"
+          expected_version=$(jq -r '.version' package.json)
+          test "$(docker run --rm --entrypoint node "$EXPECTED_IMAGE" -p "require('/app/package.json').version")" = "$expected_version"
+
+          docker run -d --name test-autoxpose \
+            -p 127.0.0.1:3000:3000 \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -e SERVER_IP=127.0.0.1 \
+            -e LAN_IP=127.0.0.1 \
+            "$EXPECTED_IMAGE"
+
+          curl --fail --silent --show-error --retry 30 --retry-delay 1 \
+            --retry-all-errors --max-time 5 --retry-max-time 60 \
+            --output "$RUNNER_TEMP/autoxpose-health.json" \
+            http://127.0.0.1:3000/health
+          jq -e '.status == "ok"' "$RUNNER_TEMP/autoxpose-health.json"
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3000/ > /dev/null
+          test "$(docker inspect test-autoxpose --format '{{.Image}}')" = "$EXPECTED_IMAGE"
+          docker exec test-autoxpose node -e "const assert = require('node:assert/strict'); const fs = require('node:fs'); assert.match(fs.readFileSync('/proc/1/status', 'utf8'), /^Uid:\\s+1001\\s+1001\\s+1001\\s+1001$/m);"
+
+      - name: Verify shipped application contracts
+        env:
+          CONTRACT_ARTIFACTS: ${{ runner.temp }}/contracts/${{ matrix.architecture }}
+          EXPECTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          PLATFORM: linux/${{ matrix.architecture }}
+        run: pnpm test:image "$EXPECTED_IMAGE" "$PLATFORM"
+
+      - name: Preserve contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/contracts/${{ matrix.architecture }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Push tested platform image
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.architecture }}
+          outputs: type=image,name=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Verify and record platform digest
+        if: github.event_name != 'pull_request'
+        env:
+          TESTED_IMAGE: ${{ steps.build.outputs.imageid }}
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          manifest_file="$RUNNER_TEMP/pushed-platform.json"
+          docker buildx imagetools inspect --raw "$IMAGE@$IMAGE_DIGEST" > "$manifest_file"
+          if jq -e 'has("manifests")' "$manifest_file" > /dev/null; then
+            platform_digest=$(jq -er --arg architecture "$ARCHITECTURE" '
+              [.manifests[] | select(.platform.os == "linux" and .platform.architecture == $architecture)]
+              | if length == 1 then .[0].digest else error("Expected one matching platform") end
+            ' "$manifest_file")
+            [[ "$platform_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker buildx imagetools inspect --raw "$IMAGE@$platform_digest" > "$manifest_file"
+          fi
+          config_digest=$(jq -er '.config.digest' "$manifest_file")
+          test "$config_digest" = "$TESTED_IMAGE"
+          mkdir -p "$RUNNER_TEMP/digests"
+          jq -n --arg digest "$IMAGE_DIGEST" --arg config "$config_digest" --arg revision "$SOURCE_REVISION" \
+            '{digest: $digest, config: $config, revision: $revision, tested: true}' \
+            > "$RUNNER_TEMP/digests/$ARCHITECTURE"
+
+      - name: Upload platform digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/digests/${{ matrix.architecture }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Clean up test container
+        if: always()
+        run: |
+          if docker container inspect test-autoxpose > /dev/null 2>&1; then
+            docker logs test-autoxpose
+            docker rm --force test-autoxpose
+          fi
+
+  regression:
+    name: regression
+    needs: [source, build-and-push]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require every qualification result
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const results = JSON.parse(process.env.REQUIRED_RESULTS);
+          assert.deepEqual(Object.keys(results).sort(), ['build-and-push', 'source']);
+          for (const [name, value] of Object.entries(results)) {
+            assert.equal(value.result, 'success', `${name} did not pass`);
+          }
+          NODE
+
+  publish:
+    name: Publish multi-platform image
+    needs: [regression, build-and-push]
+    if: github.event_name != 'pull_request' && needs.regression.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: docker-tag-promotion
+      cancel-in-progress: false
+    outputs:
+      release: ${{ steps.promote.outputs.changed }}
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prepare release plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs prepare
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -43,46 +262,36 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Download platform digests
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
 
-      - name: Test Docker image
-        if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p $RUNNER_TEMP/autoxpose-test-data
-          chmod 777 $RUNNER_TEMP/autoxpose-test-data
+      - name: Publish verified platform manifests
+        id: promote
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          METADATA: ${{ steps.meta.outputs.json }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs promote
 
-          docker run -d --name test-autoxpose --user root \
-            -p 3000:3000 \
-            -v /var/run/docker.sock:/var/run/docker.sock:ro \
-            -v $RUNNER_TEMP/autoxpose-test-data:/app/packages/backend/data \
-            -e SERVER_IP=127.0.0.1 \
-            -e LAN_IP=127.0.0.1 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+      - name: Preserve qualified release receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualified-release
+          path: |
+            ${{ runner.temp }}/release-plan.json
+            ${{ runner.temp }}/publication.json
+          if-no-files-found: error
+          retention-days: 14
 
-          sleep 20
-
-          if ! docker ps | grep test-autoxpose; then
-            echo "Container failed to start or crashed"
-            docker logs test-autoxpose || true
-            exit 1
-          fi
-
-          if curl -f http://localhost:3000; then
-            echo "Health check passed"
-          else
-            echo "Health check failed"
-            docker logs test-autoxpose || true
-            exit 1
-          fi
-
-          docker stop test-autoxpose
+  release:
+    needs: [regression, publish]
+    if: github.event_name == 'push' && needs.publish.outputs.release == 'true'
+    uses: ./.github/workflows/auto-tag.yml
+    permissions:
+      contents: write
+      actions: read
+    secrets: inherit

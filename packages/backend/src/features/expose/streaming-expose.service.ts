@@ -54,6 +54,9 @@ export class StreamingExposeService {
       settings: this.settings,
       publicIp: this.publicIp,
       fullDomain,
+      onRecord: async id => {
+        await this.servicesRepo.update(serviceId, { dnsRecordId: id, dnsExists: true });
+      },
     });
     if (dnsResult.recordId === null || !dnsResult.propagationSuccess) return;
 
@@ -64,6 +67,9 @@ export class StreamingExposeService {
       settings: this.settings,
       lanIp: this.lanIp,
       accessLists: this.accessLists,
+      onHost: async id => {
+        await this.servicesRepo.update(serviceId, { proxyHostId: id, proxyExists: true });
+      },
     });
     if (proxyResult === null) return;
 
@@ -154,8 +160,11 @@ export class StreamingExposeService {
 
     await this.servicesRepo.update(serviceId, {
       enabled: false,
+      exposureSource: 'paused',
       dnsRecordId: dnsOk ? null : service.dnsRecordId,
       proxyHostId: proxyOk ? null : service.proxyHostId,
+      dnsExists: dnsOk ? false : undefined,
+      proxyExists: proxyOk ? false : undefined,
     });
 
     if (!dnsOk || !proxyOk) {

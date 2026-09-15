@@ -1,25 +1,28 @@
 {
   "name": "autoxpose",
-  "version": "0.4.2",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
     "build": "pnpm --filter backend build && pnpm --filter frontend build",
     "build:metadata": "tsx scripts/build-metadata.ts",
+    "test": "pnpm --filter backend build && pnpm --filter backend test && tsx --test packages/frontend/test/*.test.ts",
+    "test:context": "node scripts/check-build-context.mjs",
+    "test:image": "node scripts/image-contracts.mjs",
     "db:generate": "drizzle-kit generate:sqlite",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push:sqlite",
-    "lint": "pnpm -r lint",
+    "lint": "pnpm -r lint && pnpm --filter backend exec eslint ../../scripts --ext .mjs",
     "type-check": "pnpm -r type-check",
-    "format": "prettier --write \"**/*.{ts,tsx,json,yaml,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,yaml,md}\"",
-    "test": "pnpm -r test"
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,json,yaml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,json,yaml,md}\""
   },
   "eslintConfig": {
     "extends": "./.eslintrc.json"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "^20.19.26",
     "concurrently": "^8.2.2",
     "drizzle-kit": "^0.20.18",

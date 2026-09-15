@@ -34,6 +34,14 @@ interface CheckBulkBody {
   serviceIds: string[];
 }
 
+const serviceProperties = {
+  name: { type: 'string', minLength: 1 },
+  subdomain: { type: 'string', minLength: 1 },
+  port: { type: 'integer', minimum: 1, maximum: 65535 },
+  scheme: { type: 'string', enum: ['http', 'https'] },
+  enabled: { type: 'boolean' },
+};
+
 async function handleProbe(
   ctx: AppContext,
   serviceId: string,
@@ -151,24 +159,20 @@ async function handleCleanup(
   ctx: AppContext,
   serviceId: string,
   reply: FastifyReply
-): Promise<{ success: boolean } | void> {
+): Promise<unknown> {
   const service = await ctx.services.getServiceById(serviceId);
   if (!service) return notFound(reply);
   if (service.exposureSource === 'discovered') {
     return reply.code(400).send({ error: 'Cannot cleanup discovered services' });
   }
-  const promises = [];
-  if (service.dnsRecordId) {
-    const dns = await ctx.settings.getDnsProvider();
-    if (dns) promises.push(dns.deleteRecord(service.dnsRecordId).catch(() => null));
+  try {
+    await ctx.services.deleteService(serviceId, true);
+    return { success: true };
+  } catch {
+    return reply
+      .code(502)
+      .send({ success: false, error: 'Provider cleanup failed; service retained for retry' });
   }
-  if (service.proxyHostId) {
-    const proxy = await ctx.settings.getProxyProvider();
-    if (proxy) promises.push(proxy.deleteHost(service.proxyHostId).catch(() => null));
-  }
-  await Promise.all(promises);
-  await ctx.services.deleteService(serviceId);
-  return { success: true };
 }
 
 type ExternalService = {
@@ -237,8 +241,55 @@ async function mergeExternalSources(
   return [...services, ...externalServices];
 }
 
+function registerCrud(server: Parameters<FastifyPluginAsync>[0], ctx: AppContext): void {
+  server.post<{ Body: CreateBody }>(
+    '/',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name', 'subdomain', 'port'],
+          properties: serviceProperties,
+          additionalProperties: false,
+        },
+      },
+    },
+    async request => {
+      const service = await ctx.services.createService({ ...request.body, source: 'manual' });
+      return { service };
+    }
+  );
+
+  server.patch<{ Params: IdParams; Body: UpdateBody }>(
+    '/:id',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: serviceProperties,
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const service = await ctx.services.updateService(request.params.id, request.body);
+      return service ? { service } : notFound(reply);
+    }
+  );
+
+  server.delete<{ Params: IdParams; Querystring: { unexpose?: string } }>(
+    '/:id',
+    async (request, reply) => {
+      const shouldUnexpose = request.query.unexpose === 'true';
+      const deleted = await ctx.services.deleteService(request.params.id, shouldUnexpose);
+      return deleted ? { success: true } : notFound(reply);
+    }
+  );
+}
+
 export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
   return async server => {
+    registerCrud(server, ctx);
     server.get<{ Querystring: ServicesQuery }>('/', async request => {
       const services = await ctx.services.getAllServices();
       if (request.query.includeExternal === 'true') {
@@ -249,32 +300,11 @@ export const createServicesRoutes = (ctx: AppContext): FastifyPluginAsync => {
     });
 
     server.get('/changes/version', async () => ctx.changeTracker.getInfo());
-
     server.get('/orphans', async () => handleGetOrphans(ctx));
-
     server.get<{ Params: IdParams }>('/:id', async (request, reply) => {
       const service = await ctx.services.getServiceById(request.params.id);
       return service ? { service } : notFound(reply);
     });
-
-    server.post<{ Body: CreateBody }>('/', async request => {
-      const service = await ctx.services.createService({ ...request.body, source: 'manual' });
-      return { service };
-    });
-
-    server.patch<{ Params: IdParams; Body: UpdateBody }>('/:id', async (request, reply) => {
-      const service = await ctx.services.updateService(request.params.id, request.body);
-      return service ? { service } : notFound(reply);
-    });
-
-    server.delete<{ Params: IdParams; Querystring: { unexpose?: string } }>(
-      '/:id',
-      async (request, reply) => {
-        const shouldUnexpose = request.query.unexpose === 'true';
-        const deleted = await ctx.services.deleteService(request.params.id, shouldUnexpose);
-        return deleted ? { success: true } : notFound(reply);
-      }
-    );
 
     server.post<{ Params: IdParams }>('/:id/probe', async (request, reply) =>
       handleProbe(ctx, request.params.id, reply)

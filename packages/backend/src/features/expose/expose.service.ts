@@ -6,7 +6,6 @@ import type { AccessListService } from '../access-lists/access-list.service.js';
 import { createLogger } from '../../core/logger/index.js';
 
 const logger = createLogger('expose-service');
-
 type ExposeResult = { service: ServiceRecord; dnsRecordId?: string; proxyHostId?: string };
 
 type ExposeContext = {
@@ -86,7 +85,7 @@ export class ExposeService {
     sslPending?: boolean;
     sslError?: string;
   }> {
-    const baseDomain = await this.getBaseDomain();
+    const baseDomain = await this.context.settings.getBaseDomainFromAnySource();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
     const isWildcardMode = await this.context.settings.isWildcardMode();
 
@@ -96,6 +95,10 @@ export class ExposeService {
         !forceCreate && service.dnsRecordId
           ? service.dnsRecordId
           : await this.createDnsRecord(service);
+    }
+
+    if (!forceCreate && dnsRecordId && !service.dnsRecordId) {
+      await this.context.servicesRepo.update(service.id, { dnsRecordId, dnsExists: true });
     }
 
     const proxyResult =
@@ -135,24 +138,25 @@ export class ExposeService {
     const service = await this.context.servicesRepo.findById(serviceId);
     if (!service) throw new Error('Service not found');
 
+    await this.context.servicesRepo.update(serviceId, { enabled: false, exposureSource: 'paused' });
+    const failures: unknown[] = [];
     try {
       await this.removeDnsRecord(service);
+      await this.context.servicesRepo.update(serviceId, { dnsRecordId: null, dnsExists: false });
     } catch (error) {
       logger.error({ serviceId, error }, 'Failed to delete DNS record');
+      failures.push(error);
     }
 
     try {
       await this.removeProxyHost(service);
+      await this.context.servicesRepo.update(serviceId, { proxyHostId: null, proxyExists: false });
     } catch (error) {
       logger.error({ serviceId, error }, 'Failed to delete proxy host');
+      failures.push(error);
     }
 
-    await this.context.servicesRepo.update(serviceId, {
-      enabled: false,
-      dnsRecordId: null,
-      proxyHostId: null,
-      exposureSource: null,
-    });
+    if (failures.length) throw failures[0];
 
     const updated = await this.context.servicesRepo.findById(serviceId);
 
@@ -193,7 +197,7 @@ export class ExposeService {
     const updatedService = await this.context.servicesRepo.findById(serviceId);
     if (!updatedService) throw new Error('Service not found after scheme update');
 
-    const baseDomain = await this.getBaseDomain();
+    const baseDomain = await this.context.settings.getBaseDomainFromAnySource();
     const fullDomain = this.buildFullDomain(updatedService.subdomain, baseDomain);
     const proxyResult = await this.createProxyHost(updatedService, fullDomain);
     if (!proxyResult) throw new Error('No proxy provider configured');
@@ -214,10 +218,6 @@ export class ExposeService {
       service: updated!,
       proxyHostId: proxyResult.id,
     };
-  }
-
-  private async getBaseDomain(): Promise<string | null> {
-    return this.context.settings.getBaseDomainFromAnySource();
   }
 
   private buildFullDomain(subdomain: string, baseDomain: string | null): string {
@@ -272,13 +272,15 @@ export class ExposeService {
   private async removeDnsRecord(svc: ServiceRecord): Promise<void> {
     if (!svc.dnsRecordId) return;
     const dns = await this.context.settings.getDnsProvider();
-    if (dns) await dns.deleteRecord(svc.dnsRecordId);
+    if (!dns) throw new Error('DNS provider is unavailable');
+    await dns.deleteRecord(svc.dnsRecordId);
   }
 
   private async removeProxyHost(svc: ServiceRecord): Promise<void> {
     if (!svc.proxyHostId) return;
     const proxy = await this.context.settings.getProxyProvider();
-    if (proxy) await proxy.deleteHost(svc.proxyHostId);
+    if (!proxy) throw new Error('Proxy provider is unavailable');
+    await proxy.deleteHost(svc.proxyHostId);
   }
 
   async migrateSubdomain(
@@ -393,7 +395,7 @@ export class ExposeService {
     proxyHostId: string,
     subdomain: string
   ): Promise<void> {
-    const baseDomain = await this.getBaseDomain();
+    const baseDomain = await this.context.settings.getBaseDomainFromAnySource();
     const fullDomain = this.buildFullDomain(subdomain, baseDomain);
     const proxy = await this.context.settings.getProxyProvider();
     if (!proxy) return;

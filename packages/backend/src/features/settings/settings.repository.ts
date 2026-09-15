@@ -79,6 +79,31 @@ export class SettingsRepository {
     return result.changes > 0;
   }
 
+  async saveAll(inputs: SaveProviderInput[]): Promise<void> {
+    this.db.transaction(transaction => {
+      for (const input of inputs) {
+        const existing = transaction
+          .select()
+          .from(schema.providerConfigs)
+          .where(eq(schema.providerConfigs.type, input.type))
+          .get();
+        const values = { provider: input.provider, config: JSON.stringify(input.config) };
+        if (existing) {
+          transaction
+            .update(schema.providerConfigs)
+            .set(values)
+            .where(eq(schema.providerConfigs.id, existing.id))
+            .run();
+        } else {
+          transaction
+            .insert(schema.providerConfigs)
+            .values({ id: nanoid(), type: input.type, createdAt: new Date(), ...values })
+            .run();
+        }
+      }
+    });
+  }
+
   async deleteAll(): Promise<number> {
     const result = await this.db.delete(schema.providerConfigs);
     return result.changes;

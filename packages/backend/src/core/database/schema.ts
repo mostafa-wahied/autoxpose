@@ -9,6 +9,7 @@ export const services = sqliteTable('services', {
   enabled: integer('enabled', { mode: 'boolean' }).default(true),
   source: text('source').notNull(),
   sourceId: text('source_id'),
+  sourceName: text('source_name'),
   dnsRecordId: text('dns_record_id'),
   proxyHostId: text('proxy_host_id'),
   accessListName: text('access_list_name'),

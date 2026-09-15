@@ -48,10 +48,28 @@ export class CloudflareDnsProvider implements DnsProvider {
   }
 
   async listRecords(): Promise<DnsRecord[]> {
-    const response = await this.request<{ result: Record<string, unknown>[] }>(
-      `/zones/${this.zoneId}/dns_records`
-    );
-    return response.result.map(r => this.mapRecord(r));
+    const records: DnsRecord[] = [];
+    for (let page = 1; page <= 100; page += 1) {
+      const response = await this.request<{
+        result: Record<string, unknown>[];
+        result_info?: { total_pages?: number; total_count?: number };
+      }>(`/zones/${this.zoneId}/dns_records?page=${page}&per_page=100`);
+      if (!Array.isArray(response.result))
+        throw new ProviderError('cloudflare', 'Invalid record list');
+      records.push(...response.result.map(record => this.mapRecord(record)));
+      if (page >= (response.result_info?.total_pages ?? 1)) {
+        if (
+          response.result_info?.total_count !== undefined &&
+          records.length < response.result_info.total_count
+        ) {
+          throw new ProviderError('cloudflare', 'DNS record list is incomplete');
+        }
+        return records;
+      }
+      if (!response.result.length)
+        throw new ProviderError('cloudflare', 'DNS page is empty before inventory completion');
+    }
+    throw new ProviderError('cloudflare', 'DNS record list is incomplete');
   }
 
   async findByHostname(hostname: string): Promise<DnsRecord | null> {

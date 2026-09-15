@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { detectPlatform } from '../../core/platform.js';
 import type { ServicesRepository } from '../services/services.repository.js';
+import type { SaveProviderInput } from './settings.repository.js';
 import type { SettingsService } from './settings.service.js';
 import { testDnsProvider, testProxyProvider } from './validation.js';
 import type { AccessListService } from '../access-lists/access-list.service.js';
@@ -12,7 +13,13 @@ type ParsedConfig = { provider: string; config: Record<string, string> } | null;
 function hasProviderConfig(body: unknown): body is ProviderBody {
   if (!body || typeof body !== 'object') return false;
   const value = body as { provider?: unknown; config?: unknown };
-  return typeof value.provider === 'string' && !!value.config && typeof value.config === 'object';
+  return (
+    typeof value.provider === 'string' &&
+    !!value.config &&
+    typeof value.config === 'object' &&
+    !Array.isArray(value.config) &&
+    Object.values(value.config).every(item => typeof item === 'string')
+  );
 }
 
 function maskSecret(value: string | undefined): string {
@@ -45,6 +52,12 @@ function formatDnsConfig(cfg: ParsedConfig): DnsConfigResponse {
     baseConfig.token = maskSecret(cfg.config.token);
   } else if (cfg.provider === 'porkbun') {
     baseConfig.apiKey = maskSecret(cfg.config.apiKey);
+    baseConfig.secretKey = maskSecret(cfg.config.secretKey);
+  } else if (cfg.provider === 'aliyun') {
+    baseConfig.accessKeyId = maskSecret(cfg.config.accessKeyId);
+    baseConfig.accessKeySecret = maskSecret(cfg.config.accessKeySecret);
+  } else if (cfg.provider === 'dnspod') {
+    baseConfig.secretId = maskSecret(cfg.config.secretId);
     baseConfig.secretKey = maskSecret(cfg.config.secretKey);
   }
 
@@ -121,13 +134,13 @@ function registerDnsRoutes(
       reply.code(400);
       return { success: false, error: 'Invalid DNS config payload' };
     }
-    await settings.saveDnsConfig(request.body.provider, request.body.config);
-    const cfg = await settings.getDnsConfig();
-    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
-    const validation = await testDnsProvider(
-      cfg.provider,
-      cfg.config as Parameters<typeof testDnsProvider>[1]
-    );
+    const config = await settings.getMergedDnsConfig(request.body.provider, request.body.config);
+    const validation = await testDnsProvider(request.body.provider, config);
+    if (!validation.ok) {
+      reply.code(400);
+      return { success: false, error: validation.error || 'DNS validation failed' };
+    }
+    await settings.saveDnsConfig(request.body.provider, config);
     return { success: true, validation };
   });
 }
@@ -144,20 +157,22 @@ function registerProxyRoutes(
       reply.code(400);
       return { success: false, error: 'Invalid proxy config payload' };
     }
-    const config = { ...request.body.config };
-    if (config.url && !config.url.startsWith('http')) {
+    const config = await settings.getMergedProxyConfig(request.body.provider, request.body.config);
+    if (config.url && !/^[a-z][a-z\d+.-]*:\/\//i.test(config.url)) {
       config.url = `http://${config.url}`;
+    }
+    const validation = await testProxyProvider(
+      request.body.provider,
+      config as Parameters<typeof testProxyProvider>[1]
+    );
+    if (!validation.ok) {
+      reply.code(400);
+      return { success: false, error: validation.error || 'Proxy validation failed' };
     }
     await settings.saveProxyConfig(request.body.provider, config);
     // Cached access lists belong to the previous NPM instance; drop them along
     // with any service still referencing one, then re-read from the new config.
     await accessLists?.onProxyConfigChanged();
-    const cfg = await settings.getProxyConfig();
-    if (!cfg) return { success: true, validation: { ok: false, error: 'Failed to load config' } };
-    const validation = await testProxyProvider(
-      cfg.provider,
-      cfg.config as Parameters<typeof testProxyProvider>[1]
-    );
     return { success: true, validation };
   });
 }
@@ -274,7 +289,7 @@ function registerTestRoutes(
   server.post('/dns/test', async () => {
     const cfg = await settings.getDnsConfig();
     if (!cfg) return { ok: false, error: 'DNS not configured' };
-    return testDnsProvider(cfg.provider, cfg.config as Parameters<typeof testDnsProvider>[1]);
+    return testDnsProvider(cfg.provider, cfg.config);
   });
 
   server.post('/proxy/test', async () => {
@@ -298,15 +313,39 @@ function registerExportImportRoutes(
     };
   });
 
-  server.post<{ Body: { dns: ParsedConfig; proxy: ParsedConfig } }>('/import', async request => {
-    const { dns, proxy } = request.body;
-    if (dns?.provider && dns.config) {
-      await settings.saveDnsConfig(dns.provider, dns.config);
+  server.post<{ Body: { dns: ParsedConfig; proxy: ParsedConfig } }>(
+    '/import',
+    async (request, reply) => {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) {
+        return reply.code(400).send({ success: false, error: 'Invalid settings import' });
+      }
+      const candidates: SaveProviderInput[] = [];
+      for (const type of ['dns', 'proxy'] as const) {
+        const value = request.body[type];
+        if (value === null || value === undefined) continue;
+        if (!hasProviderConfig(value)) {
+          return reply.code(400).send({ success: false, error: 'Invalid provider configuration' });
+        }
+        const config =
+          type === 'dns'
+            ? await settings.getMergedDnsConfig(value.provider, value.config)
+            : await settings.getMergedProxyConfig(value.provider, value.config);
+        const validation =
+          type === 'dns'
+            ? await testDnsProvider(value.provider, config)
+            : await testProxyProvider(
+                value.provider,
+                config as Parameters<typeof testProxyProvider>[1]
+              );
+        if (!validation.ok)
+          return reply.code(400).send({ success: false, error: validation.error });
+        candidates.push({ type, provider: value.provider, config });
+      }
+      await settings.importProviderConfigs(candidates);
+      if (candidates.some(candidate => candidate.type === 'proxy')) {
+        await accessLists?.onProxyConfigChanged();
+      }
+      return { success: true };
     }
-    if (proxy?.provider && proxy.config) {
-      await settings.saveProxyConfig(proxy.provider, proxy.config);
-      await accessLists?.onProxyConfigChanged();
-    }
-    return { success: true };
-  });
+  );
 }

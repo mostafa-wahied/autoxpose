@@ -37,16 +37,37 @@ export class DigitalOceanDnsProvider implements DnsProvider {
   }
 
   async listRecords(): Promise<DnsRecord[]> {
-    const response = await this.request<{ domain_records: Record<string, unknown>[] }>(
-      `/domains/${this.domain}/records`
-    );
-    return response.domain_records.map(r => this.mapRecord(r));
+    const records: DnsRecord[] = [];
+    for (let page = 1; page <= 100; page += 1) {
+      const response = await this.request<{
+        domain_records: Record<string, unknown>[];
+        links?: { pages?: { next?: string } };
+        meta?: { total?: number };
+      }>(`/domains/${this.domain}/records?page=${page}&per_page=100`);
+      if (!Array.isArray(response.domain_records))
+        throw new ProviderError('digitalocean', 'Invalid record list');
+      records.push(...response.domain_records.map(record => this.mapRecord(record)));
+      if (!response.links?.pages?.next) {
+        if (response.meta?.total !== undefined && records.length < response.meta.total) {
+          throw new ProviderError('digitalocean', 'DNS record list is incomplete');
+        }
+        return records;
+      }
+      if (!response.domain_records.length)
+        throw new ProviderError('digitalocean', 'DNS page is empty before inventory completion');
+    }
+    throw new ProviderError('digitalocean', 'DNS record list is incomplete');
   }
 
   async findByHostname(hostname: string): Promise<DnsRecord | null> {
     const records = await this.listRecords();
+    const target = hostname.includes('.') ? hostname : `${hostname}.${this.domain}`;
     return (
-      records.find(r => r.hostname === hostname && (r.type === 'A' || r.type === 'CNAME')) ?? null
+      records.find(
+        r =>
+          r.hostname.toLowerCase().replace(/\.$/, '') === target.toLowerCase().replace(/\.$/, '') &&
+          (r.type === 'A' || r.type === 'CNAME')
+      ) ?? null
     );
   }
 
@@ -82,9 +103,14 @@ export class DigitalOceanDnsProvider implements DnsProvider {
   }
 
   private mapRecord(raw: Record<string, unknown>): DnsRecord {
+    const name = String(raw.name);
+    const hostname = name === '@' ? this.domain : name;
     return {
       id: String(raw.id),
-      hostname: String(raw.name),
+      hostname:
+        hostname === this.domain || hostname.endsWith(`.${this.domain}`)
+          ? hostname
+          : `${hostname}.${this.domain}`,
       type: String(raw.type),
       value: String(raw.data),
       ttl: Number(raw.ttl),

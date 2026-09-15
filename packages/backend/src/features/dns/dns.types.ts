@@ -4,6 +4,7 @@ export type DnsRecord = {
   type: string;
   value: string;
   ttl: number;
+  active?: boolean;
 };
 
 export type DnsProviderConfig = {

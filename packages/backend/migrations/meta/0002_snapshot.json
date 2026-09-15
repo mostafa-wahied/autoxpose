@@ -1,63 +1,9 @@
 {
   "version": "5",
   "dialect": "sqlite",
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id": "e4094987-7969-4357-80ca-f928238f46bc",
   "prevId": "daea65e9-ece4-4c30-af91-49cf29a81bc1",
   "tables": {
-    "npm_access_lists": {
-      "name": "npm_access_lists",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "satisfy_any": {
-          "name": "satisfy_any",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": false
-        },
-        "pass_auth": {
-          "name": "pass_auth",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": true
-        },
-        "proxy_host_count": {
-          "name": "proxy_host_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": 0
-        },
-        "synced_at": {
-          "name": "synced_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
-    },
     "provider_configs": {
       "name": "provider_configs",
       "columns": {
@@ -163,6 +109,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "source_name": {
+          "name": "source_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "dns_record_id": {
           "name": "dns_record_id",
           "type": "text",
@@ -173,20 +126,6 @@
         "proxy_host_id": {
           "name": "proxy_host_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "access_list_name": {
-          "name": "access_list_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "access_list_id": {
-          "name": "access_list_id",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

@@ -95,6 +95,7 @@ type DnsExposeParams = {
   settings: SettingsService;
   publicIp: string;
   fullDomain: string;
+  onRecord?: (id: string) => Promise<void>;
 };
 export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResult> {
   const { ctx, svc, settings, publicIp, fullDomain } = p;
@@ -128,6 +129,7 @@ export async function handleDnsExpose(p: DnsExposeParams): Promise<DnsExposeResu
       recordId = record.id;
       emitRunning(ctx, 'dns', 25, `Created ${recordType}: ${svc.subdomain}`);
     }
+    await p.onRecord?.(recordId);
     const propagation = await runPropagationWithinDns(ctx, fullDomain);
     if (!propagation.success) {
       emitStepError(ctx, 'dns', 'DNS not propagated after 2 minutes', 'DNS failed');
@@ -221,6 +223,7 @@ type ProxyExposeParams = {
   settings: SettingsService;
   lanIp: string;
   accessLists?: AccessListService;
+  onHost?: (id: string) => Promise<void>;
 };
 export type ProxyExposeResult =
   | { id: string; sslPending?: boolean; sslError?: string }
@@ -246,6 +249,7 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
     const existing = await proxy.findByDomain(fullDomain);
     if (existing) {
       if (accessLists) await accessLists.reconcileProxyHost(svc, existing, proxy);
+      await params.onHost?.(existing.id);
       await finishProxyStep(ctx, svc.port, fullDomain, true);
       return { id: existing.id };
     }
@@ -261,6 +265,7 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
       accessListId,
     });
 
+    await params.onHost?.(host.id);
     if (host.sslPending) {
       const detail = `HTTP only - SSL failed: ${host.sslError || 'unknown'}`;
       ctx.steps = updateStep(ctx.steps, 'proxy', { status: 'warning', progress: 100, detail });
@@ -287,7 +292,8 @@ export async function handleDnsUnexpose(
   emitRunning(ctx, 'dns', 50, 'Removing...');
   try {
     const dns = await settings.getDnsProvider();
-    if (dns) await dns.deleteRecord(recordId);
+    if (!dns) throw new Error('DNS provider is unavailable');
+    await dns.deleteRecord(recordId);
     emitSuccess(ctx, 'dns', 'Removed');
     return true;
   } catch (err) {
@@ -310,7 +316,8 @@ export async function handleProxyUnexpose(
   emitRunning(ctx, 'proxy', 50, 'Removing...');
   try {
     const proxy = await settings.getProxyProvider();
-    if (proxy) await proxy.deleteHost(hostId);
+    if (!proxy) throw new Error('Proxy provider is unavailable');
+    await proxy.deleteHost(hostId);
     emitSuccess(ctx, 'proxy', 'Removed');
     return true;
   } catch (err) {

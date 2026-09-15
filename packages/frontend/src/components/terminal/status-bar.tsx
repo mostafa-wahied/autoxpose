@@ -106,8 +106,8 @@ function StatusBarContent(props: StatusBarContentProps): JSX.Element {
 
   return (
     <>
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 break-all md:gap-4">
           {isWildcardMode && wildcardDomain ? (
             <WildcardIndicator domain={wildcardDomain} />
           ) : (
