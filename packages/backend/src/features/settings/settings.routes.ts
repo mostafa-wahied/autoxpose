@@ -4,6 +4,7 @@ import type { ServicesRepository } from '../services/services.repository.js';
 import type { SaveProviderInput } from './settings.repository.js';
 import type { SettingsService } from './settings.service.js';
 import { testDnsProvider, testProxyProvider } from './validation.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import { NpmProxyProvider } from '../proxy/providers/npm.js';
 
 type ProviderBody = { provider: string; config: Record<string, string> };
@@ -96,16 +97,17 @@ function formatProxyConfig(cfg: ParsedConfig): ProxyConfigResponse {
 
 export function createSettingsRoutes(
   settings: SettingsService,
-  servicesRepo: ServicesRepository
+  servicesRepo: ServicesRepository,
+  accessLists?: AccessListService
 ): FastifyPluginAsync {
   return async server => {
     registerDnsRoutes(server, settings);
-    registerProxyRoutes(server, settings);
+    registerProxyRoutes(server, settings, accessLists);
     registerWildcardRoutes(server, settings);
     registerStatusRoute(server, settings);
     registerTestRoutes(server, settings);
     registerResetRoutes(server, settings, servicesRepo);
-    registerExportImportRoutes(server, settings);
+    registerExportImportRoutes(server, settings, accessLists);
   };
 }
 
@@ -145,7 +147,8 @@ function registerDnsRoutes(
 
 function registerProxyRoutes(
   server: Parameters<FastifyPluginAsync>[0],
-  settings: SettingsService
+  settings: SettingsService,
+  accessLists?: AccessListService
 ): void {
   server.get('/proxy', async () => formatProxyConfig(await settings.getProxyConfig()));
 
@@ -167,6 +170,9 @@ function registerProxyRoutes(
       return { success: false, error: validation.error || 'Proxy validation failed' };
     }
     await settings.saveProxyConfig(request.body.provider, config);
+    // Cached access lists belong to the previous NPM instance; drop them along
+    // with any service still referencing one, then re-read from the new config.
+    await accessLists?.onProxyConfigChanged();
     return { success: true, validation };
   });
 }
@@ -295,7 +301,8 @@ function registerTestRoutes(
 
 function registerExportImportRoutes(
   server: Parameters<FastifyPluginAsync>[0],
-  settings: SettingsService
+  settings: SettingsService,
+  accessLists?: AccessListService
 ): void {
   server.get('/export', async () => {
     const dnsCfg = await settings.getDnsConfig();
@@ -335,6 +342,9 @@ function registerExportImportRoutes(
         candidates.push({ type, provider: value.provider, config });
       }
       await settings.importProviderConfigs(candidates);
+      if (candidates.some(candidate => candidate.type === 'proxy')) {
+        await accessLists?.onProxyConfigChanged();
+      }
       return { success: true };
     }
   );

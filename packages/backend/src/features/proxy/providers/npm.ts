@@ -9,6 +9,15 @@ import type {
   UpdateProxyHostInput,
 } from '../proxy.types.js';
 
+export type NpmAccessList = {
+  id: number;
+  name: string;
+  satisfy_any: boolean;
+  pass_auth: boolean;
+  owner_user_id?: number;
+  proxy_host_count?: number;
+};
+
 const logger = createLogger('npm-provider');
 
 export class NpmProxyProvider implements ProxyProvider {
@@ -55,7 +64,7 @@ export class NpmProxyProvider implements ProxyProvider {
       forward_scheme: input.targetScheme || 'http',
       allow_websocket_upgrade: true,
       block_exploits: true,
-      access_list_id: 0,
+      access_list_id: input.accessListId ?? 0,
       certificate_id: 0,
       ssl_forced: false,
       http2_support: false,
@@ -201,7 +210,7 @@ export class NpmProxyProvider implements ProxyProvider {
   ): Record<string, unknown> {
     return {
       ...this.buildForwardingConfig(existing, input),
-      ...this.buildSecurityConfig(existing),
+      ...this.buildSecurityConfig(existing, input),
       ...this.buildMetadata(existing),
     };
   }
@@ -218,11 +227,14 @@ export class NpmProxyProvider implements ProxyProvider {
     };
   }
 
-  private buildSecurityConfig(existing: Record<string, unknown>): Record<string, unknown> {
+  private buildSecurityConfig(
+    existing: Record<string, unknown>,
+    input?: UpdateProxyHostInput
+  ): Record<string, unknown> {
     return {
       allow_websocket_upgrade: existing.allow_websocket_upgrade ?? true,
       block_exploits: existing.block_exploits ?? true,
-      access_list_id: existing.access_list_id || 0,
+      access_list_id: input?.accessListId ?? existing.access_list_id ?? 0,
       certificate_id: existing.certificate_id || 0,
       ssl_forced: existing.ssl_forced ?? false,
       http2_support: existing.http2_support ?? false,
@@ -238,6 +250,11 @@ export class NpmProxyProvider implements ProxyProvider {
       locations: existing.locations || [],
       caching_enabled: existing.caching_enabled ?? false,
     };
+  }
+
+  async listAccessLists(): Promise<NpmAccessList[]> {
+    await this.authenticate();
+    return this.request<NpmAccessList[]>('/nginx/access-lists?expand=owner');
   }
 
   async listHosts(): Promise<ProxyHost[]> {
@@ -312,6 +329,7 @@ export class NpmProxyProvider implements ProxyProvider {
     const certId = Number(raw.certificate_id);
     const sslForced = Boolean(raw.ssl_forced);
     const hasHttpOnly = certId === 0 && sslForced === false;
+    const accessListId = Number(raw.access_list_id) || 0;
 
     return {
       id: String(raw.id),
@@ -322,6 +340,7 @@ export class NpmProxyProvider implements ProxyProvider {
       sslPending: hasHttpOnly ? true : undefined,
       sslError: hasHttpOnly ? 'SSL certificate not configured (HTTP Only)' : undefined,
       enabled: Boolean(raw.enabled),
+      accessListId: accessListId || undefined,
     };
   }
 }

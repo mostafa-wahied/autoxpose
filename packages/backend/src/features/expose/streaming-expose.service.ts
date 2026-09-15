@@ -1,3 +1,4 @@
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import type { ServicesRepository } from '../services/services.repository.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import {
@@ -24,7 +25,8 @@ export class StreamingExposeService {
     private servicesRepo: ServicesRepository,
     private settings: SettingsService,
     private publicIp: string,
-    private lanIp: string
+    private lanIp: string,
+    private accessLists?: AccessListService
   ) {}
 
   async exposeWithProgress(
@@ -64,6 +66,7 @@ export class StreamingExposeService {
       fullDomain,
       settings: this.settings,
       lanIp: this.lanIp,
+      accessLists: this.accessLists,
       onHost: async id => {
         await this.servicesRepo.update(serviceId, { proxyHostId: id, proxyExists: true });
       },

@@ -3,6 +3,8 @@ import type { ProxyHost } from '../proxy/proxy.types.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { ServiceRecord, ServicesRepository } from './services.repository.js';
 import type { DockerDiscoveryProvider } from '../discovery/docker.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
+import type { ProxyProvider } from '../proxy/proxy.types.js';
 import { createLogger } from '../../core/logger/index.js';
 import {
   isCleanerSubdomain,
@@ -28,7 +30,12 @@ export type SyncStatus = {
   isSynced: boolean;
 };
 
-type ProviderData = { dnsRecords: DnsRecord[]; proxyHosts: ProxyHost[]; baseDomain: string };
+type ProviderData = {
+  dnsRecords: DnsRecord[];
+  proxyHosts: ProxyHost[];
+  baseDomain: string;
+  proxy: ProxyProvider | null;
+};
 type ServiceUpdate = {
   exposureSource: string | null;
   dnsExists: boolean;
@@ -41,13 +48,15 @@ type ServiceUpdate = {
   sslPending: boolean | null;
   sslError: string | null;
   subdomain?: string;
+  accessListId?: number | null;
 };
 
 export class SyncService {
   constructor(
     private servicesRepo: ServicesRepository,
     private settings: SettingsService,
-    private dockerProvider?: DockerDiscoveryProvider
+    private dockerProvider?: DockerDiscoveryProvider,
+    private accessLists?: AccessListService
   ) {}
 
   async getStatuses(services: ServiceRecord[]): Promise<SyncStatus[]> {
@@ -147,6 +156,7 @@ export class SyncService {
       dnsRecords,
       proxyHosts,
       baseDomain,
+      proxy,
     };
   }
 
@@ -204,13 +214,37 @@ export class SyncService {
       );
     }
 
+    const accessListId = await this.reconcileAccessList(service, proxyHost, data.proxy);
+
     const updateData = await this.buildServiceUpdate(
       service,
       dnsRecord,
       proxyHost,
       exposedSubdomain
     );
-    await this.servicesRepo.update(service.id, updateData);
+    await this.servicesRepo.update(service.id, { ...updateData, ...accessListId });
+  }
+
+  /**
+   * Aligns the NPM host with the container's access list label before the new
+   * state is stored, so the badge can never claim a protection the proxy is not
+   * actually enforcing. Returns nothing to persist when there is no host to
+   * compare against.
+   */
+  private async reconcileAccessList(
+    service: ServiceRecord,
+    proxyHost: ProxyHost | undefined,
+    proxy: ProxyProvider | null
+  ): Promise<{ accessListId?: number | null }> {
+    if (!this.accessLists || !proxyHost || !proxy) return {};
+    const result = await this.accessLists.reconcileProxyHost(service, proxyHost, proxy);
+    if (result.error) {
+      logger.warn(
+        { serviceId: service.id, error: result.error },
+        'Access list could not be reconciled with NPM'
+      );
+    }
+    return { accessListId: result.accessListId };
   }
 
   private async buildServiceUpdate(

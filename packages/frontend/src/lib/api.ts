@@ -11,6 +11,8 @@ export interface ServiceRecord {
   sourceId: string | null;
   dnsRecordId: string | null;
   proxyHostId: number | null;
+  accessListName: string | null;
+  accessListId: number | null;
   exposureSource: string | null;
   dnsExists: boolean | null;
   proxyExists: boolean | null;
@@ -24,6 +26,15 @@ export interface ServiceRecord {
   tags: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+export interface AccessListRecord {
+  id: number;
+  name: string;
+  satisfyAny: boolean | null;
+  passAuth: boolean | null;
+  proxyHostCount: number | null;
+  syncedAt: string | null;
 }
 
 export interface DiscoveredContainer {
@@ -200,6 +211,12 @@ export const api = {
       request<{ service: ServiceRecord; proxyHostId?: string }>(`/services/${id}/proxy-only`, {
         method: 'POST',
       }),
+  },
+  accessLists: {
+    list: (): Promise<{ supported: boolean; accessLists: AccessListRecord[] }> =>
+      request<{ supported: boolean; accessLists: AccessListRecord[] }>('/access-lists'),
+    sync: (): Promise<{ synced: number }> =>
+      request<{ synced: number }>('/access-lists/sync', { method: 'POST' }),
   },
   discovery: {
     containers: (): Promise<{ containers: DiscoveredContainer[] }> =>
