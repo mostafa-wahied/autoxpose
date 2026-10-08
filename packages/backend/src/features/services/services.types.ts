@@ -9,6 +9,8 @@ export type Service = {
   sourceId: string | null;
   dnsRecordId: string | null;
   proxyHostId: string | null;
+  accessListName: string | null;
+  accessListId: number | null;
   exposureSource: string | null;
   dnsExists: boolean | null;
   proxyExists: boolean | null;

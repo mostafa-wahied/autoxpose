@@ -54,6 +54,7 @@ function databaseSnapshot(name) {
     name,
     `const Database=require('better-sqlite3');const db=new Database('./data/autoxpose.db',{readonly:true});
     const tables=['services','provider_configs','__drizzle_migrations'];const values={};
+    if(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='npm_access_lists'").get())tables.push('npm_access_lists');
     for(const table of tables){const rows=db.prepare('SELECT * FROM '+table).all();for(const row of rows)delete row.updated_at;
     values[table]=rows.sort((left,right)=>String(left.id).localeCompare(String(right.id)));}
     const integrity=db.pragma('quick_check',{simple:true});db.close();console.log(JSON.stringify({values,integrity}));`
@@ -97,16 +98,22 @@ function upgradedSnapshot(snapshot) {
   const expected = structuredClone(snapshot);
   const migrations = new URL('../packages/backend/migrations/', import.meta.url);
   const journal = JSON.parse(readFileSync(new URL('meta/_journal.json', migrations)));
-  assert.equal(journal.entries.length, 3, 'Review the migration contract when adding migrations');
-  const entry = journal.entries[2];
-  for (const record of expected.values.services) record.source_name = null;
-  expected.values.__drizzle_migrations.push({
-    id: null,
-    hash: createHash('sha256')
-      .update(readFileSync(new URL(`${entry.tag}.sql`, migrations)))
-      .digest('hex'),
-    created_at: entry.when,
-  });
+  assert.equal(journal.entries.length, 4, 'Review the migration contract when adding migrations');
+  for (const record of expected.values.services) {
+    record.source_name = null;
+    record.access_list_name = null;
+    record.access_list_id = null;
+  }
+  expected.values.npm_access_lists = [];
+  for (const entry of journal.entries.slice(2)) {
+    expected.values.__drizzle_migrations.push({
+      id: null,
+      hash: createHash('sha256')
+        .update(readFileSync(new URL(`${entry.tag}.sql`, migrations)))
+        .digest('hex'),
+      created_at: entry.when,
+    });
+  }
   return expected;
 }
 

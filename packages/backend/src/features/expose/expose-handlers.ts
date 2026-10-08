@@ -1,5 +1,6 @@
 import https from 'node:https';
 import { isIpv4 } from '../../core/platform.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import { waitForDnsPropagation, type PropagationCallback } from './dns-propagation.js';
 import { updateStep, type ProgressEvent, type ProgressStep } from './progress.types.js';
@@ -63,6 +64,8 @@ type ProxyService = {
   port: number;
   scheme: string | null;
   proxyHostId: string | null;
+  accessListName?: string | null;
+  accessListId?: number | null;
 };
 type StepType = 'dns' | 'proxy';
 function emitSkipped(ctx: ExposeContext, step: StepType, detail: string): void {
@@ -219,15 +222,16 @@ type ProxyExposeParams = {
   fullDomain: string;
   settings: SettingsService;
   lanIp: string;
-  onHost?: (id: string) => Promise<void>;
+  accessLists?: AccessListService;
+  onHost?: (id: string, accessListId?: number | null) => Promise<void>;
 };
 export type ProxyExposeResult =
   | { id: string; sslPending?: boolean; sslError?: string }
   | null
   | undefined;
 export async function handleProxyExpose(params: ProxyExposeParams): Promise<ProxyExposeResult> {
-  const { ctx, svc, fullDomain, settings, lanIp } = params;
-  if (svc.proxyHostId) {
+  const { ctx, svc, fullDomain, settings, lanIp, accessLists } = params;
+  if (svc.proxyHostId && !accessLists) {
     emitSkipped(ctx, 'proxy', 'Already configured');
     return { id: svc.proxyHostId };
   }
@@ -238,10 +242,14 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
       emitSkipped(ctx, 'proxy', 'Skipped');
       return undefined;
     }
+    const prepared = accessLists
+      ? await accessLists.prepareProxyHost(svc, proxy, fullDomain)
+      : undefined;
+    const accessListId = prepared?.accessListId;
     emitRunning(ctx, 'proxy', 40, 'Checking existing hosts...');
-    const existing = await proxy.findByDomain(fullDomain);
+    const existing = prepared ? prepared.host : await proxy.findByDomain(fullDomain);
     if (existing) {
-      await params.onHost?.(existing.id);
+      await params.onHost?.(existing.id, prepared?.accessListId);
       await finishProxyStep(ctx, svc.port, fullDomain, true);
       return { id: existing.id };
     }
@@ -254,9 +262,13 @@ export async function handleProxyExpose(params: ProxyExposeParams): Promise<Prox
       targetScheme: (svc.scheme as 'http' | 'https') || 'http',
       ssl: true,
       skipDnsWait: true,
+      accessListId,
     });
 
-    await params.onHost?.(host.id);
+    await params.onHost?.(host.id, accessLists ? (host.accessListId ?? null) : undefined);
+    if (accessLists && accessListId !== undefined && (host.accessListId ?? 0) !== accessListId) {
+      throw new Error('NPM did not confirm the requested access list');
+    }
     if (host.sslPending) {
       const detail = `HTTP only - SSL failed: ${host.sslError || 'unknown'}`;
       ctx.steps = updateStep(ctx.steps, 'proxy', { status: 'warning', progress: 100, detail });

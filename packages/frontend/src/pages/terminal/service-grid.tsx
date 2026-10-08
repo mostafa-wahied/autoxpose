@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { TerminalServiceCard } from '../../components/terminal';
 import { useBulkStatusCheck } from '../../hooks/use-bulk-status-check';
+import { useAccessLists } from '../../hooks/use-access-lists';
 import { type ServiceRecord } from '../../lib/api';
+import type { AccessListBadge } from '../../components/terminal/service-card';
 
 interface ServiceGridProps {
   services: ServiceRecord[];
@@ -39,6 +41,20 @@ export function ServiceGrid({
   isWildcardMode,
 }: ServiceGridProps): JSX.Element {
   const { statusMap, checkServices } = useBulkStatusCheck(scanTrigger);
+  const { accessLists } = useAccessLists();
+
+  const accessListMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const al of accessLists) m.set(al.id, al.name);
+    return m;
+  }, [accessLists]);
+
+  const describeAccessList = (service: ServiceRecord): AccessListBadge | null => {
+    const requested = service.accessListName;
+    if (!requested || requested.toLowerCase() === 'public') return null;
+    if (service.accessListId === null) return { name: requested, resolved: false };
+    return { name: accessListMap.get(service.accessListId) ?? requested, resolved: true };
+  };
 
   useEffect(() => {
     checkServices(services);
@@ -75,6 +91,7 @@ export function ServiceGrid({
             scanTrigger={scanTrigger}
             bulkStatus={statusMap[service.id]}
             isWildcardMode={isWildcardMode}
+            accessList={describeAccessList(service)}
           />
         );
       })}

@@ -87,6 +87,7 @@ export class ContractLab {
           path: `${port.prefix ?? ''}${route}`,
           method: options.method || 'GET',
           timeout: 15000,
+          agent: false,
           headers: {
             ...(payload
               ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
@@ -152,7 +153,7 @@ export class ContractLab {
       const match=request.url.match(/^\\/__contract\\/([a-z-]+)\\/(\\d+)(\\/.*)$/);
       const host=match?match[1]:'app';const port=match?Number(match[2]):3000;const url=match?match[3]:request.url;
       if(!['fixture','caddy','npm','app','previous','rollback'].includes(host)||![8080,2019,8088,3000,80,81].includes(port)){response.writeHead(403);response.end();return;}
-      const upstream=http.request({host,port,path:url,method:request.method,headers:request.headers},reply=>{response.writeHead(reply.statusCode,reply.headers);reply.pipe(response);});
+      const upstream=http.request({host,port,path:url,method:request.method,headers:request.headers,agent:false},reply=>{response.writeHead(reply.statusCode,reply.headers);reply.pipe(response);});
       upstream.on('error',()=>{response.writeHead(502);response.end();});request.pipe(upstream);
     }).listen(8080,'0.0.0.0');`;
     this.relay = this.start(

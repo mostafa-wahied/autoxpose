@@ -1,7 +1,9 @@
 import { testBackendScheme } from './scheme-detection.js';
+import { createProxyResource, type ProxyResource } from './proxy-resource.js';
 import type { ServiceRecord, ServicesRepository } from '../services/services.repository.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { SyncService } from '../services/sync.service.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import { createLogger } from '../../core/logger/index.js';
 
 const logger = createLogger('expose-service');
@@ -13,6 +15,7 @@ type ExposeContext = {
   publicIp: string;
   lanIp: string;
   sync?: SyncService;
+  accessLists?: AccessListService;
 };
 
 export class ExposeService {
@@ -28,13 +31,13 @@ export class ExposeService {
 
     await this.updateSchemeIfNeeded(serviceId, service);
 
-    const { dnsRecordId, proxyHostId, sslPending, sslError } =
+    const { dnsRecordId, proxyHostId, sslPending, sslError, accessListId } =
       await this.createProviderResources(service);
     if (!dnsRecordId && !proxyHostId) throw new Error('No providers configured');
 
     await this.updateServiceWithProviderResources(
       serviceId,
-      { dnsRecordId, proxyHostId, sslPending, sslError },
+      { dnsRecordId, proxyHostId, sslPending, sslError, accessListId },
       isAutoExpose
     );
 
@@ -53,6 +56,7 @@ export class ExposeService {
       proxyHostId?: string;
       sslPending?: boolean;
       sslError?: string;
+      accessListId?: number | null;
     },
     isAutoExpose: boolean
   ): Promise<void> {
@@ -63,6 +67,7 @@ export class ExposeService {
       exposureSource: isAutoExpose ? 'auto' : 'manual',
       sslPending: resources.sslPending ?? null,
       sslError: resources.sslError ?? null,
+      ...(resources.accessListId !== undefined && { accessListId: resources.accessListId }),
     });
   }
 
@@ -82,6 +87,7 @@ export class ExposeService {
     proxyHostId?: string;
     sslPending?: boolean;
     sslError?: string;
+    accessListId?: number | null;
   }> {
     const baseDomain = await this.context.settings.getBaseDomainFromAnySource();
     const fullDomain = this.buildFullDomain(service.subdomain, baseDomain);
@@ -100,15 +106,20 @@ export class ExposeService {
     }
 
     const proxyResult =
-      !forceCreate && service.proxyHostId !== null
-        ? { id: service.proxyHostId }
-        : await this.createProxyHost(service, fullDomain, isWildcardMode);
+      !forceCreate && service.proxyHostId !== null && !this.context.accessLists
+        ? { id: service.proxyHostId, accessListId: undefined }
+        : await this.createProxyHost(
+            forceCreate ? { ...service, proxyHostId: null } : service,
+            fullDomain,
+            isWildcardMode
+          );
 
     return {
       dnsRecordId,
       proxyHostId: proxyResult?.id,
       sslPending: proxyResult?.sslPending,
       sslError: proxyResult?.sslError,
+      accessListId: proxyResult?.accessListId,
     };
   }
 
@@ -205,6 +216,7 @@ export class ExposeService {
       proxyExists: true,
       sslPending: proxyResult.sslPending ?? null,
       sslError: proxyResult.sslError ?? null,
+      ...(proxyResult.accessListId !== undefined && { accessListId: proxyResult.accessListId }),
     });
 
     const updated = await this.context.servicesRepo.findById(serviceId);
@@ -237,27 +249,15 @@ export class ExposeService {
     svc: ServiceRecord,
     fullDomain: string,
     isWildcardMode = false
-  ): Promise<{ id: string; sslPending?: boolean; sslError?: string } | undefined> {
-    const proxy = await this.context.settings.getProxyProvider();
-    if (!proxy) return undefined;
-
-    let certificateId: number | undefined;
-    if (isWildcardMode) {
-      const wildcardConfig = await this.context.settings.getWildcardConfig();
-      if (wildcardConfig?.certId) {
-        certificateId = wildcardConfig.certId;
-      }
-    }
-
-    const host = await proxy.createHost({
+  ): Promise<ProxyResource | undefined> {
+    return createProxyResource({
+      service: svc,
       domain: fullDomain,
-      targetHost: this.context.lanIp,
-      targetPort: svc.port,
-      targetScheme: (svc.scheme as 'http' | 'https') || 'http',
-      ssl: true,
-      certificateId,
+      wildcard: isWildcardMode,
+      settings: this.context.settings,
+      lanIp: this.context.lanIp,
+      accessLists: this.context.accessLists,
     });
-    return { id: host.id, sslPending: host.sslPending, sslError: host.sslError };
   }
 
   private async removeDnsRecord(svc: ServiceRecord): Promise<void> {

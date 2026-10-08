@@ -1,8 +1,9 @@
 import type { DnsRecord } from '../dns/dns.types.js';
-import type { ProxyHost } from '../proxy/proxy.types.js';
+import type { ProxyHost, ProxyProvider } from '../proxy/proxy.types.js';
 import type { SettingsService } from '../settings/settings.service.js';
 import type { ServiceRecord, ServicesRepository } from './services.repository.js';
 import type { DockerDiscoveryProvider } from '../discovery/docker.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import { createLogger } from '../../core/logger/index.js';
 import {
   isCleanerSubdomain,
@@ -28,7 +29,12 @@ export type SyncStatus = {
   isSynced: boolean;
 };
 
-type ProviderData = { dnsRecords: DnsRecord[]; proxyHosts: ProxyHost[]; baseDomain: string };
+type ProviderData = {
+  dnsRecords: DnsRecord[];
+  proxyHosts: ProxyHost[];
+  baseDomain: string;
+  proxy: ProxyProvider | null;
+};
 type ServiceUpdate = {
   exposureSource: string | null;
   dnsExists: boolean;
@@ -41,13 +47,15 @@ type ServiceUpdate = {
   sslPending: boolean | null;
   sslError: string | null;
   subdomain?: string;
+  accessListId?: number | null;
 };
 
 export class SyncService {
   constructor(
     private servicesRepo: ServicesRepository,
     private settings: SettingsService,
-    private dockerProvider?: DockerDiscoveryProvider
+    private dockerProvider?: DockerDiscoveryProvider,
+    private accessLists?: AccessListService
   ) {}
 
   async getStatuses(services: ServiceRecord[]): Promise<SyncStatus[]> {
@@ -147,6 +155,7 @@ export class SyncService {
       dnsRecords,
       proxyHosts,
       baseDomain,
+      proxy,
     };
   }
 
@@ -189,8 +198,16 @@ export class SyncService {
     data: ProviderData
   ): Promise<void> {
     let dnsRecord = findMatchingDnsRecord(service, data.dnsRecords, data.baseDomain);
-    const proxyHost = findMatchingProxyHost(service, data.proxyHosts, data.baseDomain);
-
+    const expectedDomain = data.baseDomain
+      ? `${service.subdomain}.${data.baseDomain}`
+      : service.subdomain;
+    const exactHosts = data.proxyHosts.filter(host => host.domain === expectedDomain);
+    const proxyHost =
+      this.accessLists && service.accessListName != null
+        ? exactHosts.length === 1
+          ? exactHosts[0]
+          : undefined
+        : findMatchingProxyHost(service, data.proxyHosts, data.baseDomain);
     this.logDetectionResults(service, dnsRecord, proxyHost, data);
 
     const exposedSubdomain = getExposedSubdomain(proxyHost ?? null, data.baseDomain);
@@ -204,13 +221,32 @@ export class SyncService {
       );
     }
 
+    const accessListId = await this.reconcileAccessList(service, proxyHost, data.proxy);
+
     const updateData = await this.buildServiceUpdate(
       service,
       dnsRecord,
       proxyHost,
       exposedSubdomain
     );
-    await this.servicesRepo.update(service.id, updateData);
+    await this.servicesRepo.update(service.id, { ...updateData, ...accessListId });
+  }
+
+  private async reconcileAccessList(
+    service: ServiceRecord,
+    proxyHost: ProxyHost | undefined,
+    proxy: ProxyProvider | null
+  ): Promise<{ accessListId?: number | null }> {
+    if (!this.accessLists) return {};
+    if (!proxyHost || !proxy) return { accessListId: null };
+    const result = await this.accessLists.reconcileProxyHost(service, proxyHost, proxy);
+    if (result.error) {
+      logger.warn(
+        { serviceId: service.id, error: result.error },
+        'Access list could not be reconciled with NPM'
+      );
+    }
+    return { accessListId: result.accessListId };
   }
 
   private async buildServiceUpdate(

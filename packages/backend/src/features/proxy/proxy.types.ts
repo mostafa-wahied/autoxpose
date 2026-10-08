@@ -7,6 +7,7 @@ export type ProxyHost = {
   sslPending?: boolean;
   sslError?: string;
   enabled: boolean;
+  accessListId?: number;
 };
 
 export type ProxyProviderConfig = {
@@ -24,12 +25,14 @@ export type CreateProxyHostInput = {
   ssl?: boolean;
   skipDnsWait?: boolean;
   certificateId?: number;
+  accessListId?: number;
 };
 
 export type UpdateProxyHostInput = {
   targetHost?: string;
   targetPort?: number;
   targetScheme?: 'http' | 'https';
+  accessListId?: number;
 };
 
 export interface ProxyProvider {

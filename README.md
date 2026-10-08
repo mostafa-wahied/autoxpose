@@ -341,13 +341,45 @@ services:
       - autoxpose.subdomain=myapp
 ```
 
-| Label                  | Description                                            | Required         |
-| ---------------------- | ------------------------------------------------------ | ---------------- |
-| **`autoxpose.enable`** | `true` to show in UI, `auto` to auto-expose            | **Yes**          |
-| `autoxpose.subdomain`  | Subdomain for the service (defaults to container name) | No (Recommended) |
-| `autoxpose.port`       | Override auto-detected port                            | No               |
-| `autoxpose.scheme`     | Override auto-detected scheme (`http`/`https`)         | No               |
-| `autoxpose.name`       | Display name in UI (default: container name)           | No               |
+| Label                       | Description                                              | Required         |
+| --------------------------- | -------------------------------------------------------- | ---------------- |
+| **`autoxpose.enable`**      | `true` to show in UI, `auto` to auto-expose              | **Yes**          |
+| `autoxpose.subdomain`       | Subdomain for the service (defaults to container name)   | No (Recommended) |
+| `autoxpose.port`            | Override auto-detected port                              | No               |
+| `autoxpose.scheme`          | Override auto-detected scheme (`http`/`https`)           | No               |
+| `autoxpose.name`            | Display name in UI (default: container name)             | No               |
+| `autoxpose.npm.access_list` | Name of an existing NPM Access List to attach (NPM only) | No               |
+
+### Access Lists (NPM only)
+
+You can restrict access to a service by attaching an existing [Nginx Proxy Manager Access List](https://nginxproxymanager.com/advanced-config/#access-lists). Create the access list in the NPM UI first, then reference it by name:
+
+```yaml
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    labels:
+      - autoxpose.enable=auto
+      - autoxpose.subdomain=vault
+      - 'autoxpose.npm.access_list=My Access List'
+```
+
+> **Note:** Quote the label value if the access list name contains spaces.
+
+The label is the source of truth, and it is matched against NPM strictly:
+
+| Label value                | Result                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| Exact name of one NPM list | The proxy host is created or updated to use that access list                 |
+| `public`                   | Any access list is explicitly removed from the proxy host                    |
+| Label removed              | The proxy host keeps whatever protection it currently has                    |
+| Unknown or ambiguous name  | **Exposure is blocked**, and the valid NPM list names are shown in the error |
+
+The name must match exactly (including case) and exactly one NPM list may carry it — autoxpose never falls back to public access when a reference cannot be resolved.
+
+Changing the label on a service that is already exposed updates the proxy host in NPM, so the badge in the UI always reflects what NPM is actually enforcing.
+
+autoxpose syncs access lists from NPM on startup, whenever a reference needs validating, and whenever the proxy settings change. You can also trigger a manual sync from the Settings panel.
 
 ### Understanding Auto-Expose Modes
 

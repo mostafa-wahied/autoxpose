@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { afterEach, test } from 'node:test';
 import { CaddyProxyProvider } from '../dist/features/proxy/providers/caddy.js';
+import { ContractLab } from '../../../scripts/contract-lab.mjs';
 
 const originalFetch = globalThis.fetch;
 
@@ -36,6 +39,43 @@ function mockCaddy(initialConfig, rejectLoad = false) {
 }
 
 const input = { domain: 'demo.example.test', targetHost: '192.0.2.10', targetPort: 8080 };
+
+test('Image fixture requests do not pool connections across container changes', async () => {
+  const server = createServer((request, response) => {
+    response.end(JSON.stringify({ connection: request.headers.connection }));
+  });
+  const lab = new ContractLab('fixture:local', 'linux/amd64');
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const port = server.address().port;
+    for (let request = 0; request < 2; request++) {
+      const response = await lab.request(port, '/');
+      assert.equal(response.status, 200);
+      assert.equal(response.data.connection, 'close');
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    rmSync(lab.directory, { recursive: true, force: true });
+  }
+});
+
+test('Caddy admin requests avoid reusable connections across reloads', async () => {
+  const remote = mockCaddy({
+    admin: { listen: ':2019' },
+    apps: { http: { servers: { primary: { routes: [] } } } },
+  });
+  const mockedFetch = globalThis.fetch;
+  globalThis.fetch = (url, options) => {
+    assert.equal(new Headers(options.headers).get('connection'), 'close');
+    return mockedFetch(url, options);
+  };
+  const provider = new CaddyProxyProvider({ url: 'http://caddy:2019' });
+  const host = await provider.createHost(input);
+  await provider.listHosts();
+  await provider.deleteHost(host.id);
+  assert.equal(remote.requests.length, 4);
+});
 
 test('Caddy create and delete preserve existing root, application, and server settings', async () => {
   const initial = {

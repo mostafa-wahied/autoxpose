@@ -9,6 +9,50 @@ import {
 } from '../dist/features/discovery/docker.js';
 import { SyncService } from '../dist/features/services/sync.service.js';
 
+test('discovery preserves verified access-list state until NPM confirms a change', async () => {
+  for (const action of ['event', 'scan']) {
+    const saved = { ...service, sourceName: 'demo', accessListName: 'Previous', accessListId: 3 };
+    const repo = repository([saved]);
+    const accessLists = { resolveForStorage: async () => 2 };
+    const services = new ServicesService(repo, undefined, undefined, undefined, accessLists);
+    const discovered = {
+      id: service.sourceId,
+      source: 'docker',
+      sourceName: 'demo',
+      name: 'demo',
+      subdomain: 'demo',
+      port: 8080,
+      scheme: 'http',
+      labels: {},
+      image: 'fixture',
+      autoExpose: false,
+      accessListName: 'Family',
+    };
+    const update = input =>
+      action === 'event' ? services.upsertService(input) : services.syncFromDiscovery([input]);
+    await update(discovered);
+    assert.equal(repo.values.get('owned').accessListName, 'Family');
+    assert.equal(repo.values.get('owned').accessListId, 3, action);
+    const settings = {
+      getDnsProvider: async () => ({
+        listRecords: async () => {
+          throw new Error('Inventory unavailable');
+        },
+      }),
+      getProxyProvider: async () => null,
+      getBaseDomainFromAnySource: async () => 'example.test',
+    };
+    await assert.rejects(
+      new SyncService(repo, settings).detectExistingConfigurations([repo.values.get('owned')]),
+      /Inventory unavailable/
+    );
+    assert.equal(repo.values.get('owned').accessListId, 3, action);
+    await update({ ...discovered, accessListName: null });
+    assert.equal(repo.values.get('owned').accessListName, null);
+    assert.equal(repo.values.get('owned').accessListId, 3, action);
+  }
+});
+
 function repository(records = []) {
   const values = new Map(records.map(record => [record.id, structuredClone(record)]));
   return {

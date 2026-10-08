@@ -16,7 +16,21 @@ export type DiscoveredService = {
   labels: Record<string, string>;
   autoExpose: boolean;
   image: string;
+  /** Raw `<prefix>.npm.access_list` label value; null when the label is absent. */
+  accessListName: string | null;
 };
+
+/**
+ * Reads the `<prefix>.npm.access_list` label. Returns null when the label is
+ * absent (meaning "leave the current protection alone") and the trimmed value
+ * otherwise, including the reserved value `public`.
+ */
+function parseAccessListLabel(labels: Record<string, string>, labelPrefix: string): string | null {
+  const raw = labels[`${labelPrefix}.npm.access_list`];
+  if (raw === undefined) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 export interface DiscoveryProvider {
   readonly name: string;
@@ -169,6 +183,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     const name = container.Names?.[0]?.replace(/^\//, '') || '';
     const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
     const image = container.Image || '';
+    const accessListName = parseAccessListLabel(labels, this.labelPrefix);
 
     return {
       id: container.Id,
@@ -181,6 +196,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
       labels,
       autoExpose: enableValue === 'auto',
       image,
+      accessListName,
     };
   }
 
@@ -246,6 +262,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
     const name = info.Name.replace(/^\//, '');
     const subdomain = labels[`${this.labelPrefix}.subdomain`] || name;
     const image = info.Config.Image || '';
+    const accessListName = parseAccessListLabel(labels, this.labelPrefix);
 
     return {
       id: info.Id,
@@ -258,6 +275,7 @@ export class DockerDiscoveryProvider implements DiscoveryProvider {
       labels,
       autoExpose: enableValue === 'auto',
       image,
+      accessListName,
     };
   }
 

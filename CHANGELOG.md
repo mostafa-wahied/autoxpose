@@ -2,6 +2,16 @@
 
 All notable changes to autoxpose will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **NPM Access Lists**: Assign existing NPM access lists to services through Docker labels.
+
+### Fixed
+
+- **Caddy Connections**: Fix intermittent errors when starting or stopping services with Caddy.
+
 ## [0.5.2] - 2026-09-14
 
 ### Security

@@ -22,7 +22,11 @@ interface TerminalServiceCardProps {
   scanTrigger?: number;
   bulkStatus?: { online: boolean; protocol: string | null };
   isWildcardMode: boolean;
+  accessList?: AccessListBadge | null;
 }
+
+/** An access list reference from a container label, and whether NPM knows it. */
+export type AccessListBadge = { name: string; resolved: boolean };
 export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Element {
   const {
     service,
@@ -60,6 +64,7 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
         port={service.port}
         scheme={service.scheme || 'http'}
         tags={service.tags}
+        accessList={props.accessList ?? null}
         onNameChange={onNameChange}
       />
       <EditableSubdomain
@@ -89,12 +94,31 @@ export function TerminalServiceCard(props: TerminalServiceCardProps): JSX.Elemen
     </div>
   );
 }
+function AccessListBadgeChip({ accessList }: { accessList: AccessListBadge }): JSX.Element {
+  const color = accessList.resolved ? '#da3633' : '#d29922';
+  const tooltip = accessList.resolved
+    ? `Access List: ${accessList.name}`
+    : `Access List "${accessList.name}" was not found in NPM. Exposure is blocked until the name matches an existing list, or the label is set to "public".`;
+
+  return (
+    <Tooltip content={tooltip}>
+      <span
+        className="rounded px-2 py-0.5 text-xs font-medium"
+        style={{ background: `${color}20`, color }}
+      >
+        {accessList.resolved ? `AL: ${accessList.name}` : `AL? ${accessList.name}`}
+      </span>
+    </Tooltip>
+  );
+}
+
 interface CardHeaderProps {
   name: string;
   containerName: string;
   port: number;
   scheme: string;
   tags: string | null;
+  accessList: AccessListBadge | null;
   onNameChange: (name: string) => void;
 }
 function CardHeader({
@@ -103,6 +127,7 @@ function CardHeader({
   port,
   scheme,
   tags,
+  accessList,
   onNameChange,
 }: CardHeaderProps): JSX.Element {
   const parsedTags = tags ? JSON.parse(tags) : [];
@@ -131,6 +156,7 @@ function CardHeader({
           {(scheme || 'http').toUpperCase()}
         </span>
         <TagBadge tags={parsedTags} />
+        {accessList && <AccessListBadgeChip accessList={accessList} />}
       </div>
     </div>
   );
@@ -171,7 +197,7 @@ function CardFooter(props: CardFooterProps): JSX.Element {
     isWildcardMode,
   } = props;
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-2">
       <StatusBadge
         serviceId={serviceId}
         isExposed={isExposed}
@@ -181,14 +207,13 @@ function CardFooter(props: CardFooterProps): JSX.Element {
         bulkStatus={bulkStatus}
         isWildcardMode={isWildcardMode}
       />
-      <div className="flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
         {isExposed && service.sslPending && (
           <Tooltip content="Retry SSL certificate setup">
             <button
               onClick={onRetrySsl}
               disabled={isRetrySslPending}
-              className="rounded border border-[#f0883e] px-2 py-1 text-xs transition-colors hover:bg-[#f0883e20] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-              style={{ color: TERMINAL_COLORS.warning }}
+              className="flex items-center gap-1 rounded border border-yellow-700/50 bg-yellow-900/30 px-2 py-0.5 text-xs text-yellow-400 transition-colors hover:bg-yellow-900/50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isRetrySslPending && <InlineSpinner />}
               Retry SSL

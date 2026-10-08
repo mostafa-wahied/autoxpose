@@ -16,6 +16,8 @@ export interface ServiceRecord {
   sourceName: string | null;
   dnsRecordId: string | null;
   proxyHostId: string | null;
+  accessListName: string | null;
+  accessListId: number | null;
   exposureSource: string | null;
   dnsExists: boolean | null;
   proxyExists: boolean | null;
@@ -43,6 +45,8 @@ export interface CreateServiceInput {
   sourceName?: string;
   tags?: string;
   hasExplicitSubdomainLabel?: boolean;
+  accessListName?: string | null;
+  accessListId?: number | null;
 }
 
 export interface UpdateServiceInput {
@@ -68,6 +72,8 @@ export interface UpdateServiceInput {
   tags?: string | null;
   hasExplicitSubdomainLabel?: boolean;
   labelMismatchIgnored?: boolean;
+  accessListName?: string | null;
+  accessListId?: number | null;
 }
 
 export class ServicesRepository {
@@ -115,6 +121,8 @@ export class ServicesRepository {
       labelMismatchIgnored: false,
       dnsRecordId: null,
       proxyHostId: null,
+      accessListName: input.accessListName ?? null,
+      accessListId: input.accessListId ?? null,
       exposureSource: null,
       dnsExists: null,
       proxyExists: null,

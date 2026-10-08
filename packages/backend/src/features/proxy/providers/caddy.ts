@@ -151,6 +151,7 @@ export class CaddyProxyProvider implements ProxyProvider {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        Connection: 'close',
         ...options.headers,
       },
     });

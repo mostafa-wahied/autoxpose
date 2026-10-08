@@ -1,5 +1,6 @@
 import type { DiscoveredService } from '../discovery/docker.js';
 import type { SettingsService } from '../settings/settings.service.js';
+import type { AccessListService } from '../access-lists/access-list.service.js';
 import type { TagDetector } from './tag-detector.js';
 import type {
   CreateServiceInput,
@@ -19,7 +20,8 @@ export class ServicesService {
     private repository: ServicesRepository,
     private settings?: SettingsService,
     private tagDetector?: TagDetector,
-    private discovery?: { containerExists(containerId: string): Promise<boolean> }
+    private discovery?: { containerExists(containerId: string): Promise<boolean> },
+    private accessLists?: AccessListService
   ) {}
 
   async getAllServices(): Promise<ServiceRecord[]> {
@@ -128,9 +130,12 @@ export class ServicesService {
   async upsertService(discovered: DiscoveredService): Promise<ServiceRecord> {
     const existing = await this.findDiscoveredService(discovered);
     const tags = this.detectServiceTags(discovered, existing);
+    const accessList = await this.resolveAccessList(discovered.accessListName);
 
     if (existing) {
-      const needsUpdate = this.serviceNeedsUpdate(existing, discovered);
+      const needsUpdate =
+        this.serviceNeedsUpdate(existing, discovered) ||
+        this.accessListChanged(existing, accessList);
       if (!needsUpdate) return existing;
       const hasExplicitSubdomain = discovered.labels[`autoxpose.subdomain`] !== undefined;
       const subdomainToUse = hasExplicitSubdomain ? discovered.subdomain : existing.subdomain;
@@ -143,6 +148,7 @@ export class ServicesService {
         scheme: discovered.scheme,
         tags,
         hasExplicitSubdomainLabel: hasExplicitSubdomain,
+        ...accessList,
       });
       return updated!;
     }
@@ -156,7 +162,23 @@ export class ServicesService {
       sourceName: discovered.sourceName,
       tags,
       hasExplicitSubdomainLabel: !!discovered.labels['autoxpose.subdomain'],
+      ...accessList,
     });
+  }
+
+  private async resolveAccessList(
+    name: string | null | undefined
+  ): Promise<{ accessListName?: string | null }> {
+    if (!this.accessLists) return {};
+    return { accessListName: name ?? null };
+  }
+
+  private accessListChanged(
+    existing: ServiceRecord,
+    next: { accessListName?: string | null; accessListId?: number | null }
+  ): boolean {
+    if (next.accessListName === undefined) return false;
+    return existing.accessListName !== next.accessListName;
   }
 
   private detectServiceTags(discovered: DiscoveredService, existing?: ServiceRecord): string {
@@ -227,6 +249,7 @@ export class ServicesService {
       }
       const tags = this.detectServiceTags(disc);
       const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
+      const accessList = await this.resolveAccessList(disc.accessListName);
       const svc = await this.repository.create({
         name: disc.name,
         subdomain: disc.subdomain,
@@ -237,6 +260,7 @@ export class ServicesService {
         sourceName: disc.sourceName,
         tags,
         hasExplicitSubdomainLabel: hasExplicitSubdomain,
+        ...accessList,
       });
       created.push(svc);
       existingMap.set(disc.id, svc);
@@ -252,7 +276,9 @@ export class ServicesService {
     for (const disc of discovered) {
       const existing = existingMap.get(disc.id);
       if (!existing) continue;
-      const needsUpdate = this.serviceNeedsUpdate(existing, disc);
+      const accessList = await this.resolveAccessList(disc.accessListName);
+      const needsUpdate =
+        this.serviceNeedsUpdate(existing, disc) || this.accessListChanged(existing, accessList);
       if (!needsUpdate) continue;
       const hasExplicitSubdomain = disc.labels[`autoxpose.subdomain`] !== undefined;
       const subdomainToUse = hasExplicitSubdomain ? disc.subdomain : existing.subdomain;
@@ -266,6 +292,7 @@ export class ServicesService {
         scheme: disc.scheme,
         tags,
         hasExplicitSubdomainLabel: hasExplicitSubdomain,
+        ...accessList,
       });
       if (upd) updated.push(upd);
     }

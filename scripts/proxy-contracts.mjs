@@ -33,11 +33,20 @@ function startNpm(lab) {
   return name;
 }
 
-export async function waitForNpmRoute(lab, port, route, hostname, expected, timeout = 15000) {
+export async function waitForNpmRoute(
+  lab,
+  port,
+  route,
+  hostname,
+  expected,
+  timeout = 15000,
+  expectedStatus = 200
+) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const response = await lab.request(port, route, { headers: { Host: hostname } });
-    if (response.status === 200 && response.text === expected) return;
+    if (response.status === expectedStatus && (expected === null || response.text === expected))
+      return;
     await new Promise(resolve =>
       setTimeout(resolve, Math.min(250, Math.max(0, deadline - Date.now())))
     );
@@ -87,7 +96,7 @@ export async function proxyContracts(lab, app) {
     (await lab.request(port, '/', { headers: { Host: 'keep-npm.example.test' } })).text,
     'AUTOXPOSE_CONTRACT_UPSTREAM'
   );
-  await verifySettings(lab, app);
+  await verifySettings(lab, app, name, run);
   lab.stop(name);
   return {
     create: true,
@@ -96,10 +105,11 @@ export async function proxyContracts(lab, app) {
     unrelatedHostPreserved: true,
     actualNpmRouting: true,
     settingsMasking: true,
+    accessListRouting: true,
   };
 }
 
-async function verifySettings(lab, app) {
+async function verifySettings(lab, app, name, run) {
   const config = {
     provider: 'npm',
     config: {
@@ -114,6 +124,7 @@ async function verifySettings(lab, app) {
   );
   const masked = await lab.request(app.port, '/api/settings/proxy');
   assert.equal(masked.text.includes(config.config.password), false);
+  await verifyAccessListRouting(lab, app, name, run);
   assert.equal(
     (
       await lab.request(app.port, '/api/settings/proxy', {
@@ -123,4 +134,94 @@ async function verifySettings(lab, app) {
     ).status,
     200
   );
+}
+
+async function scanAccessListLabel(lab, call, containers, requested) {
+  const labels = { 'autoxpose.enable': 'true', 'autoxpose.subdomain': 'access-contract' };
+  if (requested !== null) labels['autoxpose.npm.access_list'] = requested;
+  const container = {
+    Id: 'access-contract',
+    Names: ['/access-contract'],
+    Image: 'fixture:local',
+    Labels: labels,
+    Ports: [{ PrivatePort: 8080, PublicPort: 8080, Type: 'tcp' }],
+  };
+  assert.equal(
+    (
+      await lab.request(lab.fixturePort, '/control', {
+        method: 'POST',
+        body: { containers: [...containers, container] },
+      })
+    ).status,
+    200
+  );
+  await call('/api/discovery/scan', {});
+  const service = (await call('/api/services')).services.find(
+    item => item.sourceId === 'access-contract'
+  );
+  assert.ok(service);
+  return service;
+}
+
+async function verifyAccessListRouting(lab, app, name, run) {
+  const call = async (route, body, method = body === undefined ? 'GET' : 'POST') => {
+    const response = await lab.request(app.port, route, { method, body });
+    assert.equal(response.status, 200, `Access-list contract: ${method} ${route}`);
+    return response.data;
+  };
+  const baseline = run('console.log(JSON.stringify(await provider.listHosts()));');
+  const created = run(`await provider.listHosts();
+    const list=await provider.request('/nginx/access-lists',{method:'POST',body:JSON.stringify({name:'Contract denied',satisfy_any:false,pass_auth:true,items:[],clients:[{address:'all',directive:'deny'}]})});
+    const host=await provider.createHost({domain:'access-contract.example.test',targetHost:'fixture',targetPort:8080,ssl:false});
+    console.log(JSON.stringify({listId:list.id,hostId:host.id}));`);
+  assert.ok(Number.isInteger(created.listId));
+  const state = (await lab.request(lab.fixturePort, '/state')).data;
+  const wildcard = await call('/api/settings/wildcard');
+  await call('/api/settings/wildcard', { enabled: true, domain: 'example.test' });
+  let service;
+  for (const requested of ['Contract denied', null, 'Missing contract list', 'public']) {
+    service = await scanAccessListLabel(lab, call, state.containers, requested);
+    const expectedId = requested === 'public' ? 0 : created.listId;
+    assert.equal(service.accessListId || 0, expectedId);
+    const host = run(
+      `console.log(JSON.stringify(await provider.findByDomain('access-contract.example.test')));`
+    );
+    assert.equal(host.accessListId || 0, expectedId);
+    await waitForNpmRoute(
+      lab,
+      lab.port(name, 80),
+      '/',
+      host.domain,
+      expectedId ? null : 'AUTOXPOSE_CONTRACT_UPSTREAM',
+      15000,
+      expectedId ? 403 : 200
+    );
+    if (requested === 'Missing contract list') {
+      const rejected = await lab.request(app.port, `/api/services/${service.id}/expose`, {
+        method: 'POST',
+        body: {},
+      });
+      assert.ok(rejected.status >= 400 && rejected.status < 600);
+      assert.match(rejected.text, /access list/i);
+    }
+  }
+  await call(`/api/services/${service.id}`, undefined, 'DELETE');
+  assert.equal(
+    (
+      await lab.request(lab.fixturePort, '/control', {
+        method: 'POST',
+        body: { containers: state.containers },
+      })
+    ).status,
+    200
+  );
+  run(
+    `await provider.deleteHost(${JSON.stringify(created.hostId)});await provider.request('/nginx/access-lists/${created.listId}',{method:'DELETE'});console.log('{}');`
+  );
+  const preserved = run('console.log(JSON.stringify(await provider.listHosts()));');
+  assert.deepEqual(preserved, baseline, 'Access-list actions changed unrelated NPM hosts');
+  await call('/api/settings/wildcard', {
+    enabled: wildcard.enabled,
+    domain: wildcard.domain || '',
+  });
 }

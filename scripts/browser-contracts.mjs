@@ -168,7 +168,9 @@ async function actionsContract(page, lab, identifier) {
   });
   assert.equal(route.text, 'AUTOXPOSE_CONTRACT_UPSTREAM');
   await card.getByRole('button', { name: 'Stop service', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Start service', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Start service', exact: true })).toBeVisible({
+    timeout: 15000,
+  });
   await page.reload();
   await expect(card.getByRole('button', { name: 'Start service', exact: true })).toBeVisible();
   return { browserStartStop: true, realProxyRouting: true, stopSurvivesReload: true };

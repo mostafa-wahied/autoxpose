@@ -1,8 +1,123 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
+import { AccessListService } from '../dist/features/access-lists/access-list.service.js';
+import { handleProxyExpose } from '../dist/features/expose/expose-handlers.js';
+import { createInitialSteps } from '../dist/features/expose/progress.types.js';
 import { ExposeService } from '../dist/features/expose/expose.service.js';
 import { StreamingExposeService } from '../dist/features/expose/streaming-expose.service.js';
 import { SyncService } from '../dist/features/services/sync.service.js';
+
+test('existing proxy paths enforce requested protection before reporting success', async context => {
+  const originalRequest = https.request;
+  context.after(() => {
+    https.request = originalRequest;
+  });
+  https.request = (_options, callback) => {
+    const request = new EventEmitter();
+    request.end = () => queueMicrotask(() => callback({ statusCode: 200 }));
+    request.destroy = () => {};
+    return request;
+  };
+  for (const mode of [
+    'saved-unknown',
+    'failed-update',
+    'wrong-saved-id',
+    'ambiguous',
+    'saved',
+    'existing',
+  ]) {
+    const host = { id: 'host', domain: 'demo.example.test', targetPort: 8080, accessListId: 0 };
+    const saved = [];
+    const events = [];
+    let updates = 0;
+    const proxy = {
+      findByDomain: async () => host,
+      listHosts: async () => (mode === 'ambiguous' ? [host, { ...host, id: 'duplicate' }] : [host]),
+      updateHost: async (_id, change) => {
+        updates += 1;
+        if (mode === 'failed-update') throw new Error('NPM rejected update');
+        Object.assign(host, change);
+        return host;
+      },
+    };
+    const accessLists = new AccessListService(null, {});
+    accessLists.resolve = async () =>
+      mode === 'saved-unknown'
+        ? { kind: 'error', message: 'Unknown requested list' }
+        : { kind: 'resolved', id: 2, name: 'Family' };
+    const service = {
+      ...initialRecord(),
+      accessListName: 'Family',
+      proxyHostId: mode === 'wrong-saved-id' ? 'other' : mode.startsWith('saved') ? 'host' : null,
+    };
+    const result = await handleProxyExpose({
+      ctx: {
+        serviceId: 'demo',
+        action: 'expose',
+        steps: createInitialSteps('expose'),
+        onProgress: event => events.push(event),
+      },
+      svc: service,
+      fullDomain: host.domain,
+      settings: { getProxyProvider: async () => proxy },
+      lanIp: '192.0.2.1',
+      accessLists,
+      onHost: async (id, accessListId) => saved.push({ id, accessListId }),
+    });
+    if (mode === 'saved' || mode === 'existing') {
+      assert.equal(result.id, 'host', mode);
+      assert.deepEqual(saved, [{ id: 'host', accessListId: 2 }], mode);
+      assert.equal(updates, 1, mode);
+    } else {
+      assert.equal(result, null, mode);
+      assert.equal(events.at(-1).type, 'error', mode);
+      assert.deepEqual(saved, [], mode);
+    }
+  }
+});
+
+test('non-streaming exposure verifies existing-host access lists without duplicating hosts', async () => {
+  for (const mode of ['saved', 'existing', 'unknown', 'failed-update', 'wrong-id']) {
+    const value = fixture();
+    const host = { id: 'host', domain: 'demo.example.test', targetPort: 8080, accessListId: 0 };
+    let writes = 0;
+    const proxy = {
+      listHosts: async () => [host],
+      updateHost: async (_id, change) => {
+        writes += 1;
+        if (mode === 'failed-update') throw new Error('Rejected protection');
+        Object.assign(host, change);
+        return host;
+      },
+      createHost: async () => {
+        throw new Error('Existing host must not be duplicated');
+      },
+    };
+    const accessLists = new AccessListService(null, {});
+    accessLists.resolve = async () =>
+      mode === 'unknown'
+        ? { kind: 'error', message: 'Unknown access list' }
+        : { kind: 'resolved', id: 2, name: 'Family' };
+    value.expose.context.accessLists = accessLists;
+    value.settings.getProxyProvider = async () => proxy;
+    value.settings.isWildcardMode = async () => true;
+    await value.repo.update('demo', {
+      accessListName: 'Family',
+      accessListId: null,
+      proxyHostId: mode === 'existing' ? null : mode === 'wrong-id' ? 'other' : 'host',
+    });
+    if (mode === 'saved' || mode === 'existing') {
+      await value.expose.expose('demo');
+      assert.equal(writes, 1, mode);
+      assert.equal(value.record().accessListId, 2, mode);
+    } else {
+      await assert.rejects(value.expose.expose('demo'));
+      assert.equal(value.record().enabled, false, mode);
+    }
+  }
+});
 
 function initialRecord() {
   return {
